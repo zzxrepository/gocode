@@ -24,24 +24,28 @@ export default sidebar({
       children: [
         {
           text: "Go 基础语法",
+          icon: "book-open",
           collapsible: true,
           collapsed: false,
           children: [{ text: "基础语法与项目结构", link: "/go/basics" }],
         },
         {
           text: "并发编程",
+          icon: "arrows-split-up-and-left",
           collapsible: true,
           collapsed: false,
           children: [{ text: "Goroutine、Channel 与 Context", link: "/go/concurrency" }],
         },
         {
           text: "Web 开发：Gin",
+          icon: "globe",
           collapsible: true,
           collapsed: false,
           children: [{ text: "Gin 服务开发", link: "/go/gin" }],
         },
         {
           text: "工程实践",
+          icon: "gears",
           collapsible: true,
           collapsed: false,
           children: [{ text: "配置、日志、测试与部署", link: "/go/engineering" }],
@@ -54,9 +58,9 @@ export default sidebar({
       collapsible: true,
       collapsed: false,
       children: [
-        { text: "Java 基础", children: [{ text: "Java 基础语法与面向对象", link: "/java/basics" }] },
-        { text: "集合与并发", children: [{ text: "集合框架与并发编程", link: "/java/collections-and-concurrency" }] },
-        { text: "JVM 与框架", children: [{ text: "JVM 与 Spring 生态", link: "/java/jvm-and-frameworks" }] },
+        { text: "Java 基础", icon: "book-open", children: [{ text: "Java 基础语法与面向对象", link: "/java/basics" }] },
+        { text: "集合与并发", icon: "boxes-stacked", children: [{ text: "集合框架与并发编程", link: "/java/collections-and-concurrency" }] },
+        { text: "JVM 与框架", icon: "microchip", children: [{ text: "JVM 与 Spring 生态", link: "/java/jvm-and-frameworks" }] },
       ],
     },
     {
@@ -65,8 +69,8 @@ export default sidebar({
       collapsible: true,
       collapsed: false,
       children: [
-        { text: "MySQL", children: [{ text: "MySQL 基础、索引与事务", link: "/database/mysql" }] },
-        { text: "Redis", children: [{ text: "Redis 缓存与常用场景", link: "/database/redis" }] },
+        { text: "MySQL", icon: "table", children: [{ text: "MySQL 基础、索引与事务", link: "/database/mysql" }] },
+        { text: "Redis", icon: "bolt", children: [{ text: "Redis 缓存与常用场景", link: "/database/redis" }] },
       ],
     },
     {
@@ -175,6 +179,7 @@ export default sidebar({
       children: [
         {
           text: "二叉树题解",
+          icon: "tree",
           collapsible: true,
           collapsed: false,
           children: [
@@ -189,10 +194,11 @@ export default sidebar({
           ],
         },
         {
-          text: "Hot 100 题解",
+          text: "🔥 Hot 100 题解",
+          icon: "fire",
           collapsible: true,
           collapsed: false,
-          children: [{ text: "两数之和", link: "/algorithm/leetcode/hot-100/two-sum" }],
+          children: [{ text: "1. 两数之和", link: "/algorithm/leetcode/hot-100/two-sum" }],
         },
       ],
     },
@@ -279,5 +285,4 @@ export default sidebar({
       children: [{ text: "Agent 工作流与实战", link: "/ai-application-development/agent-development" }],
     },
   ],
-  "/resources/": false,
 });
