@@ -7,11 +7,11 @@ export default sidebar({
       text: "学习栏目",
       children: [
         { text: "后端开发", link: "/backend/" },
-        { text: "前端开发", link: "/frontend/" },
         { text: "算法与数据结构", link: "/algorithm/" },
         { text: "计算机基础", link: "/computer-fundamentals/" },
         { text: "开发工具", link: "/tools/" },
         { text: "AI 应用开发", link: "/ai-application-development/" },
+        { text: "前端开发", link: "/frontend/" },
         { text: "网站维护指南", icon: "book-open", link: "/site-guide/" },
       ],
     },
