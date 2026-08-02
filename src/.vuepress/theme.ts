@@ -16,6 +16,9 @@ export default hopeTheme({
 
   repo: "zzxrepository/gocode",
 
+  // 源码位于 GitHub 的 master 分支，用于生成“在 GitHub 上编辑此页”链接
+  docsBranch: "master",
+
   docsDir: "src",
 
   // 导航栏
