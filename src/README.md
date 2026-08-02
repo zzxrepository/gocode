@@ -14,7 +14,7 @@ actions:
     icon: terminal
     link: /backend/go/
     type: primary
-  - text: 查看学习地图
+  - text: 查看学习路线
     icon: map
     link: /learning-paths/
   - text: 网站维护指南
@@ -22,6 +22,15 @@ actions:
     link: /site-guide/
 
 highlights:
+  - header: 推荐阅读 · 学习路线
+    description: 按路线学习，比零散收藏更容易形成体系。
+    image: /assets/image/features.svg
+    highlights:
+      - title: Java 学习路线
+        icon: mug-hot
+        details: 从基础语法到并发、JVM、Spring Boot 与微服务
+        link: /learning-paths/java
+
   - header: 后端开发
     description: 从语言基础到真实服务，建立完整的后端知识体系。
     image: /assets/image/advanced.svg
@@ -38,6 +47,10 @@ highlights:
         icon: database
         details: MySQL、Redis、MongoDB 与数据存储实践
         link: /backend/database/
+      - title: 消息队列与微服务
+        icon: tower-broadcast
+        details: 消息队列、Spring Boot、go-zero、分布式与云原生
+        link: /backend/microservices/
 
   - header: 基础能力
     description: 夯实解决实际问题所需的通用技术基础。
@@ -85,15 +98,6 @@ highlights:
         icon: mobile-screen-button
         details: 手机实况照片筛选器 · Swift
         link: https://github.com/zzxrepository/MotionAlbum
-
-  - header: 推荐阅读
-    description: 按路线学习，比零散收藏更容易形成体系。
-    image: /assets/image/features.svg
-    highlights:
-      - title: Java 学习路线
-        icon: mug-hot
-        details: 从基础语法到并发、JVM、Spring Boot 与微服务
-        link: /learning-paths/java
 
 copyright: false
 footer: Copyright © 2026 神马都会亿点点的毛毛张
