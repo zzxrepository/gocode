@@ -260,17 +260,6 @@ npm run docs:build && ./deploy.sh
 
 顶部导航由 `navbar.ts` 控制；只创建文件夹或 Markdown 不会自动出现在顶部。
 
-### 部署脚本报 `env: sh\r: No such file or directory`
-
-这是脚本使用了 Windows 换行符（CRLF）。在项目根目录执行：
-
-```bash
-sed -i '' $'s/\r$//' deploy.sh
-chmod +x deploy.sh
-```
-
-然后再运行部署命令。
-
 ### 网站更新后浏览器还是旧内容
 
 先等待 GitHub Pages 完成发布，再用 `Cmd + Shift + R` 强制刷新页面，避免浏览器缓存旧的 CSS 或 JavaScript。
