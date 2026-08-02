@@ -1,1 +1,29 @@
-// place your custom styles here
+/* 导航图标使用低饱和的栏目色，正文文字仍保持清晰的主题色。 */
+.vp-nav-links > .vp-nav-item:nth-child(1) .vp-icon { color: #2563eb; }
+.vp-nav-links > .vp-nav-item:nth-child(2) .vp-icon { color: #0f766e; }
+.vp-nav-links > .vp-nav-item:nth-child(3) .vp-icon { color: #7c3aed; }
+.vp-nav-links > .vp-nav-item:nth-child(4) .vp-icon { color: #2563eb; }
+.vp-nav-links > .vp-nav-item:nth-child(5) .vp-icon { color: #ea580c; }
+.vp-nav-links > .vp-nav-item:nth-child(6) .vp-icon { color: #db2777; }
+.vp-nav-links > .vp-nav-item:nth-child(7) .vp-icon { color: #0891b2; }
+.vp-nav-links > .vp-nav-item:nth-child(8) .vp-icon { color: #475569; }
+
+.vp-sidebar .vp-sidebar-group:nth-child(1) > .vp-sidebar-heading .vp-icon { color: #06b6d4; }
+.vp-sidebar .vp-sidebar-group:nth-child(2) > .vp-sidebar-heading .vp-icon { color: #7c3aed; }
+.vp-sidebar .vp-sidebar-group:nth-child(3) > .vp-sidebar-heading .vp-icon { color: #ea580c; }
+.vp-sidebar .vp-sidebar-group:nth-child(4) > .vp-sidebar-heading .vp-icon { color: #db2777; }
+
+/* Go 使用项目内的原创 Gopher 图标，替换默认的终端符号。 */
+.vp-sidebar .vp-sidebar-group:has(> .vp-sidebar-heading .vp-icon[icon="fa6-solid:terminal"]) > .vp-sidebar-heading .vp-icon {
+  display: none;
+}
+
+.vp-sidebar .vp-sidebar-group:has(> .vp-sidebar-heading .vp-icon[icon="fa6-solid:terminal"]) > .vp-sidebar-heading::before {
+  content: "";
+  display: inline-block;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-right: 0.35rem;
+  vertical-align: -0.22rem;
+  background: url("/gocode/go-gopher.png") center / contain no-repeat;
+}

@@ -45,7 +45,7 @@ export default sidebar({
     },
     {
       text: "微服务与分布式",
-      icon: "diagram-project",
+      icon: "share-nodes",
       collapsible: true,
       collapsed: false,
       children: [
@@ -129,7 +129,7 @@ export default sidebar({
   "/tree/": [
     {
       text: "LeetCode 二叉树题解",
-      icon: "diagram-project",
+      icon: "sitemap",
       collapsible: true,
       collapsed: false,
       children: [
@@ -221,7 +221,7 @@ export default sidebar({
     },
     {
       text: "Agent 应用开发",
-      icon: "diagram-project",
+      icon: "wand-magic-sparkles",
       collapsible: true,
       collapsed: false,
       children: [{ text: "Agent 工作流与实战", link: "/ai-application-development/agent-development" }],
