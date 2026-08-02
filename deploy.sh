@@ -7,7 +7,7 @@ set -e
 # 1. 添加所有源码文件（.gitignore 中配置的文件会自动忽略）
 # git init
 git add -A
-git commit -m "docs: update project source code" || echo "No changes to commit for source code"
+git commit -m "gocode v1" || echo "No changes to commit for source code"
 
 # 3. 确认已关联远程仓库
 git remote get-url origin
