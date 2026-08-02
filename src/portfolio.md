@@ -1,24 +1,20 @@
 ---
 home: true
 portfolio: true
-title: 档案主页
+title: 关于作者
 icon: house
 welcome: 👋 你好，我是
 name: 神马都会亿点点的毛毛张
 avatar: https://theme-hope-assets.vuejs.press/hero/conan.png
 
 titles:
-  - 天才少年侦探
-  - 小兰的青梅竹马
-  - 黑衣组织的最大对手
+  - 跟着毛毛张学 Go
+  - 技术学习与实践
+  - 神马都会亿点点
 
 footer: false
 ---
 
 ## 介绍
 
-这是一个档案主页的案例。
-
-要使用此布局，你应该在页面 Frontmatter 中设置 `home: true` 和 `portfolio: true`。
-
-相关配置文档请见 [档案主页](https://theme-hope.vuejs.press/zh/guide/blog/home.html#档案类型主页)。
+欢迎来到 GoCode。这里记录 Go 学习、技术实践与成长过程。

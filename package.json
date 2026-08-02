@@ -1,6 +1,6 @@
 {
-  "name": "mmzhang-blog",
-  "description": "神马都会亿点点的毛毛张的个人博客",
+  "name": "gocode",
+  "description": "GoCode · MaoMao Zhang｜跟着毛毛张学 Go",
   "version": "2.0.0",
   "license": "MIT",
   "type": "module",

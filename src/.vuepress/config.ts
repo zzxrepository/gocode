@@ -3,11 +3,11 @@ import { defineUserConfig } from "vuepress";
 import theme from "./theme.js";
 
 export default defineUserConfig({
-  base: "/mmzhang-blog/",
+  base: "/gocode/",
 
   lang: "zh-CN",
-  title: "神马都会亿点点的毛毛张",
-  description: "技术博客",
+  title: "GoCode · MaoMao Zhang",
+  description: "跟着毛毛张学 Go",
 
   theme,
 

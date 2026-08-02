@@ -4,16 +4,15 @@ import navbar from "./navbar.js";
 import sidebar from "./sidebar.js";
 
 export default hopeTheme({
-  hostname: "https://vuepress-theme-hope-docs-demo.netlify.app",
+  hostname: "https://zzxrepository.github.io/gocode/",
 
   author: {
-    name: "毛毛张",
-    url: "https://mister-hope.com",
+    name: "神马都会亿点点的毛毛张",
   },
 
   logo: "https://img-blog.csdnimg.cn/direct/4aa8ec47d1bd467390ece69275f023a8.png",
 
-  repo: "vuepress-theme-hope/vuepress-theme-hope",
+  repo: "zzxrepository/gocode",
 
   docsDir: "src",
 
@@ -24,7 +23,7 @@ export default hopeTheme({
   sidebar,
 
   // 页脚
-  footer: "默认页脚",
+  footer: "Copyright © 2026 神马都会亿点点的毛毛张",
   displayFooter: true,
 
   // 加密配置
@@ -119,14 +118,7 @@ export default hopeTheme({
 
   // 在这里配置主题提供的插件
   plugins: {
-    // 注意: 仅用于测试! 你必须自行生成并在生产环境中使用自己的评论服务
-    comment: {
-      provider: "Giscus",
-      repo: "vuepress-theme-hope/giscus-discussions",
-      repoId: "R_kgDOG_Pt2A",
-      category: "Announcements",
-      categoryId: "DIC_kwDOG_Pt2M4COD69",
-    },
+    // 评论功能暂未启用。配置自己的 Giscus 仓库后再在此处开启。
 
     components: {
       components: ["Badge", "VPCard"],
