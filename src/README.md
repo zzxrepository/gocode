@@ -2,7 +2,7 @@
 home: true
 icon: house
 title: 跟着毛毛张学 Go
-heroImage: /maomao-zhang-logo.png
+heroImage: /maomao-zhang-logo-clean.png
 bgImage: https://theme-hope-assets.vuejs.press/bg/6-light.svg
 bgImageDark: https://theme-hope-assets.vuejs.press/bg/6-dark.svg
 bgImageStyle:
@@ -69,6 +69,15 @@ highlights:
         icon: robot
         details: Agent 工作流与项目实战
         link: /ai-application-development/
+
+  - header: 项目与实践
+    description: 把学习沉淀为真正可以使用的产品。
+    image: /assets/image/blog.svg
+    highlights:
+      - title: MotionAlbum
+        icon: mobile-screen-button
+        details: 手机实况照片筛选器 · Swift
+        link: https://github.com/zzxrepository/MotionAlbum
 
 copyright: false
 footer: Copyright © 2026 神马都会亿点点的毛毛张

@@ -2,16 +2,7 @@ import { navbar } from "vuepress-theme-hope";
 
 export default navbar([
   { text: "首页", icon: "house", link: "/" },
-  {
-    text: "后端开发",
-    icon: "server",
-    link: "/backend/",
-    children: [
-      { text: "Go", icon: "code", link: "/go/" },
-      { text: "Java", icon: "code", link: "/java/" },
-      { text: "数据库", icon: "database", link: "/database/" },
-    ],
-  },
+  { text: "后端开发", icon: "server", link: "/backend/" },
   { text: "算法与数据结构", icon: "code", link: "/tree/" },
   { text: "计算机基础", icon: "laptop-code", link: "/computer-fundamentals/" },
   { text: "开发工具", icon: "screwdriver-wrench", link: "/tools/" },

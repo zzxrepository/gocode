@@ -4,13 +4,15 @@ import navbar from "./navbar.js";
 import sidebar from "./sidebar.js";
 
 export default hopeTheme({
-  hostname: "https://zzxrepository.github.io/gocode/",
+  hostname: "https://zzxrepository.github.io",
 
   author: {
     name: "神马都会亿点点的毛毛张",
   },
 
-  logo: "/maomao-zhang-logo.png",
+  // 用于导航栏、浏览器标签页与收藏夹的站点图标
+  logo: "/maomao-zhang-logo-clean.png",
+  favicon: "/maomao-zhang-logo-clean.png",
 
   repo: "zzxrepository/gocode",
 
