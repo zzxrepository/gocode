@@ -32,7 +32,7 @@ git add -A
 git commit -m 'deploy: update static files to gh-pages'
 
 # 强制推送静态文件到 gh-pages 分支
-git push -f origin master:gh-pages
+git push -f origin HEAD:gh-pages
 
 # 返回项目根目录
 cd -
