@@ -188,6 +188,15 @@ export default sidebar({
   ],
   "/tools/": [
     {
+      text: "开发环境",
+      icon: "laptop",
+      collapsible: true,
+      collapsed: false,
+      children: [
+        { text: "macOS 使用技巧", icon: "fa6-brands:apple", link: "/tools/development-environment/macos-tips" },
+      ],
+    },
+    {
       text: "🐳 Docker",
       collapsible: true,
       collapsed: false,
