@@ -7,7 +7,7 @@ export default sidebar({
       text: "学习栏目",
       children: [
         { text: "后端开发", link: "/backend/" },
-        { text: "算法与数据结构", link: "/tree/" },
+        { text: "算法与数据结构", link: "/algorithm/" },
         { text: "计算机基础", link: "/computer-fundamentals/" },
         { text: "开发工具", link: "/tools/" },
         { text: "AI 应用开发", link: "/ai-application-development/" },
@@ -126,21 +126,21 @@ export default sidebar({
       children: [{ text: "Redis 缓存与常用场景", link: "/database/redis" }],
     },
   ],
-  "/tree/": [
+  "/algorithm/": [
     {
       text: "LeetCode 二叉树题解",
       icon: "sitemap",
       collapsible: true,
       collapsed: false,
       children: [
-        { text: "二叉树遍历", link: "/tree/LeetCode二叉树刷题笔记总结1-二叉树的遍历" },
-        { text: "二叉树属性", link: "/tree/LeetCode刷题笔记2" },
-        { text: "二叉树基本性质", link: "/tree/Leetcode刷题笔记3" },
-        { text: "二叉树路径", link: "/tree/LeetCode刷题笔记4" },
-        { text: "构造二叉树", link: "/tree/LeetCode刷题笔记5" },
-        { text: "二叉搜索树（一）", link: "/tree/LeetCode刷题笔记6二叉搜索树1" },
-        { text: "二叉搜索树（二）", link: "/tree/LeetCode刷题笔记7二叉搜索树2" },
-        { text: "二叉树的直径", link: "/tree/LeetCode刷题笔记8" },
+        { text: "二叉树遍历", link: "/algorithm/LeetCode二叉树刷题笔记总结1-二叉树的遍历" },
+        { text: "二叉树属性", link: "/algorithm/LeetCode刷题笔记2" },
+        { text: "二叉树基本性质", link: "/algorithm/Leetcode刷题笔记3" },
+        { text: "二叉树路径", link: "/algorithm/LeetCode刷题笔记4" },
+        { text: "构造二叉树", link: "/algorithm/LeetCode刷题笔记5" },
+        { text: "二叉搜索树（一）", link: "/algorithm/LeetCode刷题笔记6二叉搜索树1" },
+        { text: "二叉搜索树（二）", link: "/algorithm/LeetCode刷题笔记7二叉搜索树2" },
+        { text: "二叉树的直径", link: "/algorithm/LeetCode刷题笔记8" },
       ],
     },
   ],
@@ -173,8 +173,7 @@ export default sidebar({
   ],
   "/tools/": [
     {
-      text: "Docker",
-      icon: "docker",
+      text: "🐳 Docker",
       collapsible: true,
       collapsed: false,
       children: [

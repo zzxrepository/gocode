@@ -28,16 +28,6 @@ export default hopeTheme({
   footer: "Copyright © 2026 神马都会亿点点的毛毛张",
   displayFooter: true,
 
-  // 加密配置
-  encrypt: {
-    config: {
-      "/demo/encrypt.html": {
-        hint: "Password: 1234",
-        password: "1234",
-      },
-    },
-  },
-
   // 多语言配置
   metaLocales: {
     editLink: "在 GitHub 上编辑此页",
@@ -120,6 +110,12 @@ export default hopeTheme({
 
     icon: {
       prefix: "fa6-solid:",
+    },
+
+    redirect: {
+      config: {
+        "/tree/": "/algorithm/",
+      },
     },
 
     // 如果你需要 PWA。安装 @vuepress/plugin-pwa 并取消下方注释

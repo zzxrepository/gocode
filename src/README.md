@@ -43,7 +43,7 @@ highlights:
       - title: 算法与数据结构
         icon: diagram-project
         details: LeetCode、Hot 100 与常用算法题解
-        link: /tree/
+        link: /algorithm/
       - title: 计算机基础
         icon: desktop
         details: 计算机网络与操作系统
