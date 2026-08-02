@@ -22,7 +22,30 @@ export default sidebar({
       collapsible: true,
       collapsed: false,
       children: [
-        { text: "Go 教程", link: "/go/" },
+        {
+          text: "Go 基础语法",
+          collapsible: true,
+          collapsed: false,
+          children: [{ text: "基础语法与项目结构", link: "/go/basics" }],
+        },
+        {
+          text: "并发编程",
+          collapsible: true,
+          collapsed: false,
+          children: [{ text: "Goroutine、Channel 与 Context", link: "/go/concurrency" }],
+        },
+        {
+          text: "Web 开发：Gin",
+          collapsible: true,
+          collapsed: false,
+          children: [{ text: "Gin 服务开发", link: "/go/gin" }],
+        },
+        {
+          text: "工程实践",
+          collapsible: true,
+          collapsed: false,
+          children: [{ text: "配置、日志、测试与部署", link: "/go/engineering" }],
+        },
       ],
     },
     {
@@ -31,7 +54,9 @@ export default sidebar({
       collapsible: true,
       collapsed: false,
       children: [
-        { text: "Java 教程", link: "/java/" },
+        { text: "Java 基础", children: [{ text: "Java 基础语法与面向对象", link: "/java/basics" }] },
+        { text: "集合与并发", children: [{ text: "集合框架与并发编程", link: "/java/collections-and-concurrency" }] },
+        { text: "JVM 与框架", children: [{ text: "JVM 与 Spring 生态", link: "/java/jvm-and-frameworks" }] },
       ],
     },
     {
@@ -40,7 +65,8 @@ export default sidebar({
       collapsible: true,
       collapsed: false,
       children: [
-        { text: "数据库教程", link: "/database/" },
+        { text: "MySQL", children: [{ text: "MySQL 基础、索引与事务", link: "/database/mysql" }] },
+        { text: "Redis", children: [{ text: "Redis 缓存与常用场景", link: "/database/redis" }] },
       ],
     },
     {
@@ -128,19 +154,41 @@ export default sidebar({
   ],
   "/algorithm/": [
     {
-      text: "LeetCode 二叉树题解",
-      icon: "sitemap",
+      text: "数据结构",
+      icon: "cubes-stacked",
+      collapsible: true,
+      collapsed: false,
+      children: [{ text: "数据结构学习路线", link: "/algorithm/data-structures/" }],
+    },
+    {
+      text: "算法",
+      icon: "diagram-project",
+      collapsible: true,
+      collapsed: false,
+      children: [{ text: "算法学习路线", link: "/algorithm/algorithms/" }],
+    },
+    {
+      text: "LeetCode 题解",
+      icon: "simple-icons:leetcode",
       collapsible: true,
       collapsed: false,
       children: [
-        { text: "二叉树遍历", link: "/algorithm/LeetCode二叉树刷题笔记总结1-二叉树的遍历" },
-        { text: "二叉树属性", link: "/algorithm/LeetCode刷题笔记2" },
-        { text: "二叉树基本性质", link: "/algorithm/Leetcode刷题笔记3" },
-        { text: "二叉树路径", link: "/algorithm/LeetCode刷题笔记4" },
-        { text: "构造二叉树", link: "/algorithm/LeetCode刷题笔记5" },
-        { text: "二叉搜索树（一）", link: "/algorithm/LeetCode刷题笔记6二叉搜索树1" },
-        { text: "二叉搜索树（二）", link: "/algorithm/LeetCode刷题笔记7二叉搜索树2" },
-        { text: "二叉树的直径", link: "/algorithm/LeetCode刷题笔记8" },
+        {
+          text: "二叉树题解",
+          collapsible: true,
+          collapsed: false,
+          children: [
+            { text: "二叉树遍历", link: "/algorithm/leetcode/binary-tree/LeetCode二叉树刷题笔记总结1-二叉树的遍历" },
+            { text: "二叉树属性", link: "/algorithm/leetcode/binary-tree/LeetCode刷题笔记2" },
+            { text: "二叉树基本性质", link: "/algorithm/leetcode/binary-tree/Leetcode刷题笔记3" },
+            { text: "二叉树路径", link: "/algorithm/leetcode/binary-tree/LeetCode刷题笔记4" },
+            { text: "构造二叉树", link: "/algorithm/leetcode/binary-tree/LeetCode刷题笔记5" },
+            { text: "二叉搜索树（一）", link: "/algorithm/leetcode/binary-tree/LeetCode刷题笔记6二叉搜索树1" },
+            { text: "二叉搜索树（二）", link: "/algorithm/leetcode/binary-tree/LeetCode刷题笔记7二叉搜索树2" },
+            { text: "二叉树的直径", link: "/algorithm/leetcode/binary-tree/LeetCode刷题笔记8" },
+          ],
+        },
+        { text: "Hot 100 题解", link: "/algorithm/leetcode/hot-100/" },
       ],
     },
   ],
