@@ -74,6 +74,16 @@ export default sidebar({
       children: [
         { text: "MySQL", icon: "table", children: [{ text: "MySQL 基础、索引与事务", icon: "table-columns", link: "/backend/database/mysql" }] },
         { text: "Redis", icon: "bolt", children: [{ text: "Redis 缓存与常用场景", icon: "gauge-high", link: "/backend/database/redis" }] },
+        { text: "MongoDB", icon: "simple-icons:mongodb", children: [{ text: "MongoDB 文档数据库入门", icon: "file-lines", link: "/backend/database/mongodb" }] },
+      ],
+    },
+    {
+      text: "消息队列",
+      icon: "tower-broadcast",
+      collapsible: true,
+      collapsed: false,
+      children: [
+        { text: "消息队列概览", icon: "message", link: "/backend/message-queue/" },
       ],
     },
     {
@@ -234,7 +244,10 @@ export default sidebar({
       icon: "robot",
       collapsible: true,
       collapsed: false,
-      children: [{ text: "模型调用与提示词", icon: "comment-dots", link: "/ai-application-development/llm-applications" }],
+      children: [
+        { text: "模型调用与提示词", icon: "comment-dots", link: "/ai-application-development/llm-applications" },
+        { text: "LangChain：大模型应用框架", icon: "link", link: "/ai-application-development/langchain" },
+      ],
     },
     {
       text: "RAG 与 MCP",
@@ -248,7 +261,10 @@ export default sidebar({
       icon: "wand-magic-sparkles",
       collapsible: true,
       collapsed: false,
-      children: [{ text: "Agent 工作流与实战", icon: "bezier-curve", link: "/ai-application-development/agent-development" }],
+      children: [
+        { text: "Agent 工作流与实战", icon: "bezier-curve", link: "/ai-application-development/agent-development" },
+        { text: "LangGraph：Agent 工作流框架", icon: "diagram-project", link: "/ai-application-development/langgraph" },
+      ],
     },
   ],
 });

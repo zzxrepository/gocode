@@ -36,7 +36,7 @@ highlights:
         link: /backend/java/
       - title: 数据库
         icon: database
-        details: MySQL、Redis 与数据存储实践
+        details: MySQL、Redis、MongoDB 与数据存储实践
         link: /backend/database/
 
   - header: 基础能力
@@ -66,7 +66,7 @@ highlights:
     highlights:
       - title: 大模型应用
         icon: brain
-        details: 模型调用、提示词与应用设计
+        details: 模型调用、提示词、LangChain 与应用设计
         link: /ai-application-development/
       - title: RAG 与 MCP
         icon: link
@@ -74,7 +74,7 @@ highlights:
         link: /ai-application-development/
       - title: Agent 应用开发
         icon: robot
-        details: Agent 工作流与项目实战
+        details: LangGraph 工作流与 Agent 项目实战
         link: /ai-application-development/
 
   - header: 项目与实践
