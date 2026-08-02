@@ -6,7 +6,7 @@ export default defineUserConfig({
   base: "/gocode/",
 
   lang: "zh-CN",
-  title: "GoCode · MaoMao Zhang",
+  title: "GoCode · 毛毛张",
   description: "跟着毛毛张学 Go",
 
   theme,

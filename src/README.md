@@ -8,7 +8,7 @@ bgImageDark: https://theme-hope-assets.vuejs.press/bg/6-dark.svg
 bgImageStyle:
   background-attachment: fixed
 heroText: GoCode · MaoMao Zhang
-tagline: 跟着毛毛张学 Go，系统学习后端开发与 AI 应用开发
+tagline: 跟着毛毛张学 Go，系统学习软件开发与 AI 应用开发
 actions:
   - text: 开始学习 Go
     icon: terminal
