@@ -51,6 +51,13 @@ export default navbar([
           { text: "Microsoft Azure", link: "https://azure.microsoft.com/" },
         ],
       },
+      {
+        text: "建站与文档",
+        children: [
+          { text: "VuePress Theme Hope", link: "https://theme-hope.vuejs.press/" },
+          { text: "VuePress 官方文档", link: "https://vuejs.press/zh/" },
+        ],
+      },
     ],
   },
   { text: "关于作者", icon: "user", link: "/portfolio" },
