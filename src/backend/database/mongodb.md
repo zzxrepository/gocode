@@ -1,6 +1,12 @@
 ---
 title: MongoDB 文档数据库入门
 icon: simple-icons:mongodb
+prev:
+  text: Redis 缓存与常用场景
+  link: /backend/database/redis
+next:
+  text: 消息队列概览
+  link: /backend/message-queue/
 ---
 
 # MongoDB 文档数据库入门

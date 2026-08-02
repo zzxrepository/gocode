@@ -1,5 +1,11 @@
 ---
 title: 进程、线程与协程
+prev:
+  text: 操作系统
+  link: /computer-fundamentals/operating-system/
+next:
+  text: 内存管理
+  link: /computer-fundamentals/operating-system/memory-management
 icon: arrows-split-up-and-left
 ---
 

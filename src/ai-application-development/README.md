@@ -1,6 +1,9 @@
 ---
 title: AI 应用开发
 icon: robot
+next:
+  text: 模型调用与提示词
+  link: /ai-application-development/llm-applications
 ---
 
 # AI 应用开发

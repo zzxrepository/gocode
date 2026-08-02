@@ -1,3 +1,13 @@
+---
+title: LeetCode 刷题笔记 3：二叉树的基本性质
+prev:
+  text: 二叉树属性
+  link: /algorithm/leetcode/binary-tree/LeetCode刷题笔记2
+next:
+  text: 二叉树路径
+  link: /algorithm/leetcode/binary-tree/LeetCode刷题笔记4
+---
+
 > 📌本期毛毛张分享的是LeetCode关于二叉树🌲的性质的一些基础题，做这些题目的本质还是遍历二叉树🏃‍➡️的过程，如果还不熟悉二叉树的遍历方法的同学可以先看看毛毛张的这篇文章➡️[LeetCode刷题笔记：二叉树前序遍历、中序遍历、后序遍历和层序遍历 | 递归法 | 迭代法 | 统一迭代法 | 深度优先搜索 | 广度优先搜索](https://blog.csdn.net/weixin_48235955/article/details/139028925)
 
 [toc]

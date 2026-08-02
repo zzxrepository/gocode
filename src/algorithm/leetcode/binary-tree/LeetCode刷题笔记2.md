@@ -1,3 +1,13 @@
+---
+title: LeetCode 刷题笔记 2：二叉树的属性
+prev:
+  text: 二叉树遍历
+  link: /algorithm/leetcode/binary-tree/LeetCode二叉树刷题笔记总结1-二叉树的遍历
+next:
+  text: 二叉树基本性质
+  link: /algorithm/leetcode/binary-tree/Leetcode刷题笔记3
+---
+
 > 今天毛毛张分享的关于求解二叉树属性的4道LeetCode算法题，每道题目都是一题多解，并配上5道练习题，标签全部为简单题，赶快进来看看是不是真的简单吧！
 
 [toc]

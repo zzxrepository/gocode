@@ -1,5 +1,11 @@
 ---
 title: DNS 与域名解析
+prev:
+  text: TCP 与 UDP
+  link: /computer-fundamentals/network/tcp-and-udp
+next:
+  text: 操作系统
+  link: /computer-fundamentals/operating-system/
 icon: server
 ---
 

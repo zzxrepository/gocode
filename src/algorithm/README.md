@@ -2,6 +2,9 @@
 title: 算法与数据结构
 index: false
 icon: diagram-project
+next:
+  text: 数据结构学习路线
+  link: /algorithm/data-structures/
 category:
   - 算法
 ---

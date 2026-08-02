@@ -30,3 +30,51 @@
   vertical-align: -0.22rem;
   background: url("/gocode/go-gopher.png") center / contain no-repeat;
 }
+
+/* 右侧“沉浸阅读”开关：不依赖额外插件。 */
+.gocode-focus-reading-button {
+  position: fixed;
+  right: 1rem;
+  bottom: 8rem;
+  z-index: 101;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--vp-c-border);
+  border-radius: 999px;
+  background: var(--vp-c-bg);
+  color: var(--vp-c-text);
+  box-shadow: 0 4px 14px var(--vp-c-shadow);
+  cursor: pointer;
+}
+
+.gocode-focus-reading-button:hover,
+.gocode-focus-reading-button.is-active {
+  border-color: var(--vp-c-accent);
+  color: var(--vp-c-accent);
+}
+
+body.gocode-focus-reading [vp-navbar],
+body.gocode-focus-reading .vp-sidebar,
+body.gocode-focus-reading .vp-sidebar-mask,
+body.gocode-focus-reading .toggle-sidebar-wrapper,
+body.gocode-focus-reading .vp-toc-placeholder {
+  display: none !important;
+}
+
+body.gocode-focus-reading .theme-container .vp-page {
+  padding-top: 1.5rem;
+  padding-inline: 0;
+}
+
+body.gocode-focus-reading .theme-container .vp-page [vp-content] {
+  max-width: 52rem;
+  margin-inline: auto;
+}
+
+@media (max-width: 719px) {
+  .gocode-focus-reading-button span:last-child {
+    display: none;
+  }
+}

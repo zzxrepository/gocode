@@ -1,6 +1,12 @@
 ---
 title: Go
 icon: terminal
+prev:
+  text: 后端开发
+  link: /backend/
+next:
+  text: Go 基础语法与项目结构
+  link: /backend/go/basics
 ---
 
 # Go

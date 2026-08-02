@@ -1,5 +1,11 @@
 ---
 title: HTTP 与 HTTPS
+prev:
+  text: 网络分层与协议
+  link: /computer-fundamentals/network/network-layers-and-protocols
+next:
+  text: TCP 与 UDP
+  link: /computer-fundamentals/network/tcp-and-udp
 icon: globe
 ---
 

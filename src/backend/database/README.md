@@ -1,6 +1,12 @@
 ---
 title: 数据库
 icon: database
+prev:
+  text: JVM 与 Spring 生态
+  link: /backend/java/jvm-and-frameworks
+next:
+  text: MySQL 基础、索引与事务
+  link: /backend/database/mysql
 ---
 
 # 数据库

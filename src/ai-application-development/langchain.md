@@ -1,6 +1,12 @@
 ---
 title: LangChain：大模型应用框架
 icon: link
+prev:
+  text: 模型调用与提示词
+  link: /ai-application-development/llm-applications
+next:
+  text: 知识库与工具调用
+  link: /ai-application-development/rag-and-mcp
 ---
 
 # LangChain：大模型应用框架

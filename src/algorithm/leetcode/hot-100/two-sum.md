@@ -1,5 +1,8 @@
 ---
 title: 两数之和
+prev:
+  text: Hot 100 题解
+  link: /algorithm/leetcode/hot-100/
 ---
 
 # 两数之和

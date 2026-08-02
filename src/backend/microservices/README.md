@@ -1,6 +1,12 @@
 ---
 title: 微服务与分布式
 icon: diagram-project
+prev:
+  text: 消息队列概览
+  link: /backend/message-queue/
+next:
+  text: Spring / Spring Boot
+  link: /backend/microservices/spring-spring-boot
 ---
 
 # 微服务与分布式

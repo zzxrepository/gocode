@@ -1,5 +1,11 @@
 ---
 title: 数据结构
+prev:
+  text: 算法与数据结构
+  link: /algorithm/
+next:
+  text: 算法学习路线
+  link: /algorithm/algorithms/
 ---
 
 # 数据结构

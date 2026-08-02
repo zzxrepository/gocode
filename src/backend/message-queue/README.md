@@ -1,6 +1,12 @@
 ---
 title: 消息队列
 icon: tower-broadcast
+prev:
+  text: MongoDB 文档数据库入门
+  link: /backend/database/mongodb
+next:
+  text: 微服务与分布式
+  link: /backend/microservices/
 ---
 
 # 消息队列

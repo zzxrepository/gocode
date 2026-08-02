@@ -1,5 +1,11 @@
 ---
 title: Gin 服务开发
+prev:
+  text: Goroutine、Channel 与 Context
+  link: /backend/go/concurrency
+next:
+  text: 配置、日志、测试与部署
+  link: /backend/go/engineering
 ---
 
 # Gin 服务开发

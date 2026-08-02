@@ -1,5 +1,11 @@
 ---
 title: 二叉树前序遍历、中序遍历、后序遍历和层序遍历 | 递归法 | 迭代法 | 统一迭代法 | 深度优先搜索 | 广度优先搜索
+prev:
+  text: 二叉树题解
+  link: /algorithm/leetcode/binary-tree/
+next:
+  text: 二叉树属性
+  link: /algorithm/leetcode/binary-tree/LeetCode刷题笔记2
 date: 2024/7/28 16:04:00
 categories:
   - 算法

@@ -1,5 +1,11 @@
 ---
 title: Go 基础语法与项目结构
+prev:
+  text: Go
+  link: /backend/go/
+next:
+  text: Goroutine、Channel 与 Context
+  link: /backend/go/concurrency
 ---
 
 # Go 基础语法与项目结构

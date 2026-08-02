@@ -1,5 +1,11 @@
 ---
 title: Agent 工作流与实战
+prev:
+  text: 知识库与工具调用
+  link: /ai-application-development/rag-and-mcp
+next:
+  text: LangGraph：Agent 工作流框架
+  link: /ai-application-development/langgraph
 ---
 
 # Agent 工作流与实战

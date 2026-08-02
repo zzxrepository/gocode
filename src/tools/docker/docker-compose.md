@@ -1,6 +1,12 @@
 ---
 title: Docker Compose
 icon: cubes
+prev:
+  text: 镜像与容器
+  link: /tools/docker/images-and-containers
+next:
+  text: Git 入门
+  link: /tools/git/
 ---
 
 # Docker Compose

@@ -13,6 +13,7 @@ export default sidebar({
         { text: "开发工具", icon: "screwdriver-wrench", link: "/tools/" },
         { text: "AI 应用开发", icon: "robot", link: "/ai-application-development/" },
         { text: "前端开发", icon: "laptop-code", link: "/frontend/" },
+        { text: "学习路线", icon: "map", link: "/learning-paths/" },
         { text: "网站维护指南", icon: "book-open", link: "/site-guide/" },
       ],
     },
@@ -266,5 +267,8 @@ export default sidebar({
         { text: "LangGraph：Agent 工作流框架", icon: "diagram-project", link: "/ai-application-development/langgraph" },
       ],
     },
+  ],
+  "/learning-paths/": [
+    { text: "☕ Java 学习路线", icon: "map", link: "/learning-paths/java" },
   ],
 });

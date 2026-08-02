@@ -1,5 +1,11 @@
 ---
 title: 计算机网络
+prev:
+  text: 计算机基础
+  link: /computer-fundamentals/
+next:
+  text: 网络分层与协议
+  link: /computer-fundamentals/network/network-layers-and-protocols
 icon: network-wired
 ---
 

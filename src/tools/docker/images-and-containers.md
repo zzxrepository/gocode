@@ -1,6 +1,12 @@
 ---
 title: 镜像与容器
 icon: cube
+prev:
+  text: Docker 入门
+  link: /tools/docker/
+next:
+  text: Docker Compose
+  link: /tools/docker/docker-compose
 ---
 
 # 镜像与容器

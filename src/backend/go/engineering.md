@@ -1,5 +1,11 @@
 ---
 title: 配置、日志、测试与部署
+prev:
+  text: Gin 服务开发
+  link: /backend/go/gin
+next:
+  text: Java
+  link: /backend/java/
 ---
 
 # 配置、日志、测试与部署

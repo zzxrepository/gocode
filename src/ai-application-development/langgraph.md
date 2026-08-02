@@ -1,6 +1,9 @@
 ---
 title: LangGraph：Agent 工作流框架
 icon: bezier-curve
+prev:
+  text: Agent 工作流与实战
+  link: /ai-application-development/agent-development
 ---
 
 # LangGraph：Agent 工作流框架

@@ -1,6 +1,12 @@
 ---
 title: 分支与协作
 icon: code-branch
+prev:
+  text: Git 入门
+  link: /tools/git/
+next:
+  text: Maven 入门
+  link: /tools/maven/
 ---
 
 # 分支与协作

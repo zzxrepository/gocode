@@ -1,3 +1,12 @@
+---
+title: LeetCode 刷题笔记 4：二叉树的路径问题
+prev:
+  text: 二叉树基本性质
+  link: /algorithm/leetcode/binary-tree/Leetcode刷题笔记3
+next:
+  text: 构造二叉树
+  link: /algorithm/leetcode/binary-tree/LeetCode刷题笔记5
+---
 
 > 今天毛毛张要分享的内容是LeetCode的刷题笔记，主要介绍的二叉树的路径的遍历，毛毛张试图通过一种方法能尽力做类似的题目，达到举一反三的目的
 

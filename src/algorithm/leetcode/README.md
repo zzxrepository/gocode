@@ -1,6 +1,12 @@
 ---
 title: LeetCode 题解
 icon: simple-icons:leetcode
+prev:
+  text: 算法学习路线
+  link: /algorithm/algorithms/
+next:
+  text: 二叉树题解
+  link: /algorithm/leetcode/binary-tree/
 ---
 
 # LeetCode 题解

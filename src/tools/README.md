@@ -1,6 +1,9 @@
 ---
 title: 开发工具
 icon: screwdriver-wrench
+next:
+  text: macOS 使用技巧
+  link: /tools/development-environment/macos-tips
 ---
 
 # 开发工具

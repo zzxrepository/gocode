@@ -1,5 +1,11 @@
 ---
 title: 算法
+prev:
+  text: 数据结构学习路线
+  link: /algorithm/data-structures/
+next:
+  text: LeetCode 题解
+  link: /algorithm/leetcode/
 ---
 
 # 算法

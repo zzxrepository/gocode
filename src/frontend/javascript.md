@@ -1,5 +1,8 @@
 ---
 title: JavaScript 基础与浏览器编程
+prev:
+  text: CSS 布局与样式
+  link: /frontend/css
 icon: fa6-brands:js
 ---
 

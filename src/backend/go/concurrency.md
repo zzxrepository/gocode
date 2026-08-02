@@ -1,5 +1,11 @@
 ---
 title: Goroutine、Channel 与 Context
+prev:
+  text: Go 基础语法与项目结构
+  link: /backend/go/basics
+next:
+  text: Gin 服务开发
+  link: /backend/go/gin
 ---
 
 # Goroutine、Channel 与 Context

@@ -1,6 +1,12 @@
 ---
 title: HTML 基础与语义化
 icon: fa6-brands:html5
+prev:
+  text: 前端开发
+  link: /frontend/
+next:
+  text: CSS 布局与样式
+  link: /frontend/css
 ---
 
 # HTML 基础与语义化

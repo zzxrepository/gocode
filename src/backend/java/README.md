@@ -1,6 +1,12 @@
 ---
 title: Java
 icon: mug-hot
+prev:
+  text: 配置、日志、测试与部署
+  link: /backend/go/engineering
+next:
+  text: Java 基础语法与面向对象
+  link: /backend/java/basics
 ---
 
 # Java

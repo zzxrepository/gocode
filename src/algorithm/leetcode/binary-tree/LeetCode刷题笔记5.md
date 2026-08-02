@@ -1,3 +1,13 @@
+---
+title: LeetCode 刷题笔记 5：构造二叉树
+prev:
+  text: 二叉树路径
+  link: /algorithm/leetcode/binary-tree/LeetCode刷题笔记4
+next:
+  text: 二叉搜索树（一）
+  link: /algorithm/leetcode/binary-tree/LeetCode刷题笔记6二叉搜索树1
+---
+
 > 本篇分享的是与**构造二叉树**有关的问题，有关二叉树的基础知识可以[点击此处跳转学习]()，**构造二叉树的就是遍历树，构造树一般采用的是前序遍历，因为先构造中间节点，然后递归构造左子树和右子树**
 
 [toc]

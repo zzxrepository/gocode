@@ -1,5 +1,11 @@
 ---
 title: 操作系统
+prev:
+  text: DNS 与域名解析
+  link: /computer-fundamentals/network/dns
+next:
+  text: 进程、线程与协程
+  link: /computer-fundamentals/operating-system/process-thread-coroutine
 icon: desktop
 ---
 

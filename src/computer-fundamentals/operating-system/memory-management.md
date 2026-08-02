@@ -1,5 +1,11 @@
 ---
 title: 内存管理
+prev:
+  text: 进程、线程与协程
+  link: /computer-fundamentals/operating-system/process-thread-coroutine
+next:
+  text: 文件系统
+  link: /computer-fundamentals/operating-system/file-system
 icon: memory
 ---
 

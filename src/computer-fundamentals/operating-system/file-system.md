@@ -1,5 +1,8 @@
 ---
 title: 文件系统
+prev:
+  text: 内存管理
+  link: /computer-fundamentals/operating-system/memory-management
 icon: folder-tree
 ---
 

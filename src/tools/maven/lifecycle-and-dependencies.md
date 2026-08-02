@@ -1,6 +1,9 @@
 ---
 title: 生命周期与依赖管理
 icon: boxes-stacked
+prev:
+  text: Maven 入门
+  link: /tools/maven/
 ---
 
 # 生命周期与依赖管理

@@ -1,6 +1,9 @@
 ---
 title: 前端开发
 icon: laptop-code
+next:
+  text: HTML 基础与语义化
+  link: /frontend/html
 ---
 
 # 前端开发

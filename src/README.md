@@ -16,7 +16,7 @@ actions:
     type: primary
   - text: 查看学习地图
     icon: map
-    link: /backend/
+    link: /learning-paths/
   - text: 网站维护指南
     icon: book-open
     link: /site-guide/
@@ -85,6 +85,15 @@ highlights:
         icon: mobile-screen-button
         details: 手机实况照片筛选器 · Swift
         link: https://github.com/zzxrepository/MotionAlbum
+
+  - header: 推荐阅读
+    description: 按路线学习，比零散收藏更容易形成体系。
+    image: /assets/image/features.svg
+    highlights:
+      - title: Java 学习路线
+        icon: mug-hot
+        details: 从基础语法到并发、JVM、Spring Boot 与微服务
+        link: /learning-paths/java
 
 copyright: false
 footer: Copyright © 2026 神马都会亿点点的毛毛张

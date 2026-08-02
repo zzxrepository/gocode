@@ -1,3 +1,13 @@
+---
+title: LeetCode 刷题笔记 6：二叉搜索树 1
+prev:
+  text: 构造二叉树
+  link: /algorithm/leetcode/binary-tree/LeetCode刷题笔记5
+next:
+  text: 二叉搜索树（二）
+  link: /algorithm/leetcode/binary-tree/LeetCode刷题笔记7二叉搜索树2
+---
+
 # 1.[700. 二叉搜索树中的搜索](https://leetcode.cn/problems/search-in-a-binary-search-tree/)
 
 ## 1.1 题目描述

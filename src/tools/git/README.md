@@ -1,6 +1,12 @@
 ---
 title: Git 入门
 icon: code-branch
+prev:
+  text: Docker Compose
+  link: /tools/docker/docker-compose
+next:
+  text: 分支与协作
+  link: /tools/git/branch-and-collaboration
 ---
 
 # Git 入门

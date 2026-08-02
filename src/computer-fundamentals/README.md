@@ -1,6 +1,9 @@
 ---
 title: 计算机基础
 icon: desktop
+next:
+  text: 计算机网络
+  link: /computer-fundamentals/network/
 ---
 
 # 计算机基础

@@ -1,3 +1,13 @@
+---
+title: LeetCode 刷题笔记 7：二叉搜索树 2
+prev:
+  text: 二叉搜索树（一）
+  link: /algorithm/leetcode/binary-tree/LeetCode刷题笔记6二叉搜索树1
+next:
+  text: 二叉树的直径
+  link: /algorithm/leetcode/binary-tree/LeetCode刷题笔记8
+---
+
 # 题目1：[701. 二叉搜索树中的插入操作](https://leetcode.cn/problems/insert-into-a-binary-search-tree/)
 
 ## 1.题目描述

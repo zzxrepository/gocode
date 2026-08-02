@@ -1,6 +1,12 @@
 ---
 title: Spring / Spring Boot
 icon: leaf
+prev:
+  text: 微服务与分布式
+  link: /backend/microservices/
+next:
+  text: go-zero
+  link: /backend/microservices/go-zero
 ---
 
 # Spring / Spring Boot

@@ -1,3 +1,13 @@
+---
+title: LeetCode 刷题笔记 8：二叉树的直径
+prev:
+  text: 二叉搜索树（二）
+  link: /algorithm/leetcode/binary-tree/LeetCode刷题笔记7二叉搜索树2
+next:
+  text: Hot 100 题解
+  link: /algorithm/leetcode/hot-100/
+---
+
 # [543. 二叉树的直径](https://leetcode.cn/problems/diameter-of-binary-tree/)
 
 标签：简单
