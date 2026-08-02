@@ -22,7 +22,7 @@ actions:
     link: /site-guide/
 
 highlights:
-  - header: 推荐阅读 · 学习路线
+  - header: 推荐阅读
     description: 按路线学习，比零散收藏更容易形成体系。
     image: /assets/image/features.svg
     highlights:
