@@ -10,7 +10,7 @@ export default hopeTheme({
     name: "神马都会亿点点的毛毛张",
   },
 
-  logo: "https://img-blog.csdnimg.cn/direct/4aa8ec47d1bd467390ece69275f023a8.png",
+  logo: "/maomao-zhang-logo.png",
 
   repo: "zzxrepository/gocode",
 
