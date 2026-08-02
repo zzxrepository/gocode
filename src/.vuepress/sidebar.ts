@@ -11,6 +11,7 @@ export default sidebar({
         { text: "计算机基础", link: "/computer-fundamentals/" },
         { text: "开发工具", link: "/tools/" },
         { text: "AI 应用开发", link: "/ai-application-development/" },
+        { text: "网站维护指南", icon: "book-open", link: "/site-guide/" },
       ],
     },
     { text: "关于作者", link: "/portfolio" },

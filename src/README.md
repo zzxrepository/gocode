@@ -17,6 +17,9 @@ actions:
   - text: 查看学习地图
     icon: map
     link: /backend/
+  - text: 网站维护指南
+    icon: book-open
+    link: /site-guide/
 
 highlights:
   - header: 后端开发
