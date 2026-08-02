@@ -115,6 +115,18 @@ export default hopeTheme({
     redirect: {
       config: {
         "/tree/": "/algorithm/",
+        "/go/": "/backend/go/",
+        "/go/basics.html": "/backend/go/basics.html",
+        "/go/concurrency.html": "/backend/go/concurrency.html",
+        "/go/gin.html": "/backend/go/gin.html",
+        "/go/engineering.html": "/backend/go/engineering.html",
+        "/java/": "/backend/java/",
+        "/java/basics.html": "/backend/java/basics.html",
+        "/java/collections-and-concurrency.html": "/backend/java/collections-and-concurrency.html",
+        "/java/jvm-and-frameworks.html": "/backend/java/jvm-and-frameworks.html",
+        "/database/": "/backend/database/",
+        "/database/mysql.html": "/backend/database/mysql.html",
+        "/database/redis.html": "/backend/database/redis.html",
       },
     },
 

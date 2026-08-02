@@ -12,7 +12,7 @@ tagline: 跟着毛毛张学 Go，系统学习后端开发与 AI 应用开发
 actions:
   - text: 开始学习 Go
     icon: terminal
-    link: /go/
+    link: /backend/go/
     type: primary
   - text: 查看学习地图
     icon: map
@@ -29,15 +29,15 @@ highlights:
       - title: Go
         icon: terminal
         details: 基础语法、并发、Gin、工程实践与微服务
-        link: /go/
+        link: /backend/go/
       - title: Java
         icon: mug-hot
         details: Java 基础、集合、并发、JVM 与框架
-        link: /java/
+        link: /backend/java/
       - title: 数据库
         icon: database
         details: MySQL、Redis 与数据存储实践
-        link: /database/
+        link: /backend/database/
 
   - header: 基础能力
     description: 夯实解决实际问题所需的通用技术基础。
@@ -55,6 +55,10 @@ highlights:
         icon: screwdriver-wrench
         details: Git、Docker、Linux 命令与工程效率
         link: /tools/
+      - title: 前端开发
+        icon: laptop-code
+        details: HTML、CSS、JavaScript 与浏览器基础
+        link: /frontend/
 
   - header: AI 应用开发
     description: 面向真实场景，学习构建大模型与 Agent 应用。

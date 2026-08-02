@@ -21,9 +21,12 @@ tag:
 gocode/
 ├── src/                         # 所有会被生成到网站的内容
 │   ├── README.md                 # 网站首页
-│   ├── go/                       # Go 教程
-│   ├── java/                     # Java 教程
-│   ├── database/                 # 数据库教程
+│   ├── backend/                  # 后端开发的统一目录
+│   │   ├── go/                   # Go 教程
+│   │   ├── java/                 # Java 教程
+│   │   ├── database/             # 数据库教程
+│   │   └── microservices/        # 微服务与分布式
+│   ├── frontend/                 # HTML、CSS、JavaScript
 │   ├── algorithm/                # 算法与数据结构、LeetCode 题解
 │   ├── computer-fundamentals/    # 计算机网络、操作系统
 │   ├── tools/                    # Docker、Git、Maven
@@ -44,17 +47,17 @@ gocode/
 
 | 本地文件 | 网页地址 |
 | --- | --- |
-| `src/go/README.md` | `/gocode/go/` |
-| `src/go/functions.md` | `/gocode/go/functions.html` |
+| `src/backend/go/README.md` | `/gocode/backend/go/` |
+| `src/backend/go/functions.md` | `/gocode/backend/go/functions.html` |
 | `src/algorithm/leetcode/hot-100/two-sum.md` | `/gocode/algorithm/leetcode/hot-100/two-sum.html` |
 
-在 `navbar.ts` 和 `sidebar.ts` 中写内部链接时，通常省略 `.html`，例如：`/go/functions`。
+在 `navbar.ts` 和 `sidebar.ts` 中写内部链接时，通常省略 `.html`，例如：`/backend/go/functions`。
 
 ## 2. 日常写文章：以新增 Go「函数与方法」教程为例
 
 ### 第一步：新建 Markdown 文件
 
-在 `src/go/` 下创建文件：`functions-and-methods.md`。
+在 `src/backend/go/` 下创建文件：`functions-and-methods.md`。
 
 ````md
 ---
@@ -111,25 +114,20 @@ Go 同时会从两个入口访问：顶部“后端开发”里的 Go，以及�
   collapsible: true,
   collapsed: false,
   children: [
-    { text: "基础语法与项目结构", link: "/go/basics" },
-    { text: "函数与方法", link: "/go/functions-and-methods" },
+    { text: "基础语法与项目结构", link: "/backend/go/basics" },
+    { text: "函数与方法", link: "/backend/go/functions-and-methods" },
   ],
 }
 ```
 
-这个片段要各放一份到：
-
-1. `"/backend/"` 里的 `Go` 子目录；
-2. `"/go/"` 里的独立 Go 左侧目录。
-
-这样无论读者从“后端开发”还是从 Go 课程进入，都会看到相同的文章树。
+这个片段只需放入 `sidebar.ts` 的 `"/backend/"` → `Go` 子目录。Go、Java、数据库和微服务都位于 `backend/` 下，所以读者从后端开发点进任何文章，左侧都会始终显示完整的后端目录。
 
 ### 第三步：逐步细化 Go 课程
 
-当一个主题文章变多时，不要把所有文章都堆在 `src/go/` 根目录。推荐按专题建文件夹：
+当一个主题文章变多时，不要把所有文章都堆在 `src/backend/go/` 根目录。推荐按专题建文件夹：
 
 ```text
-src/go/
+src/backend/go/
 ├── basics.md
 ├── functions-and-methods.md
 ├── data-structures/
@@ -145,7 +143,7 @@ src/go/
     └── routing.md
 ```
 
-随后在两个 Go 目录区块中增加一个可展开分组：
+随后在后端开发的 Go 目录区块中增加一个可展开分组：
 
 ```ts
 {
@@ -154,10 +152,10 @@ src/go/
   collapsible: true,
   collapsed: false,
   children: [
-    { text: "学习概览", link: "/go/data-structures/" },
-    { text: "数组与切片", link: "/go/data-structures/array-and-slice" },
-    { text: "Map", link: "/go/data-structures/map" },
-    { text: "栈与队列", link: "/go/data-structures/stack-and-queue" },
+    { text: "学习概览", link: "/backend/go/data-structures/" },
+    { text: "数组与切片", link: "/backend/go/data-structures/array-and-slice" },
+    { text: "Map", link: "/backend/go/data-structures/map" },
+    { text: "栈与队列", link: "/backend/go/data-structures/stack-and-queue" },
   ],
 }
 ```
@@ -168,7 +166,7 @@ src/go/
 
 直接编辑对应的 `.md` 文件即可。例如：
 
-- Go 基础：`src/go/basics.md`
+- Go 基础：`src/backend/go/basics.md`
 - 两数之和：`src/algorithm/leetcode/hot-100/two-sum.md`
 - Docker 教程：`src/tools/docker/README.md`
 
