@@ -188,7 +188,12 @@ export default sidebar({
             { text: "二叉树的直径", link: "/algorithm/leetcode/binary-tree/LeetCode刷题笔记8" },
           ],
         },
-        { text: "Hot 100 题解", link: "/algorithm/leetcode/hot-100/" },
+        {
+          text: "Hot 100 题解",
+          collapsible: true,
+          collapsed: false,
+          children: [{ text: "两数之和", link: "/algorithm/leetcode/hot-100/two-sum" }],
+        },
       ],
     },
   ],
@@ -274,4 +279,5 @@ export default sidebar({
       children: [{ text: "Agent 工作流与实战", link: "/ai-application-development/agent-development" }],
     },
   ],
+  "/resources/": false,
 });
