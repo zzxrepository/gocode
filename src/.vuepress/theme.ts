@@ -52,11 +52,17 @@ export default hopeTheme({
     component: true,
     demo: true,
     figure: true,
+    footnote: true,
+    flowchart: true,
     gfm: true,
     imgLazyload: true,
     imgSize: true,
     include: true,
     mark: true,
+    math: {
+      type: "katex",
+    },
+    mermaid: true,
     plantuml: true,
     spoiler: true,
     stylize: [
@@ -78,14 +84,6 @@ export default hopeTheme({
     tasklist: true,
     vPre: true,
 
-    // 取消注释它们如果你需要 TeX 支持
-    // math: {
-    //   // 启用前安装 katex
-    //   type: "katex",
-    //   // 或者安装 @mathjax/src
-    //   type: "mathjax",
-    // },
-
     // 如果你需要幻灯片，安装 @vuepress/plugin-revealjs 并取消下方注释
     // revealjs: {
     //   plugins: ["highlight", "math", "search", "notes", "zoom"],
@@ -98,12 +96,6 @@ export default hopeTheme({
 
     // 在启用之前安装 echarts
     // echarts: true,
-
-    // 在启用之前安装 flowchart.ts
-    // flowchart: true,
-
-    // 在启用之前安装 mermaid
-    // mermaid: true,
 
     // playground: {
     //   presets: ["ts", "vue"],
