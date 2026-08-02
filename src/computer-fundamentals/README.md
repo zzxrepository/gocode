@@ -1,6 +1,6 @@
 ---
 title: 计算机基础
-icon: laptop-code
+icon: desktop
 ---
 
 # 计算机基础

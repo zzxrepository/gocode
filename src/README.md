@@ -11,7 +11,7 @@ heroText: GoCode · MaoMao Zhang
 tagline: 跟着毛毛张学 Go，系统学习后端开发与 AI 应用开发
 actions:
   - text: 开始学习 Go
-    icon: code
+    icon: terminal
     link: /go/
     type: primary
   - text: 查看学习地图
@@ -24,11 +24,11 @@ highlights:
     image: /assets/image/advanced.svg
     highlights:
       - title: Go
-        icon: code
+        icon: terminal
         details: 基础语法、并发、Gin、工程实践与微服务
         link: /go/
       - title: Java
-        icon: code
+        icon: mug-hot
         details: Java 基础、集合、并发、JVM 与框架
         link: /java/
       - title: 数据库
@@ -41,11 +41,11 @@ highlights:
     image: /assets/image/features.svg
     highlights:
       - title: 算法与数据结构
-        icon: code
+        icon: diagram-project
         details: LeetCode、Hot 100 与常用算法题解
         link: /tree/
       - title: 计算机基础
-        icon: laptop-code
+        icon: desktop
         details: 计算机网络与操作系统
         link: /computer-fundamentals/
       - title: 开发工具

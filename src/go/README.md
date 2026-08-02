@@ -1,6 +1,6 @@
 ---
 title: Go
-icon: code
+icon: terminal
 ---
 
 # Go

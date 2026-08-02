@@ -1,6 +1,6 @@
 ---
 title: go-zero
-icon: code
+icon: microchip
 ---
 
 # go-zero

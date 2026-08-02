@@ -1,6 +1,6 @@
 ---
 title: Java
-icon: code
+icon: mug-hot
 ---
 
 # Java

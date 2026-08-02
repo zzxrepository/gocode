@@ -1,7 +1,7 @@
 ---
 title: 算法与数据结构
 index: false
-icon: laptop-code
+icon: diagram-project
 category:
   - 算法
 ---
