@@ -13,6 +13,7 @@
 .vp-sidebar .vp-sidebar-group:nth-child(3) > .vp-sidebar-header .vp-icon { color: #ea580c; }
 .vp-sidebar .vp-sidebar-group:nth-child(4) > .vp-sidebar-header .vp-icon { color: #db2777; }
 .vp-sidebar .vp-icon[icon="simple-icons:leetcode"] { color: #ffa116; }
+.vp-sidebar .vp-icon[icon="fa6-solid:fire"] { color: #f04438 !important; }
 
 /* Go 使用项目内的原创 Gopher 图标，替换默认的终端符号。 */
 .vp-sidebar .vp-sidebar-group:has(> .vp-sidebar-header .vp-icon[icon="fa6-solid:terminal"]) > .vp-sidebar-header .vp-icon {

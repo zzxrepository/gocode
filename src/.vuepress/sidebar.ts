@@ -151,7 +151,8 @@ export default sidebar({
           ],
         },
         {
-          text: "🔥 Hot 100 题解",
+          text: "Hot 100 题解",
+          icon: "fire",
           collapsible: true,
           collapsed: false,
           children: [{ text: "1. 两数之和", icon: "hashtag", link: "/algorithm/leetcode/hot-100/two-sum" }],
