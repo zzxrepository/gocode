@@ -1,22 +1,20 @@
 ---
-title: Go
+title: GO
 icon: terminal
 prev:
   text: 后端开发
   link: /backend/
 next:
-  text: Go 基础语法与项目结构
-  link: /backend/go/basics
+  text: Golang 基础知识
+  link: /backend/go/basic/
 ---
 
-# Go
+# GO
 
-这是 Go 的学习主线，按“语言基础 → 工程实践 → 服务开发”逐步展开。
+这是 GO 的学习主线，先按“Golang 基础知识 → Golang 进阶知识 → 项目实践”逐步展开。
 
 ## 学习路线
 
-1. 基础语法：变量、类型、函数、结构体、接口、错误处理和模块管理。
-2. 进阶能力：并发、Context、网络编程、测试和性能分析。
-3. Web 开发：使用 Gin 构建 HTTP 服务。
-4. 工程实践：配置、日志、数据库、缓存、鉴权和部署。
-5. 微服务与分布式：以 go-zero 为主要实战框架。
+1. Golang 基础知识：基础语法、项目结构、变量类型、数组切片、Map、指针、结构体、接口、错误处理和模块管理。
+2. Golang 进阶知识：标准库、并发编程、Web 开发、工程实践和性能优化。
+3. 项目实践：结合 Gin、go-zero、数据库、缓存和部署逐步沉淀真实项目经验。

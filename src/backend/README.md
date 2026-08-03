@@ -2,15 +2,15 @@
 title: 后端开发
 icon: server
 next:
-  text: Go
+  text: GO
   link: /backend/go/
 ---
 
 # 后端开发
 
-后端开发栏目以 Go 为主线，同时沉淀 Java、数据库、消息队列、微服务与分布式实践。
+后端开发栏目以 GO 为主线，同时沉淀 Java、数据库、消息队列、微服务与分布式实践。
 
-- [Go](/backend/go/)：基础语法、并发、Gin、工程实践与微服务。
+- [GO](/backend/go/)：Golang 基础知识、进阶知识、Gin、工程实践与微服务。
 - [Java](/backend/java/)：Java 基础、并发、JVM 与常用框架。
 - [数据库](/backend/database/)：MySQL、Redis、MongoDB 与数据存储实践。
 - [消息队列](/backend/message-queue/)：Kafka、RabbitMQ、RocketMQ 与异步消息设计。

@@ -35,9 +35,9 @@ highlights:
     description: 从语言基础到真实服务，建立完整的后端知识体系。
     image: /assets/image/advanced.svg
     highlights:
-      - title: Go
+      - title: GO
         icon: terminal
-        details: 基础语法、并发、Gin、工程实践与微服务
+        details: Golang 基础知识、进阶知识、Gin、工程实践与微服务
         link: /backend/go/
       - title: Java
         icon: mug-hot
