@@ -94,6 +94,10 @@ highlights:
     description: 把学习沉淀为真正可以使用的产品。
     image: /assets/image/blog.svg
     highlights:
+      - title: 个人网站
+        icon: blog
+        details: 基于 Hexo 搭建的个人网站与博客归档
+        link: https://zzxrepository.github.io/
       - title: MotionAlbum
         icon: mobile-screen-button
         details: 手机实况照片筛选器 · Swift

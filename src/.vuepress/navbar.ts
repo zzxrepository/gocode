@@ -50,6 +50,7 @@ export default navbar([
       {
         text: "建站与文档",
         children: [
+          { text: "毛毛张的 Hexo 个人网站", link: "https://zzxrepository.github.io/" },
           { text: "VuePress Theme Hope", link: "https://theme-hope.vuejs.press/" },
           { text: "VuePress 官方文档", link: "https://vuejs.press/zh/" },
         ],
