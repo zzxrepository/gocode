@@ -183,16 +183,16 @@ ctx = context.WithValue(ctx, traceIDKey{}, "trace-001")
 
 后面看源码时，一直带着这个图，会轻松很多。
 
-再用一张表把“函数”和“具体类型”对上：
+接下来会反复看到几个创建 context 的函数。它们表面上都返回 `Context` 接口，但运行时放进接口里的具体值并不一样：有的是 `backgroundCtx{}` 这样的结构体值，有的是 `*cancelCtx`、`*timerCtx`、`*valueCtx` 这样的指针值。先把这几个入口函数和它们的作用对上，后面读源码就不会散。
 
-| 函数 | 返回类型 | 运行时实际装的具体值 |
+| 函数定义 | 作用 | 返回后的具体类型 |
 | --- | --- | --- |
-| `Background()` | `Context` 接口 | `backgroundCtx{}` 结构体值 |
-| `TODO()` | `Context` 接口 | `todoCtx{}` 结构体值 |
-| `WithCancel(parent)` | `Context` 接口和 `CancelFunc` | `*cancelCtx` 指针值 |
-| `WithDeadline(parent, d)` | `Context` 接口和 `CancelFunc` | 通常是 `*timerCtx` 指针值 |
-| `WithTimeout(parent, timeout)` | `Context` 接口和 `CancelFunc` | 本质来自 `WithDeadline`，通常是 `*timerCtx` 指针值 |
-| `WithValue(parent, key, val)` | `Context` 接口 | `*valueCtx` 指针值 |
+| `func Background() Context` | 创建根 context。常用于 `main`、初始化、测试，以及一条调用链的起点。它不会取消、没有 deadline、没有 value。 | `backgroundCtx{}` 结构体值 |
+| `func TODO() Context` | 创建一个临时占位 context。适合暂时不知道该传什么 context，或者代码还没改造成接收 `ctx` 的过渡阶段。 | `todoCtx{}` 结构体值 |
+| `func WithCancel(parent Context) (ctx Context, cancel CancelFunc)` | 基于父 context 派生一个可以手动取消的子 context。调用返回的 `cancel()` 后，子 context 以及它的后代都会收到取消信号。 | `*cancelCtx` 指针值 |
+| `func WithDeadline(parent Context, d time.Time) (Context, CancelFunc)` | 基于父 context 派生一个带截止时间的子 context。到达 `d` 后自动取消。 | 通常是 `*timerCtx` 指针值 |
+| `func WithTimeout(parent Context, timeout time.Duration) (Context, CancelFunc)` | `WithDeadline` 的快捷写法，表示从现在开始最多运行 `timeout` 这么久。 | 本质来自 `WithDeadline`，通常是 `*timerCtx` 指针值 |
+| `func WithValue(parent Context, key, val any) Context` | 基于父 context 派生一个携带 key-value 的子 context。适合传 `traceID`、认证信息这类请求级数据。 | `*valueCtx` 指针值 |
 
 ## Background 和 TODO
 
@@ -292,29 +292,30 @@ func Background() Context {
 
 - `Background()` 表示这里明确需要一个根 context。常见于 `main` 函数、初始化逻辑、测试代码，以及服务端接收到请求时创建整条调用链的起点。
 - `TODO()` 表示这里暂时还不知道该传哪个 context，或者当前函数还没有改造成接收 `ctx context.Context` 的形式。它更像一个占位符，提醒后面再补上真正合适的 context。
-- 实际写业务代码时，如果你已经知道这是一条调用链的起点，就用 `Background()`；如果只是迁移代码时临时不知道传什么，可以先用 `TODO()`，但不要把它当成长期方案。
 
-还有一个小坑：因为 `Background()` 的 `Done()` 返回 `nil`，所以这样写会永远阻塞：
+实际写业务代码时，如果你已经知道这是一条调用链的起点，就用 `Background()`；如果只是迁移代码时临时不知道传什么，可以先用 `TODO()`，但不要把它当成长期方案。
 
-```go
-ctx := context.Background()
-
-done := ctx.Done() // done 是 nil
-<-done             // 永远阻塞
-```
-
-但在 `select` 里，nil channel 对应的分支永远不会被选中：
-
-```go
-select {
-case <-ctx.Done():
-	// Background 不会走到这里
-default:
-	// 会走这里
-}
-```
-
-`Background()` 自己不会取消。真正的取消能力来自后面的 `WithCancel`、`WithDeadline`、`WithTimeout`。
+> 还有一个小坑：因为 `Background()` 的 `Done()` 返回 `nil`，所以这样写会永远阻塞：
+>
+> ```go
+> ctx := context.Background()
+> 
+> done := ctx.Done() // done 是 nil
+> <-done             // 永远阻塞
+> ```
+>
+> 但在 `select` 里，`nil` channel 对应的分支永远不会被选中：
+>
+> ```go
+> select {
+> case <-ctx.Done():
+> 	// Background 不会走到这里
+> default:
+> 	// 会走这里
+> }
+> ```
+>
+> `Background()` 自己不会取消。真正的取消能力来自后面的 `WithCancel`、`WithDeadline`、`WithTimeout`。
 
 ## WithCancel
 
