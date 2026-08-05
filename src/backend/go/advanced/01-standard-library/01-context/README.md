@@ -1019,15 +1019,86 @@ query failed: context deadline exceeded
 
 ## 平时怎么用
 
-官方文档里有几条习惯很值得照着写：
+理解源码以后，平时写业务代码可以按下面几条习惯来。它们不是形式主义，背后都是为了让取消信号、超时时间和请求级数据能稳定地沿着调用链传下去。
 
-1. `Context` 通常作为函数第一个参数，名字叫 `ctx`。
-2. 不要把 `Context` 长期存在结构体里，应该显式传给需要它的函数。
-3. 不要传 `nil` context，不确定传什么时用 `context.TODO()`。
+1. `Context` 通常放在函数第一个参数，名字叫 `ctx`。
+
+   这样写是为了让调用链一眼就能看出来：这个函数支持取消、超时和值传递。Go 标准库和大部分社区库也都遵守这个约定。
+
+   ```go
+   func QueryUser(ctx context.Context, userID int64) (*User, error) {
+   	// ...
+   }
+   ```
+
+2. 不要把 `Context` 长期存在结构体字段里。
+
+   `context` 表达的是“一次调用”或“一次请求”的生命周期，而结构体通常比一次请求活得更久。如果把 `ctx` 放进结构体里，很容易出现旧请求的超时、取消信号影响新请求的问题。更推荐把 `ctx` 显式传给每个需要它的方法。
+
+   ```go
+   type UserRepo struct {
+   	db *sql.DB
+   }
+
+   func (r *UserRepo) Find(ctx context.Context, id int64) (*User, error) {
+   	// ...
+   }
+   ```
+
+3. 不要传 `nil` context。
+
+   很多函数会直接调用 `ctx.Done()`、`ctx.Err()` 或 `ctx.Value()`。如果传的是 `nil`，就可能 panic。暂时不知道传什么时，用 `context.TODO()`；如果明确是根节点，用 `context.Background()`。
+
+   ```go
+   // 临时占位：
+   ctx := context.TODO()
+   ```
+
+   ```go
+   // 明确需要根 context：
+   ctx := context.Background()
+   ```
+
 4. `WithCancel`、`WithDeadline`、`WithTimeout` 返回的 `cancel` 要调用。
+
+   `cancel()` 不只是“手动取消”。它还会释放当前 context 关联的资源，比如 timer，以及父 context 对子 context 的引用。即使你设置了超时，也应该在任务提前结束时 `defer cancel()`。
+
+   ```go
+   ctx, cancel := context.WithTimeout(parent, 2*time.Second)
+   defer cancel()
+   ```
+
 5. `WithValue` 只放请求级数据，不要当成万能参数包。
+
+   适合放进 context 的值，一般是跨函数、跨 API 边界都可能需要的请求级信息，比如 `traceID`、`requestID`、认证信息。不适合把普通业务参数塞进去，比如分页参数、开关参数、查询条件。
+
+   ```go
+   type traceIDKey struct{}
+
+   ctx = context.WithValue(ctx, traceIDKey{}, "trace-001")
+   ```
+
 6. 同一个 `Context` 可以被多个 goroutine 同时使用。
-7. 取消不是强杀 goroutine，只是发信号；goroutine 要自己监听 `ctx.Done()` 并返回。
+
+   官方保证 `Context` 的方法可以被多个 goroutine 同时调用。所以一次请求里启动多个 goroutine 时，可以把同一个 `ctx` 传进去，让它们共享同一份取消信号和请求级数据。
+
+   ```go
+   go queryDB(ctx)
+   go callRPC(ctx)
+   ```
+
+7. 取消不是强杀 goroutine，只是发信号。
+
+   调用 `cancel()` 或超时以后，context 只会关闭 `Done` channel。goroutine 不会被 Go 运行时强制杀掉，它必须自己在合适的位置监听 `ctx.Done()`，然后主动返回。
+
+   ```go
+   select {
+   case <-ctx.Done():
+   	return ctx.Err()
+   case result := <-work:
+   	return handle(result)
+   }
+   ```
 
 ## 最后总结
 
@@ -1040,9 +1111,9 @@ query failed: context deadline exceeded
 
 读源码时可以把“取消”和“取值”分成两条线看：
 
-取消更像一棵树。每个可取消的 context 都可能记录自己的子 context，父 context 被取消时，会遍历这些 children，把取消信号继续往下传。所以父 context 取消，子 context 会跟着取消；但子 context 自己取消，不会反过来影响父 context。
+- 取消更像一棵树。每个可取消的 context 都可能记录自己的子 context，父 context 被取消时，会遍历这些 children，把取消信号继续往下传。所以父 context 取消，子 context 会跟着取消；但子 context 自己取消，不会反过来影响父 context。
 
-取值更像一条链。`WithValue` 每调用一次，就在外面包一层 `valueCtx`。调用 `ctx.Value(key)` 时，会从当前这层开始找；当前层找不到，就去父 context 找；一直找到 `backgroundCtx` 或 `todoCtx` 还没有，就返回 `nil`。
+- 取值更像一条链。`WithValue` 每调用一次，就在外面包一层 `valueCtx`。调用 `ctx.Value(key)` 时，会从当前这层开始找；当前层找不到，就去父 context 找；一直找到 `backgroundCtx` 或 `todoCtx` 还没有，就返回 `nil`。
 
 所以可以把 `context` 记成一句话：**它是一条由多个小 context 包出来的调用链，同时又通过父子关系传播取消信号**。
 
