@@ -11,6 +11,8 @@ next:
 
 # 01. context
 
+![Go context 源码解析封面](/assets/image/go-context-cover.png)
+
 学习 Go 后端基本绕不开 `context`。
 
 你会在很多函数里看到它：
