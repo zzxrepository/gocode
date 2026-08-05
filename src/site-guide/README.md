@@ -103,6 +103,17 @@ sidebarSorter: ["readme", "order", "title", "filename"]
 
 ## 新增文章
 
+最快路径：
+
+```text
+1. 选栏目：先确认文章应该放在哪个已有栏目下
+2. 建文件：长教程优先建 13-generics/README.md，短文章可以建 generics.md
+3. 写元信息：补齐 title / shortTitle / icon / order / category / tag
+4. 写正文：一级标题和 title 保持一致，重点文章在标题下方放封面图
+5. 查效果：执行 npm run docs:build，确认文章进入侧边栏且构建通过
+6. 发上线：需要发布时执行 ./deploy.sh
+```
+
 普通文章使用下面的 frontmatter：
 
 ```md
