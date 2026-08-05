@@ -6,7 +6,6 @@ dir:
   link: true
   collapsible: true
   order: 2
-icon: mirror
 category:
   - Go
   - Golang 进阶知识

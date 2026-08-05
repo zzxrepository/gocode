@@ -6,7 +6,6 @@ dir:
   link: true
   collapsible: true
   order: 3
-icon: code
 category:
   - Go
   - Golang 进阶知识

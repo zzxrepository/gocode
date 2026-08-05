@@ -6,7 +6,6 @@ dir:
   link: true
   collapsible: true
   order: 1
-icon: timeline
 category:
   - Go
   - Golang 进阶知识
