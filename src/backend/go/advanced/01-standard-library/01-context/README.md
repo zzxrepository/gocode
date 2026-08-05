@@ -101,7 +101,7 @@ type Context interface {
 ```go
 done := ctx.Done() // 第一步：调用 Done() 方法，拿到一个 channel
 
-<-done             // 第二步：从 channel 接收，可能会阻塞
+<-done             // 第二步：从 channel 接收，等取消信号，可能会阻塞
 ```
 
 `ctx.Done()` 只是一个普通方法调用，它返回一个 channel。
@@ -119,39 +119,18 @@ default:
 }
 ```
 
-这一句也可以在脑子里拆成两步：
-
-```go
-done := ctx.Done() // 调方法，拿 channel
-
-<-done             // 读 channel，等取消信号
-```
-
-真实代码里一般直接写 `case <-ctx.Done():` 就行，拆开只是为了看清楚它到底做了什么。
-
 `Err()` 用来解释为什么停下来：
 
 ```go
-context.Canceled
-context.DeadlineExceeded
+context.Canceled						//手动取消
+context.DeadlineExceeded		//超时取消
 ```
-
-前者一般表示手动取消，后者表示超时。
 
 还有一个细节很重要：`Context` 接口里没有 `Cancel()` 方法。也就是说，下游函数拿到 `ctx` 后，只能监听取消，不能取消父任务。谁创建可取消的 context，谁拿到 cancel 函数。
 
 ## 先认识几种 context 具体类型
 
 读源码前，先把几个具体类型认一下。
-
-Go 里没有 Java 那种 class object 体系，所以这篇文章会尽量少说“对象”。更准确的说法是：
-
-```text
-backgroundCtx 是一个结构体类型
-backgroundCtx{} 是一个结构体值
-&cancelCtx{} 是一个指向 cancelCtx 结构体值的指针
-Context 是一个接口类型
-```
 
 `context` 不是一个大结构体，而是一层一层包出来的。
 
@@ -190,7 +169,7 @@ ctx = context.WithValue(ctx, traceIDKey{}, "trace-001")
 | `func Background() Context` | 创建根 context。常用于 `main`、初始化、测试，以及一条调用链的起点。它不会取消、没有 deadline、没有 value。 | `backgroundCtx{}` 结构体值 |
 | `func TODO() Context` | 创建一个临时占位 context。适合暂时不知道该传什么 context，或者代码还没改造成接收 `ctx` 的过渡阶段。 | `todoCtx{}` 结构体值 |
 | `func WithCancel(parent Context) (ctx Context, cancel CancelFunc)` | 基于父 context 派生一个可以手动取消的子 context。调用返回的 `cancel()` 后，子 context 以及它的后代都会收到取消信号。 | `*cancelCtx` 指针值 |
-| `func WithDeadline(parent Context, d time.Time) (Context, CancelFunc)` | 基于父 context 派生一个带截止时间的子 context。到达 `d` 后自动取消。 | 通常是 `*timerCtx` 指针值 |
+| `func WithDeadline(parent Context, d time.Time) (Context, CancelFunc)` | 基于父 context 派生一个带截止时间的子 context。到达时间`d` 后自动取消。 | 通常是 `*timerCtx` 指针值 |
 | `func WithTimeout(parent Context, timeout time.Duration) (Context, CancelFunc)` | `WithDeadline` 的快捷写法，表示从现在开始最多运行 `timeout` 这么久。 | 本质来自 `WithDeadline`，通常是 `*timerCtx` 指针值 |
 | `func WithValue(parent Context, key, val any) Context` | 基于父 context 派生一个携带 key-value 的子 context。适合传 `traceID`、认证信息这类请求级数据。 | `*valueCtx` 指针值 |
 
@@ -360,17 +339,9 @@ func withCancel(parent Context) *cancelCtx {
 c := &cancelCtx{}
 ```
 
-这行代码可以拆开理解：
-
-```text
-cancelCtx{}   创建一个 cancelCtx 结构体值
-&cancelCtx{}  取这个结构体值的地址，得到 *cancelCtx 指针值
-c             保存这个 *cancelCtx 指针值
-```
-
 所以 `WithCancel` 最后返回的 `ctx` 是一个 `Context` 接口值。这个接口值的动态类型是 `*cancelCtx`，动态值是一个指向 `cancelCtx` 结构体值的指针。`*cancelCtx` 这个类型实现了 `Context` 接口，所以它可以被当成 `context.Context` 返回。
 
-`cancelCtx` 的结构体定义是：
+我们可以继续看`cancelCtx` 的结构体定义如下：
 
 ```go
 type cancelCtx struct {
@@ -432,22 +403,7 @@ func (c *cancelCtx) Done() <-chan struct{} {
 }
 ```
 
-这段说明一件事：`done` 是懒加载的。
-
-也就是说，创建 `cancelCtx` 时并不会立刻创建 channel。只有你第一次调用：
-
-```go
-done := ctx.Done()
-```
-
-它才会真的 `make(chan struct{})`。
-
-再强调一次：
-
-```go
-done := ctx.Done() // 拿到 channel，不会阻塞
-<-done             // 从 channel 接收，可能阻塞
-```
+这段说明一件事：`done` 是懒加载的。也就是说，创建 `cancelCtx` 时并不会立刻创建 channel，只有你第一次调用`done := ctx.Done()`的时候，它才会真的创建channel`make(chan struct{})`。
 
 `Err()` 的源码是：
 
@@ -518,14 +474,12 @@ func (c *cancelCtx) cancel(removeFromParent bool, err, cause error) {
 
 这段代码做了几件事：
 
-```text
 1. 如果已经取消过，直接返回
 2. 保存 err 和 cause
 3. 关闭 done channel
 4. 遍历 children，把子 context 也取消
 5. 清空 children
 6. 必要时把自己从父 context 的 children 里移除
-```
 
 重点是第三步：关闭 `done` channel。
 
@@ -608,13 +562,11 @@ func (c *cancelCtx) propagateCancel(parent Context, child canceler) {
 
 读这段不用每个分支都背下来，先抓主线：
 
-```text
 1. 先把 parent 保存到 c.Context
 2. 如果 parent.Done() 是 nil，说明父 context 永远不会取消，直接返回
 3. 如果 parent 已经取消，child 立刻取消
 4. 如果 parent 是 cancelCtx，就把 child 放进 parent.children
 5. 如果是特殊 context，就用 AfterFunc 或 goroutine 监听父级取消
-```
 
 平时最常见的是第 2 种和第 4 种。
 
@@ -626,36 +578,13 @@ ctx1, cancel1 := context.WithCancel(root)
 ctx2, cancel2 := context.WithCancel(ctx1)
 ```
 
-结构是：
+结构是：`backgroundCtx -> cancelCtx(ctx1) -> cancelCtx(ctx2)`
 
-```text
-backgroundCtx
-  -> cancelCtx(ctx1)
-    -> cancelCtx(ctx2)
-```
+如果调用：`cancel1()`，`ctx1` 会取消，`ctx2` 也会跟着取消。
 
-如果调用：
+如果调用：`cancel2()`，只取消 `ctx2`，不会影响 `ctx1`。
 
-```go
-cancel1()
-```
-
-`ctx1` 会取消，`ctx2` 也会跟着取消。
-
-如果调用：
-
-```go
-cancel2()
-```
-
-只取消 `ctx2`，不会影响 `ctx1`。
-
-所以取消方向很好记：
-
-```text
-父取消，子跟着取消。
-子取消，父不受影响。
-```
+所以取消方向很好记：父取消，子跟着取消；子取消，父不受影响。
 
 ## WithDeadline 和 WithTimeout
 
@@ -733,7 +662,7 @@ func WithDeadlineCause(parent Context, d time.Time, cause error) (Context, Cance
 }
 ```
 
-这里涉及到 `timerCtx`：
+这里涉及到 `timerCtx`结构体，其对应源码如下：
 
 ```go
 type timerCtx struct {
@@ -772,10 +701,8 @@ func (c *timerCtx) cancel(removeFromParent bool, err, cause error) {
 
 `timerCtx` 嵌入了 `cancelCtx`，所以它天然有取消能力。它自己多了两个东西：
 
-```text
-deadline：截止时间
-timer：定时器
-```
+- deadline：截止时间
+- timer：定时器
 
 创建 `timerCtx` 后，源码会启动一个定时器：
 
@@ -866,7 +793,7 @@ type valueCtx struct {
 
 `valueCtx` 也嵌入了父 context，只是自己多存了一组 `key` 和 `val`。
 
-查值源码是：
+当需要查 key对应的 value 时，其源码是：
 
 ```go
 func (c *valueCtx) Value(key any) any {
@@ -995,7 +922,12 @@ func TraceIDFromContext(ctx context.Context) (string, bool) {
 
 ## 一个完整 demo
 
-下面这个例子把 `Background`、`WithTimeout`、`WithValue`、`Done`、`Err` 都串起来了。
+下面这个 demo 模拟一个很常见的场景：一次请求进入服务端后，业务代码要查询数据库，并且希望给这次请求加上两个能力。
+
+- 第一，给整次查询设置一个最大耗时。这里设置为 `250ms`，超过这个时间就不再继续等。
+- 第二，给调用链带上一个 `traceID`。这样下游函数不用额外加参数，也能从 `ctx` 里取到请求标识。
+
+`queryDB` 里故意把一次查询拆成 5 个步骤，每个步骤耗时 `100ms`。如果没有超时控制，5 步全部完成需要大约 `500ms`；但外层 context 只给了 `250ms`，所以这个查询会在中途被取消。
 
 ```go
 package main
@@ -1006,23 +938,32 @@ import (
 	"time"
 )
 
+// traceIDKey 使用自定义空结构体类型，避免和其他包的 key 冲突。
 type traceIDKey struct{}
 
+// WithTraceID 基于父 context 派生一个带 traceID 的子 context。
+// 底层会创建一层 valueCtx，把 key-value 挂到 context 链上。
 func WithTraceID(ctx context.Context, traceID string) context.Context {
 	return context.WithValue(ctx, traceIDKey{}, traceID)
 }
 
+// TraceIDFromContext 从 context 链上取 traceID。
+// 如果当前层找不到，context 会继续向父 context 查找。
 func TraceIDFromContext(ctx context.Context) (string, bool) {
 	v, ok := ctx.Value(traceIDKey{}).(string)
 	return v, ok
 }
 
 func main() {
+	// Background 是整条 context 链的根节点。
 	ctx := context.Background()
 
+	// WithTimeout 在 Background 外面包一层 timerCtx。
+	// 250ms 后，这个 context 会自动取消。
 	ctx, cancel := context.WithTimeout(ctx, 250*time.Millisecond)
-	defer cancel()
+	defer cancel() // 函数结束前释放 timer 等相关资源。
 
+	// WithTraceID 底层使用 WithValue，在 context 外面再包一层 valueCtx。
 	ctx = WithTraceID(ctx, "trace-001")
 
 	if err := queryDB(ctx); err != nil {
@@ -1034,6 +975,7 @@ func main() {
 }
 
 func queryDB(ctx context.Context) error {
+	// 下游函数可以从 ctx 里取到请求级数据。
 	if traceID, ok := TraceIDFromContext(ctx); ok {
 		fmt.Println("traceID:", traceID)
 	}
@@ -1041,8 +983,11 @@ func queryDB(ctx context.Context) error {
 	for i := 1; i <= 5; i++ {
 		select {
 		case <-ctx.Done():
+			// context 被取消或超时后，Done channel 会关闭。
+			// 这里返回 Err，让上层知道失败原因。
 			return ctx.Err()
 		case <-time.After(100 * time.Millisecond):
+			// 模拟数据库查询中的一个步骤。
 			fmt.Println("query step:", i)
 		}
 	}
@@ -1060,43 +1005,17 @@ query step: 2
 query failed: context deadline exceeded
 ```
 
-这段代码背后的 context 结构是：
+这个输出说明三件事。
 
-```text
-valueCtx(traceID=trace-001)
-  -> timerCtx(250ms)
-    -> backgroundCtx
-```
+- `traceID: trace-001` 说明 `WithValue` 创建的 `valueCtx` 生效了，`queryDB` 可以从 context 链上取到请求级数据。
+- `query step: 1` 和 `query step: 2` 说明查询确实执行了一小段时间。每一步大约 `100ms`，两步后已经接近 `200ms`。
+- `query failed: context deadline exceeded` 说明 `250ms` 到了以后，`timerCtx` 触发超时取消，`queryDB` 在 `case <-ctx.Done():` 这个分支里返回了 `ctx.Err()`。
 
-执行到：
+这段代码背后的 context 结构是：`valueCtx(traceID=trace-001) -> timerCtx(250ms) -> backgroundCtx`。最外层是 `valueCtx`，负责保存 `traceID`；中间是 `timerCtx`，负责超时取消；最里面是 `backgroundCtx`，作为根 context。
 
-```go
-case <-ctx.Done():
-```
+当代码执行到 `case <-ctx.Done():` 时，`ctx` 是最外层的 `valueCtx`。`valueCtx` 自己不负责取消，所以 `Done()` 会沿着嵌入的父 context 往里找，最终用到 `timerCtx` 里的取消信号。`250ms` 到了以后，`timerCtx` 关闭 Done channel，`select` 里的 `<-ctx.Done()` 被唤醒，`queryDB` 返回 `context deadline exceeded`。
 
-这句可以拆开理解：
-
-```go
-done := ctx.Done() // 调方法，拿 channel
-
-<-done             // 读 channel，等取消信号
-```
-
-这里的 `ctx` 是最外层的 `valueCtx`。`valueCtx` 自己没有实现 `Done()`，所以它会使用嵌入的父 context 的 `Done()`，继续往里找到 `timerCtx`。`timerCtx` 嵌入了 `cancelCtx`，最终拿到的是 `cancelCtx` 里的 done channel。
-
-`ctx.Done()` 这一步只是拿 channel。`<-done` 这一步才是等待取消信号。在 demo 里没有真的写一个 `done` 变量，只是直接把这两步合在了 `case <-ctx.Done():` 里。
-
-250ms 到了以后，`timerCtx` 的 timer 触发：
-
-```text
-timer 到点
-  -> 调用 cancel
-  -> 关闭 done channel
-  -> case <-ctx.Done() 被唤醒
-  -> queryDB 返回 ctx.Err()
-```
-
-这就是 `context` 控制超时的完整链路。
+这个 demo 对应的完整链路是：先从 `Background()` 创建根 context，再用 `WithTimeout()` 增加超时能力，再用 `WithValue()` 增加请求级数据，最后在下游函数里用 `select` 同时等待“查询步骤完成”和“context 取消信号”。
 
 ## 平时怎么用
 
@@ -1112,41 +1031,20 @@ timer 到点
 
 ## 最后总结
 
-`context` 的源码主线其实很清楚：
+`context` 的源码主线其实很清楚：`Context` 是接口，真正干活的是几个具体类型。
 
-```text
-Context 是接口，定义 Deadline、Done、Err、Value 四个方法。
+- `backgroundCtx` 和 `todoCtx` 是最基础的空 context。它们不会取消，没有 deadline，也不保存 value。
+- `cancelCtx` 在父 context 外面包一层，增加取消能力。它有自己的 `done` channel，也会记录子 context。
+- `timerCtx` 在 `cancelCtx` 的基础上再加 deadline 和 timer，所以它既能手动取消，也能到时间后自动取消。
+- `valueCtx` 在父 context 外面包一层 key-value，取值时先看当前层，找不到再去父 context 里找。
 
-Background 和 TODO 返回空 context。
+读源码时可以把“取消”和“取值”分成两条线看。
 
-WithCancel 创建 cancelCtx，增加取消能力。
+取消更像一棵树。每个可取消的 context 都可能记录自己的子 context，父 context 被取消时，会遍历这些 children，把取消信号继续往下传。所以父 context 取消，子 context 会跟着取消；但子 context 自己取消，不会反过来影响父 context。
 
-WithDeadline 和 WithTimeout 创建 timerCtx，增加超时能力。
+取值更像一条链。`WithValue` 每调用一次，就在外面包一层 `valueCtx`。调用 `ctx.Value(key)` 时，会从当前这层开始找；当前层找不到，就去父 context 找；一直找到 `backgroundCtx` 或 `todoCtx` 还没有，就返回 `nil`。
 
-WithValue 创建 valueCtx，增加一组 key-value。
-```
-
-读源码时把两条线分开：
-
-```text
-取消看树：
-父 context 取消，子 context 跟着取消。
-
-取值看链：
-从当前 context 往父 context 一层层找。
-```
-
-最后再记住 `Done()` 的两步：
-
-```go
-done := ctx.Done() // 调方法，拿 channel
-
-<-done             // 读 channel，等取消信号
-```
-
-`ctx.Done()` 本身不取消任何东西。  
-`cancel()` 才是发起取消。  
-`<-ctx.Done()` 是等待那个取消信号。
+所以可以把 `context` 记成一句话：**它是一条由多个小 context 包出来的调用链，同时又通过父子关系传播取消信号**。
 
 ## 参考资料
 
