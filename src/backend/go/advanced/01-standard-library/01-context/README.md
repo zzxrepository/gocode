@@ -276,7 +276,7 @@ type backgroundCtx struct{ emptyCtx }
 
 如果你学过 Java，第一反应可能会把它看成继承。这里最好先忍一下：**在 Go 里，这个叫结构体嵌入，不叫继承**。嵌入以后，`emptyCtx` 的方法会提升到 `backgroundCtx` 上，所以 `backgroundCtx` 也实现了 `Context` 接口。
 
-因此：
+因此再回头看源码中的 `Background()` 方法：
 
 ```go
 func Background() Context {
@@ -288,12 +288,11 @@ func Background() Context {
 
 而 `backgroundCtx` 之所以能放进 `Context` 接口里，是因为它嵌入了 `emptyCtx`，拥有了 `emptyCtx` 的四个方法，所以它也实现了 `Context` 接口。
 
-`TODO()` 和 `Background()` 能力差不多，区别主要是语义：
+`TODO()` 和 `Background()` 的具体能力差不多：它们都不会主动取消，没有 deadline，也不保存 value。区别主要在语义上。
 
-```text
-Background：我明确要从一个根 context 开始
-TODO：我现在还不知道该传什么 context，先占个位
-```
+- `Background()` 表示这里明确需要一个根 context。常见于 `main` 函数、初始化逻辑、测试代码，以及服务端接收到请求时创建整条调用链的起点。
+- `TODO()` 表示这里暂时还不知道该传哪个 context，或者当前函数还没有改造成接收 `ctx context.Context` 的形式。它更像一个占位符，提醒后面再补上真正合适的 context。
+- 实际写业务代码时，如果你已经知道这是一条调用链的起点，就用 `Background()`；如果只是迁移代码时临时不知道传什么，可以先用 `TODO()`，但不要把它当成长期方案。
 
 还有一个小坑：因为 `Background()` 的 `Done()` 返回 `nil`，所以这样写会永远阻塞：
 
