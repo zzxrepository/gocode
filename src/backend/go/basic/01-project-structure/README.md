@@ -1,6 +1,6 @@
 ---
 title: 01. 基础语法与项目结构
-shortTitle: 基础语法与项目结构
+shortTitle: 01. 基础语法与项目结构
 order: 1
 dir:
   link: true

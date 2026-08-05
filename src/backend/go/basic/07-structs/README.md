@@ -1,6 +1,6 @@
 ---
 title: 07. 结构体
-shortTitle: 结构体
+shortTitle: 07. 结构体
 order: 7
 dir:
   link: true

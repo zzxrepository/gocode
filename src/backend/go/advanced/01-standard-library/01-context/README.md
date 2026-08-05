@@ -1,6 +1,6 @@
 ---
 title: 01. context
-shortTitle: context
+shortTitle: 01. context
 order: 1
 dir:
   link: true

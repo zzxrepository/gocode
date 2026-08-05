@@ -1,6 +1,6 @@
 ---
 title: 04. 函数
-shortTitle: 函数
+shortTitle: 04. 函数
 order: 4
 dir:
   link: true

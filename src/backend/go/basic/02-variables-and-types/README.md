@@ -1,6 +1,6 @@
 ---
 title: 02. 变量、常量与类型
-shortTitle: 变量、常量与类型
+shortTitle: 02. 变量、常量与类型
 order: 2
 dir:
   link: true

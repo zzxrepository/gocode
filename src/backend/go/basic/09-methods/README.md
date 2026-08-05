@@ -1,6 +1,6 @@
 ---
 title: 09. 方法
-shortTitle: 方法
+shortTitle: 09. 方法
 order: 9
 dir:
   link: true

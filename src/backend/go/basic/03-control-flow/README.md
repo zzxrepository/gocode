@@ -1,6 +1,6 @@
 ---
 title: 03. 流程控制
-shortTitle: 流程控制
+shortTitle: 03. 流程控制
 order: 3
 dir:
   link: true

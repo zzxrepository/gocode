@@ -1,6 +1,6 @@
 ---
 title: 03. Web 开发
-shortTitle: Web 开发
+shortTitle: 03. Web 开发
 order: 3
 dir:
   link: true

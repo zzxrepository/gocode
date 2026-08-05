@@ -1,6 +1,6 @@
 ---
 title: 08. 指针
-shortTitle: 指针
+shortTitle: 08. 指针
 order: 8
 dir:
   link: true

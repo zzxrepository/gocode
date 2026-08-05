@@ -1,6 +1,6 @@
 ---
 title: 10. 接口
-shortTitle: 接口
+shortTitle: 10. 接口
 order: 10
 dir:
   link: true

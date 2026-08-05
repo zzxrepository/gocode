@@ -1,6 +1,6 @@
 ---
 title: 12. 包与 Go Modules
-shortTitle: 包与 Go Modules
+shortTitle: 12. 包与 Go Modules
 order: 12
 dir:
   link: true

@@ -1,6 +1,6 @@
 ---
 title: 06. Map
-shortTitle: Map
+shortTitle: 06. Map
 order: 6
 dir:
   link: true

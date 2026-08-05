@@ -1,6 +1,6 @@
 ---
 title: 04. 工程实践
-shortTitle: 工程实践
+shortTitle: 04. 工程实践
 order: 4
 dir:
   link: true

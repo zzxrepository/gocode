@@ -1,6 +1,6 @@
 ---
 title: 03. encoding：JSON 与 XML
-shortTitle: encoding：JSON 与 XML
+shortTitle: 03. encoding：JSON 与 XML
 order: 3
 dir:
   link: true

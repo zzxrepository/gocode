@@ -1,6 +1,6 @@
 ---
 title: 05. 数组与切片
-shortTitle: 数组与切片
+shortTitle: 05. 数组与切片
 order: 5
 dir:
   link: true

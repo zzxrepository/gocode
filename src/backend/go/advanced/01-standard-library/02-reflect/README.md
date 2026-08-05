@@ -1,6 +1,6 @@
 ---
 title: 02. reflect：反射
-shortTitle: reflect：反射
+shortTitle: 02. reflect：反射
 order: 2
 dir:
   link: true

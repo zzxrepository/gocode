@@ -1,6 +1,6 @@
 ---
 title: 01. 标准库
-shortTitle: 标准库
+shortTitle: 01. 标准库
 order: 1
 dir:
   link: true

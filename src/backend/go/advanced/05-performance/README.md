@@ -1,6 +1,6 @@
 ---
 title: 05. 性能优化
-shortTitle: 性能优化
+shortTitle: 05. 性能优化
 order: 5
 dir:
   link: true

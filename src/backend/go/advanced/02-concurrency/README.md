@@ -1,6 +1,6 @@
 ---
 title: 02. 并发编程
-shortTitle: 并发编程
+shortTitle: 02. 并发编程
 order: 2
 dir:
   link: true
