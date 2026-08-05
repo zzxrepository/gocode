@@ -19,25 +19,46 @@ next:
 func Query(ctx context.Context, id int64) error
 ```
 
-`context` 不是用来真正干活的。它更像一张跟着调用链往下传的通知单，告诉后面的代码几件事：
+`context` 中文经常译作“上下文”。这个翻译没问题，但刚开始学的时候容易误会：它不是 Go 运行时偷偷保存的 goroutine 栈、寄存器、调度现场；它是我们显式传给函数的一个值，用来携带一次任务的生命周期信息。
+
+`context` 不是真正干活的人。它更像一张跟着调用链往下传的通知单，告诉后面的代码几件事：
 
 1. 这件事最晚什么时候结束。
 2. 这件事是不是已经不用继续做了。
 3. 这次请求上有没有一些需要一起传下去的数据，比如 `traceID`。
 
-比如一次 HTTP 请求进来：
+## 可能引起 P0 级事故的 context
+
+为什么一个看起来只是“传参数”的包，会变成 Go 后端里的常规写法？
+
+先看一个很常见的服务端场景。一次 HTTP 请求进来以后，服务端可能会启动好几个 goroutine：
 
 ```text
 HTTP 请求
-  -> 业务逻辑
-    -> 查数据库
-    -> 调 RPC
-    -> 启动 goroutine
+  -> goroutine A：查数据库
+  -> goroutine B：调库存服务
+  -> goroutine C：调推荐服务
 ```
 
-如果用户断开连接，或者请求已经超时，后面的数据库查询和 goroutine 就应该尽快停下来。`context` 解决的就是这种调用链上的取消、超时和少量请求级数据传递问题。
+这些 goroutine 都在为同一个请求工作。它们需要共享一些请求级信息，比如登录态、`traceID`、请求最大处理时间。同时，它们也应该共享同一个退出信号。
 
- Go 1.26.5 版本。
+如果用户关掉页面，或者调用方已经超时不等了，这些 goroutine 的工作结果就没人要了。这个时候它们应该尽快退出，让系统释放连接、内存、定时器等资源。
+
+问题是，Go 不能直接从外面强杀一个 goroutine。更常见的做法是：goroutine 自己在合适的位置监听一个信号，发现任务取消了，就主动返回。
+
+没有 `context` 时，也可以自己用 `channel + select` 做这件事。但当一个请求衍生出很多 goroutine，而且还要传超时时间、取消信号、请求级数据时，手写这些控制逻辑很快就会变乱。
+
+更严重一点，假设业务高峰期下游服务突然变慢，而当前服务没有设置合理超时，大量 goroutine 就会卡在等待下游返回的地方。goroutine 数量持续上涨，内存占用跟着上涨，请求越积越多，最后服务整体不可用。这种故障继续向上游扩散，就可能变成一次 P0 级事故。
+
+`context` 要解决的就是这类问题：
+
+```text
+在一组相关 goroutine 之间，传递取消信号、超时时间、截止时间和少量请求级数据。
+```
+
+Go 1.7 把 `context` 放进标准库以后，很多标准库和社区库都开始把 `ctx context.Context` 作为参数，比如 `net/http`、[`database/sql`](https://pkg.go.dev/database/sql) 以及各种 RPC、数据库客户端。现在它几乎已经是 Go 里做并发控制和超时控制的标准写法。
+
+下面基于 Go 1.26.5 版本中的 `context.go` 来介绍 `context` 包。
 
 ## 先看 Context 接口
 
@@ -122,11 +143,22 @@ context.DeadlineExceeded
 
 还有一个细节很重要：`Context` 接口里没有 `Cancel()` 方法。也就是说，下游函数拿到 `ctx` 后，只能监听取消，不能取消父任务。谁创建可取消的 context，谁拿到 cancel 函数。
 
-## 先认识几种 context 对象
+## 先认识几种 context 具体类型
 
-读源码前，先把几个具体对象认一下。`context` 不是一个大对象，而是一层一层包出来的。
+读源码前，先把几个具体类型认一下。
 
-常见对象有这些：
+Go 里没有 Java 那种 class object 体系，所以这篇文章会尽量少说“对象”。更准确的说法是：
+
+```text
+backgroundCtx 是一个结构体类型
+backgroundCtx{} 是一个结构体值
+&cancelCtx{} 是一个指向 cancelCtx 结构体值的指针
+Context 是一个接口类型
+```
+
+`context` 不是一个大结构体，而是一层一层包出来的。
+
+常见具体类型有这些：
 
 | 类型 | 从哪里来 | 作用 |
 | --- | --- | --- |
@@ -146,19 +178,24 @@ defer cancel()
 ctx = context.WithValue(ctx, traceIDKey{}, "trace-001")
 ```
 
-最后的结构大概是：
+最后的结构大概是：`valueCtx(traceID) -> timerCtx(2s) -> backgroundCtx`
 
-```text
-valueCtx(traceID)
-  -> timerCtx(2s)
-    -> backgroundCtx
-```
-
-这几行代码不是在原来的 `ctx` 上改字段，而是每调用一次 `WithXxx`，就创建一个新的 context 对象，把旧的 context 包进去。
+这几行代码不是在原来的 `ctx` 上改字段，而是每调用一次 `WithXxx`，就创建一个新的 context 具体值，把旧的 context 包进去。
 
 变量 `ctx` 最后指向最外层的 `valueCtx`。`valueCtx` 里面包着 `timerCtx`，`timerCtx` 再包着 `backgroundCtx`。
 
 后面看源码时，一直带着这个图，会轻松很多。
+
+再用一张表把“函数”和“具体类型”对上：
+
+| 函数 | 返回类型 | 运行时实际装的具体值 |
+| --- | --- | --- |
+| `Background()` | `Context` 接口 | `backgroundCtx{}` 结构体值 |
+| `TODO()` | `Context` 接口 | `todoCtx{}` 结构体值 |
+| `WithCancel(parent)` | `Context` 接口和 `CancelFunc` | `*cancelCtx` 指针值 |
+| `WithDeadline(parent, d)` | `Context` 接口和 `CancelFunc` | 通常是 `*timerCtx` 指针值 |
+| `WithTimeout(parent, timeout)` | `Context` 接口和 `CancelFunc` | 本质来自 `WithDeadline`，通常是 `*timerCtx` 指针值 |
+| `WithValue(parent, key, val)` | `Context` 接口 | `*valueCtx` 指针值 |
 
 ## Background 和 TODO
 
@@ -209,12 +246,16 @@ func (todoCtx) String() string {
 }
 
 func Background() Context {
-	// 返回的是 Context 接口值，里面装着 backgroundCtx{}。
+	// 返回的是 Context 接口值。
+	// 这个接口值的动态类型是 backgroundCtx，
+	// 动态值是 backgroundCtx{} 这个结构体值。
 	return backgroundCtx{}
 }
 
 func TODO() Context {
-	// 返回的是 Context 接口值，里面装着 todoCtx{}。
+	// 返回的是 Context 接口值。
+	// 这个接口值的动态类型是 todoCtx，
+	// 动态值是 todoCtx{} 这个结构体值。
 	return todoCtx{}
 }
 ```
@@ -236,7 +277,7 @@ Value()    返回 nil
 type backgroundCtx struct{ emptyCtx }
 ```
 
-这不是 Java 那种继承。Go 里叫结构体嵌入。嵌入以后，`emptyCtx` 的方法会提升到 `backgroundCtx` 上，所以 `backgroundCtx` 也实现了 `Context` 接口。
+如果你学过 Java，第一反应可能会把它看成继承。这里最好先忍一下：**在 Go 里，这个叫结构体嵌入，不叫继承**。嵌入以后，`emptyCtx` 的方法会提升到 `backgroundCtx` 上，所以 `backgroundCtx` 也实现了 `Context` 接口。
 
 因此：
 
@@ -249,10 +290,16 @@ func Background() Context {
 准确理解是：
 
 ```text
-Background() 返回一个 Context 接口值；
-这个接口值里装的是 backgroundCtx{}；
-backgroundCtx 通过嵌入 emptyCtx，实现了 Context 接口。
+Background() 的返回类型是 Context 接口；
+return backgroundCtx{} 返回的是一个 backgroundCtx 结构体值；
+这个结构体值会被装进 Context 接口值里；
+这个接口值的动态类型是 backgroundCtx；
+这个接口值的动态值是 backgroundCtx{}；
+backgroundCtx 通过嵌入 emptyCtx，拥有了 emptyCtx 的方法；
+所以 backgroundCtx 实现了 Context 接口。
 ```
+
+平时口语里说“接口值里装的是 `backgroundCtx{}`”也可以，但更严谨一点应该说：接口值里保存了一个动态类型和一个动态值，这里的动态类型是 `backgroundCtx`，动态值是 `backgroundCtx{}` 这个结构体值。
 
 `TODO()` 和 `Background()` 能力差不多，区别主要是语义：
 
@@ -296,7 +343,7 @@ defer cancel()
 
 ```go
 func WithCancel(parent Context) (ctx Context, cancel CancelFunc) {
-	// 创建一个 *cancelCtx，并把它挂到 parent 下面。
+	// 创建一个 *cancelCtx 指针值，并把它挂到 parent 下面。
 	c := withCancel(parent)
 
 	// 返回新的 ctx，以及一个取消函数。
@@ -309,7 +356,9 @@ func withCancel(parent Context) *cancelCtx {
 		panic("cannot create context from nil parent")
 	}
 
-	// 真正创建出来的对象是 cancelCtx。
+	// &cancelCtx{} 会先创建一个 cancelCtx 结构体值，
+	// 然后返回指向这个结构体值的指针。
+	// 所以 c 的类型是 *cancelCtx。
 	c := &cancelCtx{}
 
 	// 建立父子取消关系：parent 取消时，c 也要取消。
@@ -318,7 +367,23 @@ func withCancel(parent Context) *cancelCtx {
 }
 ```
 
-这里真正创建的是 `cancelCtx`：
+这里真正创建的是一个 `cancelCtx` 结构体值，并拿到它的指针：
+
+```go
+c := &cancelCtx{}
+```
+
+这行代码可以拆开理解：
+
+```text
+cancelCtx{}   创建一个 cancelCtx 结构体值
+&cancelCtx{}  取这个结构体值的地址，得到 *cancelCtx 指针值
+c             保存这个 *cancelCtx 指针值
+```
+
+所以更严谨地说，`WithCancel` 最后返回的 `ctx` 是一个 `Context` 接口值，这个接口值里装的是 `*cancelCtx` 指针值。`*cancelCtx` 这个类型实现了 `Context` 接口，所以它可以被当成 `context.Context` 返回。
+
+`cancelCtx` 的结构体定义是：
 
 ```go
 type cancelCtx struct {
@@ -479,7 +544,7 @@ func (c *cancelCtx) cancel(removeFromParent bool, err, cause error) {
 
 `context` 不是给每个 goroutine 发一条消息，而是关闭同一个 channel。所有在等 `<-ctx.Done()` 的地方，都会因为 channel 关闭而醒过来。
 
-## 取消是怎么向下传的
+### 取消是怎么向下传的
 
 `withCancel` 里有一句：
 
