@@ -31,7 +31,15 @@ func Query(ctx context.Context, id int64) error
 
 为什么一个看起来只是“传参数”的包，会变成 Go 后端里的常规写法？
 
-先看一个很常见的服务端场景。一次 HTTP 请求进来以后，服务端可能会启动好几个 goroutine：`HTTP 请求 -> goroutine A：查数据库 -> goroutine B：调库存服务 -> goroutine C：调推荐服务`。
+先看一个很常见的服务端场景。一次 HTTP 请求进来以后，服务端可能会启动好几个 goroutine，它们不是严格按顺序执行，而是一起为这次请求工作：
+
+```mermaid
+flowchart TD
+    req[HTTP 请求] --> handler[业务处理]
+    handler --> db[Goroutine A：查数据库]
+    handler --> stock[Goroutine B：调库存服务]
+    handler --> rec[Goroutine C：调推荐服务]
+```
 
 这些 goroutine 都在为同一个请求工作。它们需要共享一些请求级信息，比如登录态、`traceID`、请求最大处理时间。同时，它们也应该共享同一个退出信号。
 
