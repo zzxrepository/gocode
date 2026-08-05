@@ -257,9 +257,9 @@ func TODO() Context {
 }
 ```
 
-`emptyCtx` 实现了 `Context` 接口的四个方法，所以它本身就是一个空 context。
+`emptyCtx` 实现了 `Context` 接口的四个方法。也就是说，`emptyCtx{}` 这个结构体值可以被当成一个 `context.Context` 使用。
 
-它的行为也很空：
+但是它的具体实现几乎什么都不做：
 
 ```text
 Deadline() 没有截止时间
@@ -284,19 +284,9 @@ func Background() Context {
 }
 ```
 
-准确理解是：
+这段代码可以这样读：`Background()` 的返回类型是 `Context` 接口；`return backgroundCtx{}` 返回的是一个 `backgroundCtx` 结构体值；由于返回位置需要的是 `Context` 接口，Go 会把这个结构体值赋给一个接口值。这个接口值的动态类型是 `backgroundCtx`，动态值是 `backgroundCtx{}`。
 
-```text
-Background() 的返回类型是 Context 接口；
-return backgroundCtx{} 返回的是一个 backgroundCtx 结构体值；
-这个结构体值会被装进 Context 接口值里；
-这个接口值的动态类型是 backgroundCtx；
-这个接口值的动态值是 backgroundCtx{}；
-backgroundCtx 通过嵌入 emptyCtx，拥有了 emptyCtx 的方法；
-所以 backgroundCtx 实现了 Context 接口。
-```
-
-平时口语里说“接口值里装的是 `backgroundCtx{}`”也可以，但更严谨一点应该说：接口值里保存了一个动态类型和一个动态值，这里的动态类型是 `backgroundCtx`，动态值是 `backgroundCtx{}` 这个结构体值。
+而 `backgroundCtx` 之所以能放进 `Context` 接口里，是因为它嵌入了 `emptyCtx`，拥有了 `emptyCtx` 的四个方法，所以它也实现了 `Context` 接口。
 
 `TODO()` 和 `Background()` 能力差不多，区别主要是语义：
 
@@ -378,7 +368,7 @@ cancelCtx{}   创建一个 cancelCtx 结构体值
 c             保存这个 *cancelCtx 指针值
 ```
 
-所以更严谨地说，`WithCancel` 最后返回的 `ctx` 是一个 `Context` 接口值，这个接口值里装的是 `*cancelCtx` 指针值。`*cancelCtx` 这个类型实现了 `Context` 接口，所以它可以被当成 `context.Context` 返回。
+所以 `WithCancel` 最后返回的 `ctx` 是一个 `Context` 接口值。这个接口值的动态类型是 `*cancelCtx`，动态值是一个指向 `cancelCtx` 结构体值的指针。`*cancelCtx` 这个类型实现了 `Context` 接口，所以它可以被当成 `context.Context` 返回。
 
 `cancelCtx` 的结构体定义是：
 
