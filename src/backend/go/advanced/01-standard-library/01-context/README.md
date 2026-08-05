@@ -1038,7 +1038,7 @@ query failed: context deadline exceeded
 - `timerCtx` 在 `cancelCtx` 的基础上再加 deadline 和 timer，所以它既能手动取消，也能到时间后自动取消。
 - `valueCtx` 在父 context 外面包一层 key-value，取值时先看当前层，找不到再去父 context 里找。
 
-读源码时可以把“取消”和“取值”分成两条线看。
+读源码时可以把“取消”和“取值”分成两条线看：
 
 取消更像一棵树。每个可取消的 context 都可能记录自己的子 context，父 context 被取消时，会遍历这些 children，把取消信号继续往下传。所以父 context 取消，子 context 会跟着取消；但子 context 自己取消，不会反过来影响父 context。
 
