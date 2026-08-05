@@ -1,12 +1,14 @@
 ---
 title: Docker Compose
+shortTitle: Docker Compose
+order: 2
 icon: cubes
-prev:
-  text: 镜像与容器
-  link: /tools/docker/images-and-containers
-next:
-  text: Git 入门
-  link: /tools/git/
+category:
+  - Docker
+tag:
+  - Docker Compose
+  - 多容器
+  - 环境变量
 ---
 
 # Docker Compose

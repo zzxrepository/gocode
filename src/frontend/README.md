@@ -1,9 +1,18 @@
 ---
 title: 前端开发
+shortTitle: 前端开发
+order: 6
+dir:
+  link: true
+  collapsible: true
+  order: 6
 icon: laptop-code
-next:
-  text: HTML 基础与语义化
-  link: /frontend/html
+category:
+  - 前端开发
+tag:
+  - HTML
+  - CSS
+  - JavaScript
 ---
 
 # 前端开发

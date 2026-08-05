@@ -1,12 +1,21 @@
 ---
 title: Java
+shortTitle: Java
+order: 2
+dir:
+  link: true
+  collapsible: true
+  order: 2
 icon: mug-hot
-prev:
-  text: 配置、日志、测试与部署
-  link: /backend/go/engineering
-next:
-  text: Java 基础语法与面向对象
-  link: /backend/java/basics
+category:
+  - Java
+tag:
+  - Java
+  - JVM
+  - Spring
+  - Spring Boot
+  - 并发
+  - 后端开发
 ---
 
 # Java

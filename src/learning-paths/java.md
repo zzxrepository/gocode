@@ -1,9 +1,13 @@
 ---
 title: Java 学习路线
+shortTitle: Java 学习路线
+order: 1
 icon: mug-hot
-prev:
-  text: 学习路线
-  link: /learning-paths/
+category:
+  - 学习路线
+tag:
+  - Java 学习路线
+  - 后端开发
 ---
 
 # Java 学习路线

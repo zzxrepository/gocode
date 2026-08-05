@@ -1,12 +1,17 @@
 ---
 title: go-zero
-icon: microchip
-prev:
-  text: Spring / Spring Boot
-  link: /backend/microservices/spring-spring-boot
-next:
-  text: 分布式系统
-  link: /backend/microservices/distributed-systems
+shortTitle: go-zero
+order: 2
+icon: cubes
+category:
+  - 微服务
+tag:
+  - go-zero
+  - 微服务
+  - RPC
+  - API
+  - 配置管理
+  - 工程化
 ---
 
 # go-zero

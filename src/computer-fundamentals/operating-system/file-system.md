@@ -1,9 +1,15 @@
 ---
 title: 文件系统
-prev:
-  text: 内存管理
-  link: /computer-fundamentals/operating-system/memory-management
+shortTitle: 文件系统
+order: 3
 icon: folder-tree
+category:
+  - 操作系统
+tag:
+  - 文件系统
+  - 文件描述符
+  - I/O
+  - 权限
 ---
 
 # 文件系统

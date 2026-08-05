@@ -1,11 +1,17 @@
 ---
 title: Redis 缓存与常用场景
-prev:
-  text: MySQL 基础、索引与事务
-  link: /backend/database/mysql
-next:
-  text: MongoDB 文档数据库入门
-  link: /backend/database/mongodb
+shortTitle: Redis
+order: 2
+icon: gauge-high
+category:
+  - 数据库
+tag:
+  - Redis
+  - 缓存
+  - 数据结构
+  - 缓存策略
+  - 持久化
+  - 高可用
 ---
 
 # Redis 缓存与常用场景

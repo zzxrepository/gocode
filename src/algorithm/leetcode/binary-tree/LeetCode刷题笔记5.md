@@ -1,11 +1,20 @@
 ---
 title: LeetCode 刷题笔记 5：构造二叉树
-prev:
-  text: 二叉树路径
-  link: /algorithm/leetcode/binary-tree/LeetCode刷题笔记4
-next:
-  text: 二叉搜索树（一）
-  link: /algorithm/leetcode/binary-tree/LeetCode刷题笔记6二叉搜索树1
+shortTitle: 构造二叉树
+order: 5
+icon: hammer
+category:
+  - 算法
+  - LeetCode
+  - 二叉树
+tag:
+  - LeetCode
+  - 二叉树
+  - 构造二叉树
+  - 递归
+  - 迭代
+  - DFS
+  - BFS
 ---
 
 > 本篇分享的是与**构造二叉树**有关的问题，有关二叉树的基础知识可以[点击此处跳转学习]()，**构造二叉树的就是遍历树，构造树一般采用的是前序遍历，因为先构造中间节点，然后递归构造左子树和右子树**
@@ -117,7 +126,7 @@ class Solution {
                 postorderLeftArr[i] = postorder[i];
             }
         }
-        
+
         if(rightLength > 0){
             //中序右数组
             inorderRightArr = new int[rightLength];
@@ -128,12 +137,12 @@ class Solution {
                 postorderRightArr[i] = postorder[index+i];
             }
         }
-        
+
 
         //⑥递归处理左区间和右区间
         root.left =  buildTree(inorderLeftArr,postorderLeftArr);
         root.right = buildTree(inorderRightArr,postorderRightArr);
-        
+
         return root;
     }
 }
@@ -163,11 +172,11 @@ class Solution {
         //③找到后序数组最后一个元素在中序数组的位置，作为切割点
         int index;
         for(index = inBegin;index < inEnd;index++){
-            if(inorder[index] == rootVal) break; 
+            if(inorder[index] == rootVal) break;
         }
         //下面是本题的关键，获取切割之后的子树的开始索引和结束索引
         //中序:[9,3,15,20,7]   后序：[9,15,7,20,3]
-        //④切割中序数组，切成中序左数组和中序右数组 
+        //④切割中序数组，切成中序左数组和中序右数组
         int leftInBegin = inBegin;
         int leftInEnd = index;
         int rightInBegin = index + 1;
@@ -239,7 +248,7 @@ class Solution {
 ```java
 class Solution {
     public TreeNode buildTree(int[] inorder, int[] postorder) {
-        //迭代法 借助栈  
+        //迭代法 借助栈
         //首先判断特殊情况
         if (postorder == null || postorder.length == 0) {
             return null;
@@ -356,7 +365,7 @@ class Solution {
                 preorderLeftArr[i] = preorder[i+1];
             }
         }
-        
+
         if(rightLength > 0){
             //中序右数组
             inorderRightArr = new int[rightLength];
@@ -367,11 +376,11 @@ class Solution {
                 preorderRightArr[i] = preorder[index+1+i];
             }
         }
-        
+
         //⑥递归处理左区间和右区间
         root.left =  buildTree(preorderLeftArr,inorderLeftArr);
         root.right = buildTree(preorderRightArr,inorderRightArr);
-        
+
         return root;
     }
 }
@@ -454,7 +463,7 @@ class Solution {
 ```java
 class Solution {
     public TreeNode buildTree(int[] preorder, int[] inorder) {
-        //迭代法 借助栈  
+        //迭代法 借助栈
         //首先判断特殊情况
         if (preorder == null || preorder.length == 0) {
             return null;
@@ -594,7 +603,7 @@ class Solution {
             }
             root.right = constructMaximumBinaryTree(rightArr);
         }
-       
+
         //返回结果
         return root;
     }

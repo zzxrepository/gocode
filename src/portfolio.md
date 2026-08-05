@@ -2,7 +2,13 @@
 home: true
 portfolio: true
 title: 关于作者
-icon: house
+shortTitle: 关于作者
+order: 9
+icon: user
+category:
+  - 个人介绍
+tag:
+  - 个人网站
 welcome: 👋 你好，我是
 name: 神马都会亿点点的毛毛张
 avatar: /maomao-zhang-logo-clean.png

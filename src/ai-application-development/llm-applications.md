@@ -1,11 +1,13 @@
 ---
 title: 模型调用与提示词
-prev:
-  text: AI 应用开发
-  link: /ai-application-development/
-next:
-  text: LangChain：大模型应用框架
-  link: /ai-application-development/langchain
+shortTitle: 模型调用与提示词
+order: 1
+icon: brain
+category:
+  - AI 应用开发
+tag:
+  - 大模型
+  - 提示词
 ---
 
 # 模型调用与提示词

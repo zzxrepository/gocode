@@ -1,11 +1,16 @@
 ---
 title: 数据结构
-prev:
-  text: 算法与数据结构
-  link: /algorithm/
-next:
-  text: 算法学习路线
-  link: /algorithm/algorithms/
+shortTitle: 数据结构
+order: 1
+dir:
+  link: true
+  collapsible: true
+  order: 1
+icon: cubes-stacked
+category:
+  - 数据结构
+tag:
+  - 数据结构
 ---
 
 # 数据结构

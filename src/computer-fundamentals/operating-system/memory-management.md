@@ -1,12 +1,15 @@
 ---
 title: 内存管理
-prev:
-  text: 进程、线程与协程
-  link: /computer-fundamentals/operating-system/process-thread-coroutine
-next:
-  text: 文件系统
-  link: /computer-fundamentals/operating-system/file-system
+shortTitle: 内存管理
+order: 2
 icon: memory
+category:
+  - 操作系统
+tag:
+  - 内存管理
+  - 虚拟内存
+  - 分页
+  - Swap
 ---
 
 # 内存管理

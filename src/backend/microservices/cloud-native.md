@@ -1,9 +1,18 @@
 ---
 title: 云原生
+shortTitle: 云原生
+order: 4
 icon: cloud
-prev:
-  text: 分布式系统
-  link: /backend/microservices/distributed-systems
+category:
+  - 微服务
+  - 云原生
+tag:
+  - 云原生
+  - Kubernetes
+  - Docker
+  - 可观测性
+  - 持续交付
+  - 配置管理
 ---
 
 # 云原生

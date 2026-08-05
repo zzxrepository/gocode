@@ -1,11 +1,17 @@
 ---
 title: 集合框架与并发编程
-prev:
-  text: Java 基础语法与面向对象
-  link: /backend/java/basics
-next:
-  text: JVM 与 Spring 生态
-  link: /backend/java/jvm-and-frameworks
+shortTitle: 集合与并发
+order: 2
+icon: boxes-stacked
+category:
+  - Java
+tag:
+  - Java
+  - 集合框架
+  - 并发
+  - 线程池
+  - 锁
+  - 并发容器
 ---
 
 # 集合框架与并发编程

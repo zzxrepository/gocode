@@ -1,11 +1,16 @@
 ---
 title: 算法
-prev:
-  text: 数据结构学习路线
-  link: /algorithm/data-structures/
-next:
-  text: LeetCode 题解
-  link: /algorithm/leetcode/
+shortTitle: 算法
+order: 2
+dir:
+  link: true
+  collapsible: true
+  order: 2
+icon: diagram-project
+category:
+  - 算法
+tag:
+  - 算法
 ---
 
 # 算法

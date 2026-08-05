@@ -1,11 +1,20 @@
 ---
 title: LeetCode 刷题笔记 3：二叉树的基本性质
-prev:
-  text: 二叉树属性
-  link: /algorithm/leetcode/binary-tree/LeetCode刷题笔记2
-next:
-  text: 二叉树路径
-  link: /algorithm/leetcode/binary-tree/LeetCode刷题笔记4
+shortTitle: 二叉树基本性质
+order: 3
+icon: circle-nodes
+category:
+  - 算法
+  - LeetCode
+  - 二叉树
+tag:
+  - LeetCode
+  - 二叉树
+  - 二叉树性质
+  - 递归
+  - 迭代
+  - DFS
+  - BFS
 ---
 
 > 📌本期毛毛张分享的是LeetCode关于二叉树🌲的性质的一些基础题，做这些题目的本质还是遍历二叉树🏃‍➡️的过程，如果还不熟悉二叉树的遍历方法的同学可以先看看毛毛张的这篇文章➡️[LeetCode刷题笔记：二叉树前序遍历、中序遍历、后序遍历和层序遍历 | 递归法 | 迭代法 | 统一迭代法 | 深度优先搜索 | 广度优先搜索](https://blog.csdn.net/weixin_48235955/article/details/139028925)
@@ -384,7 +393,7 @@ class Solution {
 
 # 3.完全二叉树的判断：[958.二叉树的完全性检验](https://leetcode-cn.com/problems/check-completeness-of-a-binary-tree/)
 
-> LeetCode标签：<font color="orange">中等</font>
+> LeetCode 标签：<span style="color: orange;">中等</span>
 
 ## 3.1 题目描述
 
@@ -422,7 +431,7 @@ class Solution {
 ## 3.2 题解
 
 - 在一棵满二叉树中对二叉树使用层序遍历的顺序从1开始给根节点进行编号，则对于任意一个节点编号为$n$，它的左孩子编号为$2*n$，右孩子编号为$2*n + 1$
-- 特征1：**因此我们可以通过上述性质在遍历二叉树的时候给遍历的节点的左右孩子进行编号，同时统计每个遍历整颗二叉树的节点数量，遍历完毕之后应该满足如下等式：节点数量 = 最大编号** 
+- 特征1：**因此我们可以通过上述性质在遍历二叉树的时候给遍历的节点的左右孩子进行编号，同时统计每个遍历整颗二叉树的节点数量，遍历完毕之后应该满足如下等式：节点数量 = 最大编号**
 - 完全二叉树总的可分为下图这两类：
 
 ![image-20240627225932962](https://cdn.jsdelivr.net/gh/zzxrepository/image_bed@master/leetcode/image-20240627225932962.png)
@@ -464,7 +473,7 @@ class Solution {
     public void traversal(TreeNode cur,int n) {
         //2.确定终止条件
         if(cur == null) return;
-        
+
         //3.确定单层递归逻辑
         //自增变量用于记录节点的数量
         k = k + 1;
@@ -523,7 +532,7 @@ class Solution {
 
 # 4.[404. 左叶子之和](https://leetcode.cn/problems/sum-of-left-leaves/)
 
->  LeetCode标签：<font color="green">简单</font>
+> LeetCode 标签：<span style="color: green;">简单</span>
 
 ## 4.1 题目描述
 
@@ -534,8 +543,8 @@ class Solution {
 ![img](https://assets.leetcode.com/uploads/2021/04/08/leftsum-tree.jpg#pic_center)
 
 ```
-输入: root = [3,9,20,null,null,15,7] 
-输出: 24 
+输入: root = [3,9,20,null,null,15,7]
+输出: 24
 解释: 在这个二叉树中，有两个左叶子，分别是 9 和 15，所以返回 24
 ```
 
@@ -627,7 +636,7 @@ class Solution {
 
 # 5.[513. 找树左下角的值](https://leetcode.cn/problems/find-bottom-left-tree-value/)
 
-> LeetCode标签：<font color="orange">中等</font>
+> LeetCode 标签：<span style="color: orange;">中等</span>
 
 ## 5.1 题目描述
 
@@ -650,13 +659,13 @@ class Solution {
 
 ```
 输入: [1,2,3,4,null,5,6,null,null,7]
-输出: 7 
+输出: 7
 ```
 
 **提示:**
 
 - 二叉树的节点个数的范围是 `[1,104]`
-- `-231 <= Node.val <= 231 - 1` 
+- `-231 <= Node.val <= 231 - 1`
 
 ## 5.2 题解
 
@@ -671,7 +680,7 @@ class Solution {
 
 #### 递归1 毛毛张
 
-**分析：** 
+**分析：**
 
 - 毛毛张在上面的一篇的文章分享了如何实现二叉树的层序遍历的递归实现，如果熟悉的小伙伴可以发现只需要在上面做小小的改动即可，所有毛毛张的下面这种写法来源于二叉树的层序遍历的递归实现
 - **虽然代码的效率可能没有那么高，如果学过二叉树的遍历的小伙伴可以迅速求解出这道题目，不知道大家发现没有，在刷题LeetCode的过程中，最后往往记得是最先使用的方法求解出来的题目，所有毛毛张把这种方法放在第一个就是在不断的强化已经学习过的知识点，如果能用更少的知识点求解更多的题目也是一种能力**
@@ -789,7 +798,7 @@ class Solution {
             //获取当前层的的节点数量
             int size = queue.size();
             //开始遍历每一层
-            for(int i =0;i<size;i++){ 
+            for(int i =0;i<size;i++){
                 //获取当前遍历的节点
                 TreeNode cur = queue.poll();
                 //如果是第一个就记录下来
@@ -812,7 +821,7 @@ class Solution {
 
 ## 5.3 练习：[1302. 层数最深叶子节点的和](https://leetcode.cn/problems/deepest-leaves-sum/)
 
-> LeetCode标签：<font color="orange">中等</font>
+> LeetCode 标签：<span style="color: orange;">中等</span>
 
 - 这个题目和上面这个题目的变体，毛毛张在这里就不做详细的介绍，只分享一种比较简单的代码实现，更多的方法，大家根据毛毛张对上面这一题的实现打开LeetCode去尝试一下其它方法
 

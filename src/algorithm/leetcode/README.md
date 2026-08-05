@@ -1,12 +1,17 @@
 ---
 title: LeetCode 题解
+shortTitle: LeetCode 题解
+order: 3
+dir:
+  link: true
+  collapsible: true
+  order: 3
 icon: simple-icons:leetcode
-prev:
-  text: 算法学习路线
-  link: /algorithm/algorithms/
-next:
-  text: 二叉树题解
-  link: /algorithm/leetcode/binary-tree/
+category:
+  - 算法
+  - LeetCode
+tag:
+  - LeetCode
 ---
 
 # LeetCode 题解

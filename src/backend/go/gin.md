@@ -1,11 +1,19 @@
 ---
 title: Gin 服务开发
-prev:
-  text: Goroutine、Channel 与 Context
-  link: /backend/go/concurrency
-next:
-  text: 配置、日志、测试与部署
-  link: /backend/go/engineering
+shortTitle: Gin
+order: 92
+index: false
+category:
+  - Go
+  - Web 开发
+tag:
+  - Go
+  - Gin
+  - 路由
+  - 中间件
+  - 参数校验
+  - 错误处理
+  - 接口设计
 ---
 
 # Gin 服务开发

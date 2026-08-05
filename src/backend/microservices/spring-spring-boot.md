@@ -1,12 +1,18 @@
 ---
 title: Spring / Spring Boot
-icon: leaf
-prev:
-  text: 微服务与分布式
-  link: /backend/microservices/
-next:
-  text: go-zero
-  link: /backend/microservices/go-zero
+shortTitle: Spring / Spring Boot
+order: 1
+icon: seedling
+category:
+  - Java
+  - 微服务
+tag:
+  - Spring
+  - Spring Boot
+  - Java
+  - Web 开发
+  - 数据访问
+  - 项目实践
 ---
 
 # Spring / Spring Boot

@@ -1,5 +1,11 @@
 ---
 title: 网站维护与文章发布指南
+shortTitle: 网站维护指南
+order: 8
+dir:
+  link: true
+  collapsible: true
+  order: 8
 icon: book-open
 date: 2026-08-02
 category:
@@ -7,265 +13,350 @@ category:
 tag:
   - VuePress
   - 写作
+  - 自动侧边栏
 ---
 
 # 网站维护与文章发布指南
 
-这是一套使用 **VuePress 2 + VuePress Theme Hope** 搭建的静态知识网站。文章写在 Markdown 文件中，目录、顶部导航和左侧文章树分别由少量配置文件控制。
+本站使用 **VuePress 2 + VuePress Theme Hope** 搭建。内容写在 Markdown 文件里，顶部导航由配置控制，左侧文章目录主要由文件结构和 frontmatter 自动生成。
 
-这篇文档以当前 GoCode 项目的实际结构为准。以后要新增文章、扩充 Go 教程或调整栏目，按下面的步骤操作即可。
+以前新增文章时，经常需要同时创建文件、修改 `sidebar.ts`、手写上一篇和下一篇链接。现在站点已经迁移为 **order + structure 自动侧边栏**：新增文章时，优先维护文章自己的 frontmatter；只有新增顶级栏目或特殊导航时，才需要改配置文件。
 
-## 1. 先认识项目结构
+## 项目结构
 
 ```text
 gocode/
-├── src/                         # 所有会被生成到网站的内容
-│   ├── README.md                 # 网站首页
-│   ├── backend/                  # 后端开发的统一目录
-│   │   ├── go/                   # Go 教程
-│   │   ├── java/                 # Java 教程
-│   │   ├── database/             # 数据库教程
-│   │   └── microservices/        # 微服务与分布式
-│   ├── frontend/                 # HTML、CSS、JavaScript
-│   ├── algorithm/                # 算法与数据结构、LeetCode 题解
-│   ├── computer-fundamentals/    # 计算机网络、操作系统
-│   ├── tools/                    # Docker、Git、Maven
-│   ├── ai-application-development/ # AI 应用开发
-│   ├── portfolio.md              # 关于作者页面
-│   └── .vuepress/                # 网站配置与图片资源
-│       ├── config.ts             # 站点名称、访问基础路径等
-│       ├── theme.ts              # 主题、Markdown 能力、GitHub 仓库等
-│       ├── navbar.ts             # 顶部导航与“资源导航”下拉菜单
-│       ├── sidebar.ts            # 左侧文章目录
-│       ├── public/               # 可直接通过网址访问的图片等资源
-│       └── styles/               # 自定义颜色和样式
-├── package.json                  # npm 命令与依赖
-└── deploy.sh                     # 提交源码并部署到 GitHub Pages 的脚本
+├── src/
+│   ├── README.md                  # 网站首页
+│   ├── backend/                   # 后端开发
+│   │   ├── go/                    # Go 教程
+│   │   │   ├── basic/             # Go 基础知识
+│   │   │   └── advanced/          # Go 进阶知识
+│   │   ├── java/                  # Java 教程
+│   │   ├── database/              # 数据库
+│   │   ├── message-queue/         # 消息队列
+│   │   └── microservices/         # 微服务与分布式
+│   ├── algorithm/                 # 算法与数据结构
+│   ├── computer-fundamentals/     # 计算机基础
+│   ├── tools/                     # 开发工具
+│   ├── ai-application-development/# AI 应用开发
+│   ├── frontend/                  # 前端开发
+│   ├── learning-paths/            # 学习路线
+│   ├── site-guide/                # 网站维护指南
+│   └── .vuepress/
+│       ├── config.ts              # 站点基础配置
+│       ├── theme.ts               # 主题、插件、重定向、排序规则
+│       ├── navbar.ts              # 顶部导航
+│       └── sidebar.ts             # 左侧目录入口与结构化侧边栏范围
+├── package.json
+└── deploy.sh
 ```
 
-### 文件名与网页地址的关系
+## 文件和网页地址
 
 | 本地文件 | 网页地址 |
 | --- | --- |
-| `src/backend/go/README.md` | `/gocode/backend/go/` |
-| `src/backend/go/functions.md` | `/gocode/backend/go/functions.html` |
+| `src/backend/go/basic/README.md` | `/gocode/backend/go/basic/` |
+| `src/backend/go/basic/09-methods/README.md` | `/gocode/backend/go/basic/09-methods/` |
 | `src/algorithm/leetcode/hot-100/two-sum.md` | `/gocode/algorithm/leetcode/hot-100/two-sum.html` |
 
-在 `navbar.ts` 和 `sidebar.ts` 中写内部链接时，通常省略 `.html`，例如：`/backend/go/functions`。
+在配置里写内部链接时，通常省略部署前缀 `/gocode`，例如：
 
-## 2. 日常写文章：以新增 Go「函数与方法」教程为例
-
-### 第一步：新建 Markdown 文件
-
-在 `src/backend/go/` 下创建文件：`functions-and-methods.md`。
-
-````md
----
-title: Go 函数与方法
-icon: code
-date: 2026-08-02
-category:
-  - Go
-tag:
-  - Go 基础
-  - 函数
----
-
-# Go 函数与方法
-
-## 函数
-
-```go
-func add(a int, b int) int {
-  return a + b
-}
+```text
+/backend/go/basic/09-methods/
 ```
 
-## 方法
+文章正文里引用站内页面，也优先使用这种根路径写法。
 
-```go
-type User struct {
-  Name string
-}
+## 自动侧边栏规则
 
-func (u User) Hello() string {
-  return "Hello, " + u.Name
-}
-```
-````
+当前 `src/.vuepress/sidebar.ts` 只负责定义大的栏目入口。栏目内部文章列表由 VuePress Theme Hope 的 `children: "structure"` 自动生成。
 
-最上方的 `---` 到 `---` 是文章的元信息（frontmatter）：
-
-- `title`：浏览器标题、文章标题。
-- `icon`：文章标题旁的图标，可省略。
-- `date`：发布日期，建议使用真实日期。
-- `category`、`tag`：用于给文章分类和检索，可按需要增加或删除。
-
-### 第二步：让文章出现在左侧目录
-
-Go 同时会从两个入口访问：顶部“后端开发”里的 Go，以及首页“开始学习 Go”。因此，新文章要在 [sidebar.ts](../.vuepress/sidebar.ts) 的 **两个 Go 目录区块**中同时登记。
-
-建议先把 Go 基础语法改成可容纳多篇文章的目录：
+例如 Go 基础教程：
 
 ```ts
 {
-  text: "Go 基础语法",
+  text: "Golang 基础知识",
   icon: "book-open",
   collapsible: true,
   collapsed: false,
-  children: [
-    { text: "基础语法与项目结构", link: "/backend/go/basics" },
-    { text: "函数与方法", link: "/backend/go/functions-and-methods" },
-  ],
+  prefix: "/backend/go/basic/",
+  children: "structure",
 }
 ```
 
-这个片段只需放入 `sidebar.ts` 的 `"/backend/"` → `Go` 子目录。Go、Java、数据库和微服务都位于 `backend/` 下，所以读者从后端开发点进任何文章，左侧都会始终显示完整的后端目录。
+主题会读取 `src/backend/go/basic/` 下的真实目录和 Markdown 文件：
 
-### 第三步：逐步细化 Go 课程
+- 目录会变成侧边栏分组。
+- 目录里的 `README.md` 用来控制分组标题、图标、顺序和点击链接。
+- 普通 `.md` 文件会变成文章链接。
+- 同级内容先按 `order` 排序，再按标题或文件名排序。
+- 不希望进入目录或索引的页面，写 `index: false`。
 
-当一个主题文章变多时，不要把所有文章都堆在 `src/backend/go/` 根目录。推荐按专题建文件夹：
-
-```text
-src/backend/go/
-├── basics.md
-├── functions-and-methods.md
-├── data-structures/
-│   ├── README.md                 # Go 数据结构概览
-│   ├── array-and-slice.md
-│   ├── map.md
-│   └── stack-and-queue.md
-├── concurrency/
-│   ├── README.md
-│   └── goroutine-and-channel.md
-└── gin/
-    ├── README.md
-    └── routing.md
-```
-
-随后在后端开发的 Go 目录区块中增加一个可展开分组：
+排序规则在 `src/.vuepress/theme.ts` 中显式声明：
 
 ```ts
-{
-  text: "Go 数据结构",
-  icon: "cubes-stacked",
-  collapsible: true,
-  collapsed: false,
-  children: [
-    { text: "学习概览", link: "/backend/go/data-structures/" },
-    { text: "数组与切片", link: "/backend/go/data-structures/array-and-slice" },
-    { text: "Map", link: "/backend/go/data-structures/map" },
-    { text: "栈与队列", link: "/backend/go/data-structures/stack-and-queue" },
-  ],
-}
+sidebarSorter: ["readme", "order", "title", "filename"]
 ```
 
-`README.md` 是该专题的首页；其余文件是具体文章。`collapsible: true` 代表读者可以展开或收起，`collapsed: false` 代表首次进入默认展开。
+这表示目录首页优先，其次看 `order`，再看标题和文件名。
 
-## 3. 修改已有文章
+## 新增文章
 
-直接编辑对应的 `.md` 文件即可。例如：
+普通文章使用下面的 frontmatter：
 
-- Go 基础：`src/backend/go/basics.md`
-- 两数之和：`src/algorithm/leetcode/hot-100/two-sum.md`
-- Docker 教程：`src/tools/docker/README.md`
+```md
+---
+title: 13. 泛型
+shortTitle: 泛型
+icon: code
+order: 13
+category:
+  - Go
+tag:
+  - Go
+  - 泛型
+---
 
-常用 Markdown 写法：
-
-````md
-## 二级标题
-
-[一个链接](https://example.com/)
-
-![图片说明](/gocode/example.png)
-
-`行内代码`
-
-```go
-fmt.Println("代码块")
+# 13. 泛型
 ```
-````
 
-本网站已经启用 Mermaid、TeX、脚注、选项卡、上下角标、图片尺寸、自定义属性等 Markdown 增强能力，它们统一在 [theme.ts](../.vuepress/theme.ts) 的 `markdown` 中开启。
+字段说明：
 
-## 4. 图片放在哪里
-
-有两种常用方式：
-
-1. **全站公用图片**：放入 `src/.vuepress/public/`，在文章里使用 `/gocode/文件名.png`。例如站点头像和 Go Gopher 图标就在这里。
-2. **某个栏目专用图片**：放进该栏目自己的 `assets/` 目录，再用相对路径引用。例如算法图片放在 `src/algorithm/assets/`。
-
-文件名建议使用英文、小写和连字符，例如 `go-channel-flow.png`，能避免不同系统和网址编码带来的问题。
-
-## 5. 新建一个大栏目时要改哪里
-
-假如将来新增“系统设计”栏目，需要完成这四件事：
-
-1. 新建 `src/system-design/README.md`，作为栏目首页。
-2. 在 `src/.vuepress/navbar.ts` 增加顶部导航项，决定它是否出现在最上方。
-3. 在 `src/.vuepress/sidebar.ts` 增加 `"/system-design/"` 的左侧目录，决定文章如何分组、展开和收起。
-4. 在首页 `src/README.md` 的 `highlights` 中增加一张学习卡片（推荐）。
-
-### 顶部导航、左侧目录、资源下拉分别在哪里改？
-
-| 想改的内容 | 修改文件 |
+| 字段 | 作用 |
 | --- | --- |
-| 顶部栏目，例如“后端开发”“开发工具” | `src/.vuepress/navbar.ts` |
-| “资源导航”的下拉链接 | `src/.vuepress/navbar.ts` |
-| 点击栏目后左侧的文章树 | `src/.vuepress/sidebar.ts` |
-| 首页卡片和按钮 | `src/README.md` |
-| 作者介绍 | `src/portfolio.md` |
-| 网站名、部署子路径 | `src/.vuepress/config.ts` |
-| Markdown 功能、主题设置、GitHub 仓库 | `src/.vuepress/theme.ts` |
-| 图标颜色、局部样式 | `src/.vuepress/styles/index.scss` |
+| `title` | 页面完整标题，也影响浏览器标题 |
+| `shortTitle` | 侧边栏、面包屑等位置使用的短标题 |
+| `icon` | 页面图标 |
+| `order` | 同级页面排序，数字越小越靠前 |
+| `category` | 文章分类 |
+| `tag` | 文章标签 |
 
-因此，资源导航目前就是由 `navbar.ts` 的 `children` 下拉结构控制；单独写一个 Markdown 页面不能自动生成顶部下拉菜单。Markdown 页面适合写说明内容，导航配置负责把它放到哪里。
+例如新增 Go 基础教程第 13 篇：
 
-## 6. 本地预览、构建和部署
+```text
+src/backend/go/basic/13-generics/README.md
+```
 
-### 本地边写边看
+写好 `order: 13` 后，它会自动出现在 Go 基础教程侧边栏里，不需要手动修改 `sidebar.ts`。
 
-在项目根目录执行：
+## 新增目录
+
+每个希望出现在侧边栏中的目录，都建议放一个 `README.md` 作为目录首页。
+
+```md
+---
+title: 06. 网络编程
+shortTitle: 网络编程
+icon: network-wired
+order: 6
+dir:
+  link: true
+  collapsible: true
+category:
+  - Go
+tag:
+  - Go
+  - 网络编程
+---
+
+# 06. 网络编程
+```
+
+目录 README 的关键点：
+
+- `title`、`shortTitle`、`icon` 会影响目录页和侧边栏分组。
+- `order` 控制这个目录在父级中的排序。
+- `dir.link: true` 让侧边栏分组标题可以点击进入目录首页。
+- `dir.collapsible: true` 让目录可以展开和收起。
+
+目录下面继续放文章时，每篇文章也写自己的 `order`：
+
+```text
+src/backend/go/advanced/06-network-programming/
+├── README.md
+├── 01-tcp.md
+├── 02-http.md
+└── 03-websocket.md
+```
+
+## 什么时候还需要改 sidebar.ts
+
+新增普通文章、在已有栏目里新增普通目录，通常不需要改 `sidebar.ts`。
+
+仍然需要改 `sidebar.ts` 的情况主要有：
+
+1. 新增顶级栏目，例如 `src/system-design/`。
+2. 改变某个栏目的自动生成范围。
+3. 插入外部链接、跨栏目链接或特殊固定分组。
+4. 某个栏目不适合完全按照文件结构展示。
+5. 需要关闭某个栏目的侧边栏。
+
+如果只是新增一篇 Go、算法、数据库、工具类文章，优先检查 frontmatter，而不是改 sidebar。
+
+## 什么时候需要改 navbar.ts
+
+`navbar.ts` 控制顶部导航和资源下拉菜单。
+
+| 场景 | 是否需要改 `navbar.ts` |
+| --- | --- |
+| 新增一篇普通文章 | 不需要 |
+| 新增已有栏目下的子目录 | 通常不需要 |
+| 新增顶级栏目 | 需要 |
+| 希望某篇文章出现在顶部导航 | 需要 |
+| 修改资源导航下拉链接 | 需要 |
+
+顶部导航是站点入口，不适合放太多普通文章。普通文章交给自动侧边栏管理即可。
+
+## 图片放在哪里
+
+有两种常用放法：
+
+1. 全站公用图片放在 `src/.vuepress/public/`。
+2. 某个栏目专用图片放在该栏目自己的 `assets/` 目录。
+
+文件名建议使用英文、小写和连字符，例如：
+
+```text
+go-channel-flow.png
+binary-tree-traversal.png
+```
+
+文章中引用 `public` 下的图片时，路径从站点根开始：
+
+```md
+![Go Gopher](/go-gopher.png)
+```
+
+长教程或重点文章建议在一级标题下方放一张 16:9 封面图，写法和 `context` 文章保持一致：
+
+```md
+# 01. context
+
+![Go context 源码解析封面](/assets/image/go-context-cover.png)
+```
+
+封面图建议统一放在：
+
+```text
+src/.vuepress/public/assets/image/
+```
+
+文件名建议使用栏目和主题组合，例如：
+
+```text
+go-context-cover.png
+go-struct-cover.png
+go-reflect-cover.png
+```
+
+引用栏目内图片时，可以使用相对路径：
+
+```md
+![二叉树遍历](../assets/binary-tree-traversal.png)
+```
+
+## 本地预览和构建
+
+边写边看：
 
 ```bash
 npm run docs:dev
 ```
 
-终端会给出本地地址，通常是 `http://localhost:8080/gocode/`。保存 Markdown 或配置文件后，浏览器会自动刷新。
+如果新增目录、调整 frontmatter 后侧边栏没有及时刷新，使用清缓存预览：
 
-### 发布到 GitHub Pages
+```bash
+npm run docs:clean-dev
+```
 
-确认本地内容无误后，执行当前项目约定的完整命令：
+发布前构建检查：
+
+```bash
+npm run docs:build
+```
+
+部署到 GitHub Pages：
 
 ```bash
 npm run docs:build && ./deploy.sh
 ```
 
-它会：
+## 常见问题
 
-1. 先检查网站能否构建成功；
-2. 将源码提交并推送到 GitHub 的 `master` 分支；
-3. 将生成的网站推送到 `gh-pages` 分支；
-4. GitHub Pages 随后更新 `https://zzxrepository.github.io/gocode/`。
+### 新文章写了但侧边栏没有显示
 
-`deploy.sh` 内部也会再构建一次，这是为了确保部署的就是最新静态文件，因此看到第二次构建是正常的。
+优先检查：
 
-## 7. 常见问题
+1. 文件是否放在 `src/` 下。
+2. 所在栏目是否已经在 `sidebar.ts` 中启用 `children: "structure"`。
+3. frontmatter 是否写了正确的 `title`。
+4. 是否误写了 `index: false`。
+5. 本地开发服务是否需要重启或执行 `npm run docs:clean-dev`。
 
-### 新文章写了但左侧没有显示
+### 文章顺序不对
 
-检查三件事：文件是否在 `src/` 下、`sidebar.ts` 是否增加了正确链接、链接是否与文件名一致。修改 `sidebar.ts` 后重新执行本地预览或构建。
+检查同级文章的 `order`。
 
-### 顶部没有看到新栏目
+```md
+---
+title: 09. 方法
+shortTitle: 方法
+order: 9
+---
+```
 
-顶部导航由 `navbar.ts` 控制；只创建文件夹或 Markdown 不会自动出现在顶部。
+同一级目录下建议使用连续数字，课程类文章最好让目录编号和 `order` 保持一致。
 
-### 网站更新后浏览器还是旧内容
+### 侧边栏标题太长
 
-先等待 GitHub Pages 完成发布，再用 `Cmd + Shift + R` 强制刷新页面，避免浏览器缓存旧的 CSS 或 JavaScript。
+长标题文章要写 `shortTitle`：
 
-## 8. 一条最实用的写作原则
+```md
+---
+title: 二叉树前序遍历、中序遍历、后序遍历和层序遍历
+shortTitle: 二叉树遍历
+order: 1
+---
+```
 
-**先写 Markdown，再登记目录，最后预览部署。**
+这样页面标题仍然完整，侧边栏不会被长标题撑开。
 
-也就是：先把一篇文章写清楚；再在 `sidebar.ts` 把它放进合适专题；需要顶级曝光时再改 `navbar.ts`；确认本地效果后运行部署命令。这样课程内容会持续长大，但网站结构仍然清晰。
+### 目录不能点击
+
+目录 README 里加：
+
+```md
+---
+dir:
+  link: true
+  collapsible: true
+---
+```
+
+### 不想让旧页面进入目录
+
+在旧页面 frontmatter 中写：
+
+```md
+---
+index: false
+---
+```
+
+当前 Go 旧扁平页如 `backend/go/basics.md`、`backend/go/concurrency.md` 已经作为兼容页隐藏，新内容应维护在 `backend/go/basic/` 和 `backend/go/advanced/` 下。
+
+## 推荐工作流
+
+新增文章时按这个顺序做：
+
+```text
+1. 在正确栏目下创建 Markdown 或 README.md
+2. 写好 title / shortTitle / icon / order
+3. 编写正文
+4. npm run docs:dev 本地预览
+5. npm run docs:build 构建检查
+6. 需要发布时执行 npm run docs:build && ./deploy.sh
+```
+
+核心原则是：**内容顺序由 frontmatter 管，栏目入口由 sidebar.ts 管，顶部曝光由 navbar.ts 管。**

@@ -1,12 +1,19 @@
 ---
 title: Maven 入门
+shortTitle: Maven
+order: 4
+dir:
+  link: true
+  collapsible: true
+  order: 4
 icon: box
-prev:
-  text: 分支与协作
-  link: /tools/git/branch-and-collaboration
-next:
-  text: 生命周期与依赖管理
-  link: /tools/maven/lifecycle-and-dependencies
+category:
+  - Maven
+tag:
+  - Maven
+  - POM
+  - 依赖管理
+  - 项目构建
 ---
 
 # Maven 入门

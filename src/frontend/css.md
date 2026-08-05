@@ -1,12 +1,15 @@
 ---
 title: CSS 布局与样式
-prev:
-  text: HTML 基础与语义化
-  link: /frontend/html
-next:
-  text: JavaScript 基础与浏览器编程
-  link: /frontend/javascript
+shortTitle: CSS
+order: 2
 icon: fa6-brands:css3-alt
+category:
+  - 前端开发
+tag:
+  - CSS
+  - Flex
+  - Grid
+  - 响应式布局
 ---
 
 # CSS 布局与样式

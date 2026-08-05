@@ -1,12 +1,21 @@
 ---
 title: 数据库
+shortTitle: 数据库
+order: 3
+dir:
+  link: true
+  collapsible: true
+  order: 3
 icon: database
-prev:
-  text: JVM 与 Spring 生态
-  link: /backend/java/jvm-and-frameworks
-next:
-  text: MySQL 基础、索引与事务
-  link: /backend/database/mysql
+category:
+  - 数据库
+tag:
+  - 数据库
+  - MySQL
+  - Redis
+  - MongoDB
+  - 数据存储
+  - 缓存
 ---
 
 # 数据库

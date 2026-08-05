@@ -1,9 +1,17 @@
 ---
 title: 计算机基础
+shortTitle: 计算机基础
+order: 3
+dir:
+  link: true
+  collapsible: true
+  order: 3
 icon: desktop
-next:
-  text: 计算机网络
-  link: /computer-fundamentals/network/
+category:
+  - 计算机基础
+tag:
+  - 计算机网络
+  - 操作系统
 ---
 
 # 计算机基础

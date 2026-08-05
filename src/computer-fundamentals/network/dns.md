@@ -1,12 +1,14 @@
 ---
 title: DNS 与域名解析
-prev:
-  text: TCP 与 UDP
-  link: /computer-fundamentals/network/tcp-and-udp
-next:
-  text: 操作系统
-  link: /computer-fundamentals/operating-system/
+shortTitle: DNS 与域名解析
+order: 4
 icon: server
+category:
+  - 计算机网络
+tag:
+  - DNS
+  - 域名解析
+  - 缓存
 ---
 
 # DNS 与域名解析

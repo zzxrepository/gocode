@@ -1,11 +1,18 @@
 ---
 title: Hot 100 题解
-prev:
-  text: 二叉树的直径
-  link: /algorithm/leetcode/binary-tree/LeetCode刷题笔记8
-next:
-  text: 1. 两数之和
-  link: /algorithm/leetcode/hot-100/two-sum
+shortTitle: Hot 100 题解
+order: 2
+dir:
+  link: true
+  collapsible: true
+  order: 2
+icon: fire
+category:
+  - 算法
+  - LeetCode
+tag:
+  - LeetCode
+  - Hot 100
 ---
 
 # Hot 100 题解

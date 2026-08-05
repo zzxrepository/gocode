@@ -1,12 +1,16 @@
 ---
 title: HTTP 与 HTTPS
-prev:
-  text: 网络分层与协议
-  link: /computer-fundamentals/network/network-layers-and-protocols
-next:
-  text: TCP 与 UDP
-  link: /computer-fundamentals/network/tcp-and-udp
+shortTitle: HTTP 与 HTTPS
+order: 2
 icon: globe
+category:
+  - 计算机网络
+tag:
+  - HTTP
+  - HTTPS
+  - HTTP 缓存
+  - Cookie
+  - 证书
 ---
 
 # HTTP 与 HTTPS

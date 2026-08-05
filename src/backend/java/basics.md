@@ -1,11 +1,16 @@
 ---
 title: Java 基础语法与面向对象
-prev:
-  text: Java
-  link: /backend/java/
-next:
-  text: 集合框架与并发编程
-  link: /backend/java/collections-and-concurrency
+shortTitle: Java 基础
+order: 1
+icon: cube
+category:
+  - Java
+tag:
+  - Java
+  - 基础语法
+  - 面向对象
+  - 异常
+  - 泛型
 ---
 
 # Java 基础语法与面向对象

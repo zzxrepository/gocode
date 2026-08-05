@@ -1,12 +1,19 @@
 ---
 title: Docker 入门
+shortTitle: Docker
+order: 2
+dir:
+  link: true
+  collapsible: true
+  order: 2
 icon: docker
-prev:
-  text: macOS 使用技巧
-  link: /tools/development-environment/macos-tips
-next:
-  text: 镜像与容器
-  link: /tools/docker/images-and-containers
+category:
+  - Docker
+tag:
+  - Docker
+  - 容器化
+  - 镜像
+  - 容器
 ---
 
 # Docker 入门

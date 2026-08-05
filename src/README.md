@@ -1,7 +1,13 @@
 ---
 home: true
 icon: house
+order: 0
 title: 跟着毛毛张学 Go
+category:
+  - GoCode
+tag:
+  - 个人网站
+  - GoCode
 heroImage: /maomao-zhang-logo-clean.png
 bgImage: https://theme-hope-assets.vuejs.press/bg/6-light.svg
 bgImageDark: https://theme-hope-assets.vuejs.press/bg/6-dark.svg

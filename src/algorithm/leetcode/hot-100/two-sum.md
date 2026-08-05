@@ -1,8 +1,16 @@
 ---
 title: 两数之和
-prev:
-  text: Hot 100 题解
-  link: /algorithm/leetcode/hot-100/
+shortTitle: 两数之和
+order: 1
+icon: hashtag
+category:
+  - 算法
+  - LeetCode
+tag:
+  - LeetCode
+  - Hot 100
+  - 数组
+  - 哈希表
 ---
 
 # 两数之和

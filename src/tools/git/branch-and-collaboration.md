@@ -1,12 +1,15 @@
 ---
 title: 分支与协作
+shortTitle: 分支与协作
+order: 1
 icon: code-branch
-prev:
-  text: Git 入门
-  link: /tools/git/
-next:
-  text: Maven 入门
-  link: /tools/maven/
+category:
+  - Git
+tag:
+  - Git 分支
+  - Pull Request
+  - 冲突解决
+  - 团队协作
 ---
 
 # 分支与协作

@@ -1,12 +1,14 @@
 ---
 title: LangChain：大模型应用框架
+shortTitle: LangChain
+order: 3
 icon: link
-prev:
-  text: 模型调用与提示词
-  link: /ai-application-development/llm-applications
-next:
-  text: 知识库与工具调用
-  link: /ai-application-development/rag-and-mcp
+category:
+  - AI 应用开发
+tag:
+  - 大模型
+  - LangChain
+  - RAG
 ---
 
 # LangChain：大模型应用框架

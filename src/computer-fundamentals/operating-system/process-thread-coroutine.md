@@ -1,12 +1,15 @@
 ---
 title: 进程、线程与协程
-prev:
-  text: 操作系统
-  link: /computer-fundamentals/operating-system/
-next:
-  text: 内存管理
-  link: /computer-fundamentals/operating-system/memory-management
+shortTitle: 进程、线程与协程
+order: 1
 icon: arrows-split-up-and-left
+category:
+  - 操作系统
+tag:
+  - 进程
+  - 线程
+  - 协程
+  - 并发
 ---
 
 # 进程、线程与协程

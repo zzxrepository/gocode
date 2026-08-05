@@ -1,11 +1,18 @@
 ---
 title: LeetCode 刷题笔记 8：二叉树的直径
-prev:
-  text: 二叉搜索树（二）
-  link: /algorithm/leetcode/binary-tree/LeetCode刷题笔记7二叉搜索树2
-next:
-  text: Hot 100 题解
-  link: /algorithm/leetcode/hot-100/
+shortTitle: 二叉树的直径
+order: 8
+icon: ruler-combined
+category:
+  - 算法
+  - LeetCode
+  - 二叉树
+tag:
+  - LeetCode
+  - 二叉树
+  - 路径
+  - 递归
+  - DFS
 ---
 
 # [543. 二叉树的直径](https://leetcode.cn/problems/diameter-of-binary-tree/)
@@ -20,7 +27,7 @@ next:
 
 两节点之间路径的 **长度** 由它们之间边数表示。
 
- 
+
 
 **示例 1：**
 
@@ -39,7 +46,7 @@ next:
 输出：1
 ```
 
- 
+
 
 **提示：**
 
@@ -67,7 +74,7 @@ class Solution {
     public int dfs(TreeNode cur){
         //2.确定终止条件
         if(cur == null) return 0;
-        
+
         //3.确定单层递归逻辑
         //左边树的高度
         int leftHeight = dfs(cur.left);
@@ -102,7 +109,7 @@ class Solution {
 
 给你一个二叉树的根节点 `root` ，返回其 **最大路径和** 。
 
- 
+
 
 **示例 1：**
 
@@ -124,7 +131,7 @@ class Solution {
 解释：最优路径是 15 -> 20 -> 7 ，路径和为 15 + 20 + 7 = 42
 ```
 
- 
+
 
 **提示：**
 

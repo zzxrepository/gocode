@@ -1,12 +1,19 @@
 ---
 title: Git 入门
+shortTitle: Git
+order: 3
+dir:
+  link: true
+  collapsible: true
+  order: 3
 icon: code-branch
-prev:
-  text: Docker Compose
-  link: /tools/docker/docker-compose
-next:
-  text: 分支与协作
-  link: /tools/git/branch-and-collaboration
+category:
+  - Git
+tag:
+  - Git
+  - 版本控制
+  - 提交
+  - 远端仓库
 ---
 
 # Git 入门

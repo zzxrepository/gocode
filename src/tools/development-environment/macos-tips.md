@@ -1,12 +1,8 @@
 ---
 title: macOS 使用技巧
+shortTitle: macOS 使用技巧
+order: 1
 icon: fa6-brands:apple
-prev:
-  text: 开发工具
-  link: /tools/
-next:
-  text: Docker 入门
-  link: /tools/docker/
 category:
   - 开发工具
   - 开发环境

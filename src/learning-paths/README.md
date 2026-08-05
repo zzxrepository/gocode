@@ -1,9 +1,16 @@
 ---
 title: 学习路线
+shortTitle: 学习路线
+order: 7
+dir:
+  link: true
+  collapsible: true
+  order: 7
 icon: map
-next:
-  text: Java 学习路线
-  link: /learning-paths/java
+category:
+  - 学习路线
+tag:
+  - 学习路线
 ---
 
 # 学习路线

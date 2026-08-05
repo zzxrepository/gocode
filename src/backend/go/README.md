@@ -1,12 +1,19 @@
 ---
 title: GO
+shortTitle: GO
+order: 1
+dir:
+  link: true
+  collapsible: true
+  order: 1
 icon: terminal
-prev:
-  text: 后端开发
-  link: /backend/
-next:
-  text: Golang 基础知识
-  link: /backend/go/basic/
+category:
+  - Go
+tag:
+  - Go
+  - Golang
+  - 后端开发
+  - 学习路线
 ---
 
 # GO

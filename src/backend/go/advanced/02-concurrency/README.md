@@ -1,15 +1,25 @@
 ---
 title: 02. 并发编程
+shortTitle: 并发编程
+order: 2
+dir:
+  link: true
+  collapsible: true
+  order: 2
 icon: arrows-split-up-and-left
-prev:
-  text: 01. context
-  link: /backend/go/advanced/01-standard-library/01-context/
-next:
-  text: 03. Web 开发
-  link: /backend/go/advanced/03-web-development/
+category:
+  - Go
+  - Golang 进阶知识
+  - 并发编程
+tag:
+  - Go
+  - goroutine
+  - channel
+  - select
+  - sync
+  - 并发模式
 ---
 
 # 02. 并发编程
 
 这里会整理 goroutine、channel、select、sync 包和并发模式。
-

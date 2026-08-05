@@ -1,12 +1,24 @@
 ---
 title: 01. context
+shortTitle: context
+order: 1
+dir:
+  link: true
+  collapsible: true
+  order: 1
 icon: timeline
-prev:
-  text: 01. 标准库
-  link: /backend/go/advanced/01-standard-library/
-next:
-  text: 02. 并发编程
-  link: /backend/go/advanced/02-concurrency/
+category:
+  - Go
+  - Golang 进阶知识
+  - 标准库
+tag:
+  - Go
+  - context
+  - Context
+  - WithCancel
+  - WithTimeout
+  - WithValue
+  - goroutine
 ---
 
 # 01. context
@@ -280,7 +292,7 @@ func Background() Context {
 >
 > ```go
 > ctx := context.Background()
-> 
+>
 > done := ctx.Done() // done 是 nil
 > <-done             // 永远阻塞
 > ```
@@ -1030,53 +1042,53 @@ query failed: context deadline exceeded
    	// ...
    }
    ```
-   
+
 2. 不要把 `Context` 长期存在结构体字段里。`context` 表达的是“一次调用”或“一次请求”的生命周期，而结构体通常比一次请求活得更久。如果把 `ctx` 放进结构体里，很容易出现旧请求的超时、取消信号影响新请求的问题。更推荐把 `ctx` 显式传给每个需要它的方法。
 
    ```go
    type UserRepo struct {
    	db *sql.DB
    }
-   
+
    func (r *UserRepo) Find(ctx context.Context, id int64) (*User, error) {
    	// ...
    }
    ```
-   
+
 3. 不要传 `nil` context。很多函数会直接调用 `ctx.Done()`、`ctx.Err()` 或 `ctx.Value()`。如果传的是 `nil`，就可能 panic。暂时不知道传什么时，用 `context.TODO()`；如果明确是根节点，用 `context.Background()`。
 
    ```go
    // 临时占位：
    ctx := context.TODO()
    ```
-   
+
    ```go
    // 明确需要根 context：
    ctx := context.Background()
    ```
-   
+
 4. `WithCancel`、`WithDeadline`、`WithTimeout` 返回的 `cancel` 要调用。`cancel()` 不只是“手动取消”。它还会释放当前 context 关联的资源，比如 timer，以及父 context 对子 context 的引用。即使你设置了超时，也应该在任务提前结束时 `defer cancel()`。
 
    ```go
    ctx, cancel := context.WithTimeout(parent, 2*time.Second)
    defer cancel()
    ```
-   
+
 5. `WithValue` 只放请求级数据，不要当成万能参数包。适合放进 context 的值，一般是跨函数、跨 API 边界都可能需要的请求级信息，比如 `traceID`、`requestID`、认证信息。不适合把普通业务参数塞进去，比如分页参数、开关参数、查询条件。
 
    ```go
    type traceIDKey struct{}
-   
+
    ctx = context.WithValue(ctx, traceIDKey{}, "trace-001")
    ```
-   
+
 6. 同一个 `Context` 可以被多个 goroutine 同时使用。官方保证 `Context` 的方法可以被多个 goroutine 同时调用。所以一次请求里启动多个 goroutine 时，可以把同一个 `ctx` 传进去，让它们共享同一份取消信号和请求级数据。
 
    ```go
    go queryDB(ctx)
    go callRPC(ctx)
    ```
-   
+
 7. 取消不是强杀 goroutine，只是发信号。调用 `cancel()` 或超时以后，context 只会关闭 `Done` channel。goroutine 不会被 Go 运行时强制杀掉，它必须自己在合适的位置监听 `ctx.Done()`，然后主动返回。
 
    ```go

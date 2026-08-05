@@ -1,11 +1,20 @@
 ---
 title: LeetCode 刷题笔记 2：二叉树的属性
-prev:
-  text: 二叉树遍历
-  link: /algorithm/leetcode/binary-tree/LeetCode二叉树刷题笔记总结1-二叉树的遍历
-next:
-  text: 二叉树基本性质
-  link: /algorithm/leetcode/binary-tree/Leetcode刷题笔记3
+shortTitle: 二叉树属性
+order: 2
+icon: tags
+category:
+  - 算法
+  - LeetCode
+  - 二叉树
+tag:
+  - LeetCode
+  - 二叉树
+  - 二叉树属性
+  - 递归
+  - 迭代
+  - DFS
+  - BFS
 ---
 
 > 今天毛毛张分享的关于求解二叉树属性的4道LeetCode算法题，每道题目都是一题多解，并配上5道练习题，标签全部为简单题，赶快进来看看是不是真的简单吧！
@@ -295,7 +304,7 @@ class Solution {
             else if(left == null && right != null) return false;
             else if(left.val != right.val) return false;
             //毛毛张在这里给大家留个问题：上面三行可以怎么合并？
-            
+
             //判断完毕之后按照顺序入栈
             stack.push(left.left);      //左节点左孩子
             stack.push(right.right);    //右节点右孩子
@@ -471,7 +480,7 @@ class Solution {
 
 ![img](https://assets.leetcode.com/uploads/2020/11/26/tmp-tree.jpg#pic_center)
 
- 
+
 
 ```
 输入：root = [3,9,20,null,null,15,7]
@@ -532,7 +541,7 @@ class Solution {
 class Solution {
     //创建结果返回值
     int result;
-    //前序遍历 
+    //前序遍历
     //递归法 三步走
     //1.确定形参和返回值
     public void getDepth(TreeNode cur,int depth){
@@ -569,7 +578,7 @@ class Solution {
 class Solution {
     //创建结果返回值
     int result;
-    //前序遍历 
+    //前序遍历
     //递归法 三步走
     //1.确定形参和返回值
     public void getDepth(TreeNode cur,int depth){
@@ -608,7 +617,7 @@ class Solution {
 class Solution {
     //创建结果返回值
     int result;
-    //前序遍历 
+    //前序遍历
     //递归法 三步走
     //1.确定形参和返回值
     public void getDepth(TreeNode cur,int depth){
@@ -989,7 +998,7 @@ class Solution {
         if(k == 1) { // 第一层
             return 1;
         }
-        
+
         //3.确定单层递归逻辑
         return getKLevelNodeNum(root.left, k - 1) + getKLevelNodeNum(root.right, k - 1);
     }

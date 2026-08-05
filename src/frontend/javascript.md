@@ -1,9 +1,15 @@
 ---
 title: JavaScript 基础与浏览器编程
-prev:
-  text: CSS 布局与样式
-  link: /frontend/css
+shortTitle: JavaScript
+order: 3
 icon: fa6-brands:js
+category:
+  - 前端开发
+tag:
+  - JavaScript
+  - DOM
+  - 异步编程
+  - 浏览器 API
 ---
 
 # JavaScript 基础与浏览器编程

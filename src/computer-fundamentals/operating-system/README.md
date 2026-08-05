@@ -1,12 +1,19 @@
 ---
 title: 操作系统
-prev:
-  text: DNS 与域名解析
-  link: /computer-fundamentals/network/dns
-next:
-  text: 进程、线程与协程
-  link: /computer-fundamentals/operating-system/process-thread-coroutine
+shortTitle: 操作系统
+order: 2
+dir:
+  link: true
+  collapsible: true
+  order: 2
 icon: desktop
+category:
+  - 操作系统
+tag:
+  - 进程
+  - 线程
+  - 内存管理
+  - 文件系统
 ---
 
 # 操作系统

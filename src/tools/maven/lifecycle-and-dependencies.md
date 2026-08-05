@@ -1,9 +1,14 @@
 ---
 title: 生命周期与依赖管理
+shortTitle: 生命周期与依赖管理
+order: 1
 icon: boxes-stacked
-prev:
-  text: Maven 入门
-  link: /tools/maven/
+category:
+  - Maven
+tag:
+  - Maven 生命周期
+  - 依赖管理
+  - 版本管理
 ---
 
 # 生命周期与依赖管理

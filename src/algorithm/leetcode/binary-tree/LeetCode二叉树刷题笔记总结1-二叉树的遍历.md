@@ -1,16 +1,13 @@
 ---
 title: 二叉树前序遍历、中序遍历、后序遍历和层序遍历 | 递归法 | 迭代法 | 统一迭代法 | 深度优先搜索 | 广度优先搜索
-prev:
-  text: 二叉树题解
-  link: /algorithm/leetcode/binary-tree/
-next:
-  text: 二叉树属性
-  link: /algorithm/leetcode/binary-tree/LeetCode刷题笔记2
-date: 2024/7/28 16:04:00
+shortTitle: 二叉树遍历
+order: 1
+icon: shuffle
+date: 2024-07-28 16:04:00
 categories:
   - 算法
   - LeetCode
-  - 二叉树	
+  - 二叉树
 tags:
   - 广度优先遍历
   - 深度优先遍历
@@ -40,7 +37,7 @@ comments: true
   - 前序遍历（递归法，迭代法）
   - 中序遍历（递归法，迭代法）
   - 后序遍历（递归法，迭代法）
-  
+
 - **广度优先遍历：**一层一层的去遍历，指的是从图的一个未遍历的节点出发，先遍历这个节点的相邻节点，再依次遍历每个相邻节点的相邻节点
     - 层次遍历（递归法，迭代法）
 
@@ -138,7 +135,7 @@ class Solution {
     public List<Integer> preorderTraversal(TreeNode root) {
         //创建List用来存放返回值
         List<Integer> list = new ArrayList<>();
-        
+
         //2.确定终止条件
         if(root == null){
             return list;
@@ -178,12 +175,12 @@ class Solution {
 >     public List<Integer> preorderTraversal(TreeNode root) {
 >         //创建List用来存放返回值
 >         List<Integer> list = new ArrayList<>();
-> 
+>
 >         //2.确定终止条件
 >         if(root == null){
 >             return null;
 >         }
-> 
+>
 >         //3.确定单层递归的逻辑
 >         //中
 >         list.add(root.val);
@@ -193,7 +190,7 @@ class Solution {
 >         //右子树
 >         List<Integer>  rightList = preorderTraversal(root.right);
 >         list.addAll(rightList);
-> 
+>
 >         return list;
 >     }
 > }
@@ -315,7 +312,7 @@ class Solution {
     //方法论
     //1.这里直接使用题目帮你确定好的形参和返回值
     public List<Integer> postorderTraversal(TreeNode root) {
-        
+
         //创建列表存储返回值
         List<Integer> list = new ArrayList<>();
 
@@ -408,7 +405,7 @@ class Solution {
         //1.创建列表返回结果
         List<Integer> list = new ArrayList<>();
         //2.创建中间过程中间的存放结点的栈
-        Stack<TreeNode> stack = new Stack<>();       
+        Stack<TreeNode> stack = new Stack<>();
         TreeNode cur = root;
         //注意，第一次进入循环的结果是判断根节点root是否为空！
         while(cur != null || !stack.isEmpty()){
@@ -667,7 +664,7 @@ public List<Integer> postorderTraversal(TreeNode root) {
     Stack<TreeNode> stack = new Stack<>();
     //获取当前处理的节点
     TreeNode cur = root;
-   	//表示上一个处理的节点
+	//表示上一个处理的节点
     TreeNode prev = null;
 	//3开始进行迭代
     while(cur != null || !stack.empty()) {
@@ -719,7 +716,7 @@ class Solution {
         //3.根节点入栈
         if(root != null)
             stack.push(root);
-        
+
         while(!stack.isEmpty()){
             //判断栈顶元素
             TreeNode node = stack.peek();
@@ -743,7 +740,7 @@ class Solution {
                 //获取处理的结点
                 node = stack.pop();
                 //添加中间结点
-                list.add(node.val);                
+                list.add(node.val);
             }
         }
         //返回结果
@@ -782,15 +779,15 @@ class Solution {
                 stack.push(null);
                 //左
                 if(node.left != null)
-                    stack.push(node.left);              
+                    stack.push(node.left);
             }
             else {
                 //在处理之前天弹出栈顶的null
                 stack.pop();
                 //获取处理的结点
-                node = stack.pop();      
+                node = stack.pop();
                 //添加中间结点
-                list.add(node.val);  
+                list.add(node.val);
             }
         }
         //返回结果
@@ -826,10 +823,10 @@ class Solution {
                 stack.push(null);
                 //右
                 if(node.right != null)
-                    stack.push(node.right);              
+                    stack.push(node.right);
                 //左
                 if(node.left != null)
-                    stack.push(node.left);              
+                    stack.push(node.left);
             }
             else {
                 //在处理之前天弹出栈顶的null
@@ -837,7 +834,7 @@ class Solution {
                 //获取处理的结点
                 node = stack.pop();
                 //添加中间结点
-                list.add(node.val);              
+                list.add(node.val);
             }
         }
         //返回结果
@@ -871,7 +868,7 @@ class Solution {
         //明确方法形参和返回值
         levelOrderTraverse(root,0);
         //3.返回结果
-        return result;    
+        return result;
     }
 
     public void levelOrderTraverse(TreeNode node,int depth){
@@ -900,7 +897,7 @@ class Solution {
 
 ```java
 class Solution {
-    
+
     public List<List<Integer>> levelOrder(TreeNode root) {
         //迭代方法
         List<List<Integer>> ret = new ArrayList<List<Integer>>();
@@ -908,7 +905,7 @@ class Solution {
         //首先判断特殊情况
         if(root == null){
             return ret;
-        } 
+        }
 
         //借助队列实现
         Queue<TreeNode> queue = new LinkedList<TreeNode>();
@@ -958,7 +955,7 @@ class Solution {
         //反转
         Collections.reverse(ret);
         //3.返回结果
-        return result;    
+        return result;
     }
 
     public void levelOrderTraverse(TreeNode node,int depth){
@@ -992,7 +989,7 @@ class Solution {
         //首先判断特殊情况
         if(root == null){
             return ret;
-        } 
+        }
 
         //借助队列实现
         Queue<TreeNode> queue = new LinkedList<TreeNode>();
@@ -1017,7 +1014,7 @@ class Solution {
             }
             //将每一层列表添加到结果中
             ret.add(level);
-            
+
             //如果不反转就充分利用add函数的性质
             //头插法
             //ret.add(0, level);
@@ -1025,7 +1022,7 @@ class Solution {
 
         //反转
         Collections.reverse(ret);
-        
+
         return ret;
     }
 }
@@ -1066,4 +1063,3 @@ class Solution {
 [2](https://blog.csdn.net/weixin_44027397/article/details/113735310?ops_request_misc=&request_id=&biz_id=102&utm_term=%E4%BA%8C%E5%8F%89%E6%A0%91%E7%9A%84%E8%BF%AD%E4%BB%A3%E9%81%8D%E5%8E%86java&utm_medium=distribute.pc_search_result.none-task-blog-2~all~sobaiduweb~default-3-113735310.142^v100^control&spm=1018.2226.3001.4187)
 
 [3](https://blog.csdn.net/qq_64257622/article/details/131112998?ops_request_misc=%257B%2522request%255Fid%2522%253A%2522171517933116800222816298%2522%252C%2522scm%2522%253A%252220140713.130102334..%2522%257D&request_id=171517933116800222816298&biz_id=0&utm_medium=distribute.pc_search_result.none-task-blog-2~all~sobaiduend~default-2-131112998-null-null.142^v100^control&utm_term=%E4%BA%8C%E5%8F%89%E6%A0%91%E7%9A%84%E8%BF%AD%E4%BB%A3%E9%81%8D%E5%8E%86java&spm=1018.2226.3001.4187)
-

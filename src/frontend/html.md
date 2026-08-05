@@ -1,12 +1,15 @@
 ---
 title: HTML 基础与语义化
+shortTitle: HTML
+order: 1
 icon: fa6-brands:html5
-prev:
-  text: 前端开发
-  link: /frontend/
-next:
-  text: CSS 布局与样式
-  link: /frontend/css
+category:
+  - 前端开发
+tag:
+  - HTML
+  - 语义化
+  - 表单
+  - 可访问性
 ---
 
 # HTML 基础与语义化

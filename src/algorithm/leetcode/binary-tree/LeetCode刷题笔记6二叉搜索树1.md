@@ -1,11 +1,20 @@
 ---
 title: LeetCode 刷题笔记 6：二叉搜索树 1
-prev:
-  text: 构造二叉树
-  link: /algorithm/leetcode/binary-tree/LeetCode刷题笔记5
-next:
-  text: 二叉搜索树（二）
-  link: /algorithm/leetcode/binary-tree/LeetCode刷题笔记7二叉搜索树2
+shortTitle: 二叉搜索树（一）
+order: 6
+icon: magnifying-glass
+category:
+  - 算法
+  - LeetCode
+  - 二叉树
+tag:
+  - LeetCode
+  - 二叉树
+  - 二叉搜索树
+  - 递归
+  - 迭代
+  - DFS
+  - BFS
 ---
 
 # 1.[700. 二叉搜索树中的搜索](https://leetcode.cn/problems/search-in-a-binary-search-tree/)
@@ -16,7 +25,7 @@ next:
 
 你需要在 BST 中找到节点值等于 `val` 的节点。 返回以该节点为根的子树。 如果节点不存在，则返回 `null` 。
 
- 
+
 
 **示例 1:**
 
@@ -36,7 +45,7 @@ next:
 输出：[]
 ```
 
- 
+
 
 **提示：**
 
@@ -141,7 +150,7 @@ class Solution {
 
 - 所有左子树和右子树自身必须也是二叉搜索树。
 
- 
+
 
 **示例 1：**
 
@@ -162,7 +171,7 @@ class Solution {
 解释：根节点的值是 5 ，但是右子节点的值是 4 。
 ```
 
- 
+
 
 **提示：**
 
@@ -278,10 +287,10 @@ class Solution {
             return false;
         }
         maxNode = root;
-        
+
         //右
         boolean rightFlag = isValidBST(root.right);
-        
+
         //返回结果
         return rightFlag;
     }
@@ -803,7 +812,7 @@ class Solution {
         int count = 0;
         //记录上一次的计数器的最大值
         int maxCount = 0;
-        
+
         //开始迭代
         while(!stack.isEmpty()){
             //获取当前结点
@@ -820,7 +829,7 @@ class Solution {
             }else{
                 stack.pop();
                 cur = stack.pop();
-                
+
                 //计数
                 if(pre == null || cur.val != pre.val){
                     count = 1;
@@ -851,7 +860,7 @@ class Solution {
         for (int i = 0; i < length; i++) {
             res[i] = list.get(i);
         }
-        return res;  
+        return res;
     }
 }
 ```
@@ -870,7 +879,7 @@ class Solution {
 		if (root == null){
             return list.stream().mapToInt(Integer::intValue).toArray();
         }
-        
+
 		// 遍历二叉树，获得所有元素出现的次数
 		searchBST(root, map);
         //根据出现的频次对map集合中的元素进行排序，并转换成列表
@@ -901,4 +910,3 @@ class Solution {
 	}
 }
 ```
-

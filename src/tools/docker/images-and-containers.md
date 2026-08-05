@@ -1,12 +1,15 @@
 ---
 title: 镜像与容器
+shortTitle: 镜像与容器
+order: 1
 icon: cube
-prev:
-  text: Docker 入门
-  link: /tools/docker/
-next:
-  text: Docker Compose
-  link: /tools/docker/docker-compose
+category:
+  - Docker
+tag:
+  - Docker 镜像
+  - Docker 容器
+  - 卷挂载
+  - Docker 网络
 ---
 
 # 镜像与容器

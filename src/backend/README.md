@@ -1,9 +1,22 @@
 ---
 title: 后端开发
+shortTitle: 后端开发
+order: 1
+dir:
+  link: true
+  collapsible: true
+  order: 1
 icon: server
-next:
-  text: GO
-  link: /backend/go/
+category:
+  - 后端开发
+tag:
+  - 后端开发
+  - Go
+  - Java
+  - 数据库
+  - 消息队列
+  - 微服务
+  - 分布式系统
 ---
 
 # 后端开发

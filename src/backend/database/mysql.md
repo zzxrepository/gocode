@@ -1,11 +1,17 @@
 ---
 title: MySQL 基础、索引与事务
-prev:
-  text: 数据库
-  link: /backend/database/
-next:
-  text: Redis 缓存与常用场景
-  link: /backend/database/redis
+shortTitle: MySQL
+order: 1
+icon: table-columns
+category:
+  - 数据库
+tag:
+  - MySQL
+  - 表设计
+  - 索引
+  - 事务
+  - 锁
+  - 性能优化
 ---
 
 # MySQL 基础、索引与事务

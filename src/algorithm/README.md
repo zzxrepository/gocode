@@ -1,12 +1,14 @@
 ---
 title: 算法与数据结构
+shortTitle: 算法与数据结构
+order: 2
 index: false
 icon: diagram-project
-next:
-  text: 数据结构学习路线
-  link: /algorithm/data-structures/
 category:
   - 算法
+tag:
+  - 算法
+  - 数据结构
 ---
 
 这里收录数据结构、常用算法与 LeetCode 题解。

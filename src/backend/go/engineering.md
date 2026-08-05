@@ -1,11 +1,18 @@
 ---
 title: 配置、日志、测试与部署
-prev:
-  text: Gin 服务开发
-  link: /backend/go/gin
-next:
-  text: Java
-  link: /backend/java/
+shortTitle: Go 工程实践
+order: 93
+index: false
+category:
+  - Go
+  - 工程实践
+tag:
+  - Go
+  - 工程实践
+  - 配置
+  - 日志
+  - 测试
+  - 部署
 ---
 
 # 配置、日志、测试与部署

@@ -1,12 +1,17 @@
 ---
 title: 分布式系统
-icon: share-nodes
-prev:
-  text: go-zero
-  link: /backend/microservices/go-zero
-next:
-  text: 云原生
-  link: /backend/microservices/cloud-native
+shortTitle: 分布式系统
+order: 3
+icon: network-wired
+category:
+  - 分布式系统
+tag:
+  - 分布式系统
+  - 服务治理
+  - 一致性
+  - 分布式缓存
+  - 消息队列
+  - 高可用
 ---
 
 # 分布式系统

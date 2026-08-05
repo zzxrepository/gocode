@@ -1,12 +1,19 @@
 ---
 title: 计算机网络
-prev:
-  text: 计算机基础
-  link: /computer-fundamentals/
-next:
-  text: 网络分层与协议
-  link: /computer-fundamentals/network/network-layers-and-protocols
+shortTitle: 计算机网络
+order: 1
+dir:
+  link: true
+  collapsible: true
+  order: 1
 icon: network-wired
+category:
+  - 计算机网络
+tag:
+  - 网络分层
+  - HTTP
+  - TCP
+  - DNS
 ---
 
 # 计算机网络

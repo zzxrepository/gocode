@@ -1,11 +1,18 @@
 ---
 title: Goroutine、Channel 与 Context
-prev:
-  text: Go 基础语法与项目结构
-  link: /backend/go/basics
-next:
-  text: Gin 服务开发
-  link: /backend/go/gin
+shortTitle: Go 并发
+order: 91
+index: false
+category:
+  - Go
+  - 并发编程
+tag:
+  - Go
+  - goroutine
+  - channel
+  - context
+  - sync
+  - 并发模型
 ---
 
 # Goroutine、Channel 与 Context

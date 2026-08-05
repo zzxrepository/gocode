@@ -1,15 +1,26 @@
 ---
 title: 03. Web 开发
+shortTitle: Web 开发
+order: 3
+dir:
+  link: true
+  collapsible: true
+  order: 3
 icon: globe
-prev:
-  text: 02. 并发编程
-  link: /backend/go/advanced/02-concurrency/
-next:
-  text: 04. 工程实践
-  link: /backend/go/advanced/04-engineering-practice/
+category:
+  - Go
+  - Golang 进阶知识
+  - Web 开发
+tag:
+  - Go
+  - Web 开发
+  - net/http
+  - Gin
+  - 路由
+  - 中间件
+  - 参数校验
 ---
 
 # 03. Web 开发
 
 这里会整理 `net/http`、Gin、路由、中间件、参数校验和接口开发。
-

@@ -1,11 +1,14 @@
 ---
 title: 知识库与工具调用
-prev:
-  text: LangChain：大模型应用框架
-  link: /ai-application-development/langchain
-next:
-  text: Agent 工作流与实战
-  link: /ai-application-development/agent-development
+shortTitle: RAG 与 MCP
+order: 2
+icon: link
+category:
+  - AI 应用开发
+tag:
+  - RAG
+  - MCP
+  - 工具调用
 ---
 
 # 知识库与工具调用

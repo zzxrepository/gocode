@@ -1,12 +1,21 @@
 ---
 title: 微服务与分布式
-icon: diagram-project
-prev:
-  text: 消息队列概览
-  link: /backend/message-queue/
-next:
-  text: Spring / Spring Boot
-  link: /backend/microservices/spring-spring-boot
+shortTitle: 微服务与分布式
+order: 5
+dir:
+  link: true
+  collapsible: true
+  order: 5
+icon: share-nodes
+category:
+  - 微服务
+  - 分布式系统
+tag:
+  - 微服务
+  - 分布式系统
+  - Spring Boot
+  - go-zero
+  - 云原生
 ---
 
 # 微服务与分布式

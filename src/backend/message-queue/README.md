@@ -1,12 +1,20 @@
 ---
 title: 消息队列
+shortTitle: 消息队列
+order: 4
+dir:
+  link: true
+  collapsible: true
+  order: 4
 icon: tower-broadcast
-prev:
-  text: MongoDB 文档数据库入门
-  link: /backend/database/mongodb
-next:
-  text: 微服务与分布式
-  link: /backend/microservices/
+category:
+  - 消息队列
+tag:
+  - 消息队列
+  - Kafka
+  - RabbitMQ
+  - RocketMQ
+  - 异步通信
 ---
 
 # 消息队列

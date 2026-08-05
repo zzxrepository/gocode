@@ -1,9 +1,19 @@
 ---
 title: AI 应用开发
+shortTitle: AI 应用开发
+order: 5
+dir:
+  link: true
+  collapsible: true
+  order: 5
 icon: robot
-next:
-  text: 模型调用与提示词
-  link: /ai-application-development/llm-applications
+category:
+  - AI 应用开发
+tag:
+  - 大模型
+  - RAG
+  - MCP
+  - Agent
 ---
 
 # AI 应用开发

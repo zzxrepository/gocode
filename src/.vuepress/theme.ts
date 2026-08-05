@@ -26,6 +26,7 @@ export default hopeTheme({
 
   // 侧边栏
   sidebar,
+  sidebarSorter: ["readme", "order", "title", "filename"],
 
   // 页脚
   footer: "Copyright © 2026 神马都会亿点点的毛毛张",
@@ -119,10 +120,10 @@ export default hopeTheme({
       config: {
         "/tree/": "/algorithm/",
         "/go/": "/backend/go/",
-        "/go/basics.html": "/backend/go/basics.html",
-        "/go/concurrency.html": "/backend/go/concurrency.html",
-        "/go/gin.html": "/backend/go/gin.html",
-        "/go/engineering.html": "/backend/go/engineering.html",
+        "/go/basics.html": "/backend/go/basic/",
+        "/go/concurrency.html": "/backend/go/advanced/02-concurrency/",
+        "/go/gin.html": "/backend/go/advanced/03-web-development/",
+        "/go/engineering.html": "/backend/go/advanced/04-engineering-practice/",
         "/java/": "/backend/java/",
         "/java/basics.html": "/backend/java/basics.html",
         "/java/collections-and-concurrency.html": "/backend/java/collections-and-concurrency.html",

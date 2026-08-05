@@ -1,15 +1,24 @@
 ---
 title: 01. 基础语法与项目结构
+shortTitle: 基础语法与项目结构
+order: 1
+dir:
+  link: true
+  collapsible: true
+  order: 1
 icon: code
-prev:
-  text: Golang 基础知识
-  link: /backend/go/basic/
-next:
-  text: 02. 变量、常量与类型
-  link: /backend/go/basic/02-variables-and-types/
+category:
+  - Go
+  - Golang 基础知识
+tag:
+  - Go
+  - 基础语法
+  - 项目结构
+  - package main
+  - main 函数
+  - 目录结构
 ---
 
 # 01. 基础语法与项目结构
 
 这里会整理 Go 程序入口、目录结构、`package main`、`main` 函数和基础语法轮廓。
-

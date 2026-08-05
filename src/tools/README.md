@@ -1,9 +1,19 @@
 ---
 title: 开发工具
+shortTitle: 开发工具
+order: 4
+dir:
+  link: true
+  collapsible: true
+  order: 4
 icon: screwdriver-wrench
-next:
-  text: macOS 使用技巧
-  link: /tools/development-environment/macos-tips
+category:
+  - 开发工具
+tag:
+  - Docker
+  - Git
+  - Maven
+  - 开发环境
 ---
 
 # 开发工具

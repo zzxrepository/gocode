@@ -1,11 +1,21 @@
 ---
 title: LeetCode 刷题笔记 4：二叉树的路径问题
-prev:
-  text: 二叉树基本性质
-  link: /algorithm/leetcode/binary-tree/Leetcode刷题笔记3
-next:
-  text: 构造二叉树
-  link: /algorithm/leetcode/binary-tree/LeetCode刷题笔记5
+shortTitle: 二叉树路径
+order: 4
+icon: signs-post
+category:
+  - 算法
+  - LeetCode
+  - 二叉树
+tag:
+  - LeetCode
+  - 二叉树
+  - 路径
+  - 递归
+  - 迭代
+  - DFS
+  - 回溯
+  - 二叉搜索树
 ---
 
 > 今天毛毛张要分享的内容是LeetCode的刷题笔记，主要介绍的二叉树的路径的遍历，毛毛张试图通过一种方法能尽力做类似的题目，达到举一反三的目的
@@ -21,14 +31,14 @@ next:
     - Problem: [112. 路径总和](https://leetcode.cn/problems/path-sum/)
     - Problem:[113. 路径总和 II](https://leetcode.cn/problems/path-sum-ii/)
     - Problem:[437. 路径总和 III](https://leetcode.cn/problems/path-sum-iii/)
-    
+
 - 这四个题目的本质是一样的，毛毛张认为可以放在一起总结，毛毛张在这里以[257. 二叉树的所有路径](https://leetcode.cn/problems/binary-tree-paths/)为例进行思路的分析，只要理解的了这个题的思路，就可以用这个思路去做另外几道道题目。题目说明如下：
 
     > 给定一个二叉树，返回所有从根节点到叶子节点的路径。
     >
     > 说明: 叶子节点是指没有子节点的节点。
     >
-    > 示例: 
+    > 示例:
     >
     > ![257.二叉树的所有路径1](https://code-thinking-1253855093.file.myqcloud.com/pics/2021020415161576.png)
 
@@ -69,7 +79,7 @@ public void getPath(TreeNode node,List<Integer> path,List<String> result)
     ```java
     if (node.left == NULL && node.right == NULL) {
         终止处理逻辑;
-        return;   
+        return;
     }
     ```
 
@@ -172,7 +182,7 @@ class Solution {
         //确定终止条件
         //终止条件1
         if(node == null){
-            return; 
+            return;
         }
         //前序遍历
         paths.add(node.val);
@@ -270,7 +280,7 @@ public:
 输出：["1"]
 ```
 
- 
+
 
 **提示：**
 
@@ -306,7 +316,7 @@ class Solution {
         //确定终止条件
         //终止条件1
         if(node == null){
-            return; 
+            return;
         }
         //前序遍历
         paths.add(node.val);
@@ -408,14 +418,14 @@ class Solution {
         }
         //3.创建栈存放中间节点
         Stack<Object> stack = new Stack<>();
-        
+
         stack.push(root);
         stack.push(root.val + "");
         while(!stack.isEmpty()){
             //获取当前处理的结点
             String s = (String) stack.pop();
             TreeNode cur = (TreeNode) stack.pop();
-            
+
             //遇到叶子结点
             if(cur.left == null && cur.right == null){
                 result.add(s);
@@ -515,7 +525,7 @@ class Solution {
 
 **叶子节点** 是指没有子节点的节点。
 
- 
+
 
 **示例 1：**
 
@@ -548,7 +558,7 @@ class Solution {
 解释：由于树是空的，所以不存在根节点到叶子节点的路径。
 ```
 
- 
+
 
 **提示：**
 
@@ -566,7 +576,7 @@ class Solution {
        //创建中间路径
         List<Integer> paths = new ArrayList<>();
         boolean result = function(root,paths,targetSum);
-        return result;   
+        return result;
     }
 
     //递归方法
@@ -576,11 +586,11 @@ class Solution {
         if(node == null){
             return false;
         }
-        
+
 
         //确定单层递归逻辑
         //添加节点的值
-        paths.add(node.val);        
+        paths.add(node.val);
         //如果遇到叶子节点计算路径总和
         if(node.left == null && node.right == null){
             //开始计算路径总和
@@ -599,7 +609,7 @@ class Solution {
         //创建结果返回值
         boolean result_left = false;
         boolean result_right = false;
-    
+
         //如果不是叶子节点，继续递归
         //递归左节点
         if(node.left != null){
@@ -612,7 +622,7 @@ class Solution {
             paths.remove(paths.size()-1);//回溯
         }
         return result_left || result_right;
-    } 
+    }
 }
 ```
 
@@ -624,7 +634,7 @@ class Solution {
 class Solution {
     public boolean hasPathSum(TreeNode root, int targetSum) {
        if(root == null) return false;
-       return traversal(root,targetSum);  
+       return traversal(root,targetSum);
     }
 
     //递归法 三步走
@@ -650,11 +660,11 @@ class Solution {
             if(traversal(cur.right,target - cur.val)){
                 return true;
             }
-        } 
+        }
 
         //如果上面遍历完了，没有返回true，那说明没有符合条件的路径
         return false;
-    } 
+    }
 }
 
 ```
@@ -725,7 +735,7 @@ class Solution {
             stack.push(targetSum);
             stack.push(root);
         }
-        //开始迭代  
+        //开始迭代
         while(!stack.isEmpty()){
             //获取栈顶元素
             TreeNode cur = (TreeNode) stack.pop();
@@ -761,7 +771,7 @@ class Solution {
         Stack<Object> stack = new Stack<>();
         //获取当前处理的结点
         TreeNode cur = root;
-        //开始迭代  
+        //开始迭代
         int remain = targetSum;
         while(cur != null || !stack.isEmpty()){
             //沿着根的左孩子，依次入栈
@@ -921,7 +931,7 @@ class Solution {
         traversal(root,targetSum);
         return result;
     }
-    //递归法 三步走 
+    //递归法 三步走
     //1.确定形参和方法值
     public void traversal(TreeNode cur,int targetSum){
         //2.确定终止条件
@@ -964,7 +974,7 @@ class Solution {
         traversal(root,targetSum);
         return result;
     }
-    //递归法 三步走 
+    //递归法 三步走
     //1.确定形参和方法值
     public void traversal(TreeNode cur,int targetSum){
         //2.确定终止条件
@@ -976,7 +986,7 @@ class Solution {
         //然后对这条路径进行判断：是否到了叶子节点且路径和是否等于目标值
         int target = targetSum - cur.val;
         if(cur.left == null && cur.right == null && target == 0) result.add(new ArrayList<>(path));
-        
+
         //递归
         //左
         traversal(cur.left,target);
@@ -1067,7 +1077,7 @@ class Solution {
 
 **路径** 不需要从根节点开始，也不需要在叶子节点结束，但是路径方向必须是向下的（只能从父节点到子节点）。
 
- 
+
 
 **示例 1：**
 
@@ -1089,8 +1099,8 @@ class Solution {
 **提示:**
 
 - 二叉树的节点个数的范围是 `[0,1000]`
-- `-109 <= Node.val <= 109` 
-- `-1000 <= targetSum <= 1000` 
+- `-109 <= Node.val <= 109`
+- `-1000 <= targetSum <= 1000`
 
 
 
@@ -1102,7 +1112,7 @@ class Solution {
 
 ```java
 class Solution {
-    //递归法 三步走  
+    //递归法 三步走
     //1.使用题目确定的形参和方法值
     public int pathSum(TreeNode root, long targetSum) {
         //2.确定终止条件
@@ -1151,7 +1161,7 @@ class Solution {
 
 [百度百科](https://baike.baidu.com/item/最近公共祖先/8918834?fr=aladdin)中最近公共祖先的定义为：“对于有根树 T 的两个节点 p、q，最近公共祖先表示为一个节点 x，满足 x 是 p、q 的祖先且 x 的深度尽可能大（**一个节点也可以是它自己的祖先**）。”
 
- 
+
 
 **示例 1：**
 
@@ -1180,7 +1190,7 @@ class Solution {
 输出：1
 ```
 
- 
+
 
 **提示：**
 
@@ -1196,7 +1206,7 @@ class Solution {
 
 ## 6.2 题解
 
-### 6.2.1 方法1 
+### 6.2.1 方法1
 
 ```java
 class Solution {
@@ -1215,7 +1225,7 @@ class Solution {
         for (i = 0; i < len; i++) {
             if (pathP.get(i) == pathQ.get(i))
                 ancestor = pathP.get(i);
-            else 
+            else
                 break;
         }
         return ancestor;
@@ -1263,7 +1273,7 @@ class Solution {
         TreeNode right = nearestCommonAncestor(cur.right, p, q);
 
         //判断左右子树返回情况
-        //说明 root的左/右子树中都不包含 p,q 
+        //说明 root的左/右子树中都不包含 p,q
         if(left == null && right == null) return null;
         //p,q均存在于左子树
         if(left != null && right == null) return left;
@@ -1301,13 +1311,13 @@ class Solution {
 
 ![img](https://assets.leetcode-cn.com/aliyun-lc-upload/uploads/2018/12/14/binarysearchtree_improved.png)
 
- 
+
 
 **示例 1:**
 
 ```
 输入: root = [6,2,8,0,4,7,9,null,null,3,5], p = 2, q = 8
-输出: 6 
+输出: 6
 解释: 节点 2 和节点 8 的最近公共祖先是 6。
 ```
 
@@ -1319,7 +1329,7 @@ class Solution {
 解释: 节点 2 和节点 4 的最近公共祖先是 2, 因为根据定义最近公共祖先节点可以为节点本身。
 ```
 
- 
+
 
 **说明:**
 
@@ -1348,7 +1358,7 @@ class Solution {
         for (i = 0; i < len; i++) {
             if (pathP.get(i) == pathQ.get(i))
                 ancestor = pathP.get(i);
-            else 
+            else
                 break;
         }
         return ancestor;
@@ -1486,7 +1496,7 @@ class Solution {
 
 ```
 输入：root = [2,3,1,3,1,null,1]
-输出：2 
+输出：2
 解释：上图为给定的二叉树。总共有 3 条从根到叶子的路径：红色路径 [2,3,3] ，绿色路径 [2,1,1] 和路径 [2,3,1] 。
      在这些路径中，只有红色和绿色的路径是伪回文路径，因为红色路径 [2,3,3] 存在回文排列 [3,2,3] ，绿色路径 [2,1,1] 存在回文排列 [1,2,1] 。
 ```
@@ -1497,7 +1507,7 @@ class Solution {
 
 ```
 输入：root = [2,1,1,1,3,null,null,null,null,null,1]
-输出：1 
+输出：1
 解释：上图为给定二叉树。总共有 3 条从根到叶子的路径：绿色路径 [2,1,1] ，路径 [2,1,3,1] 和路径 [2,1] 。
      这些路径中只有绿色路径是伪回文路径，因为 [2,1,1] 存在回文排列 [1,2,1] 。
 ```
@@ -1654,7 +1664,7 @@ class Solution {
         //3.确定单层递归逻辑
         //统计该节点的值
         counter[cur.val]++;
-        
+
         //判断是否到了叶子结点
         if(cur.left == null && cur.right == null){
             //判断是否是回文序列
@@ -1739,6 +1749,5 @@ class Solution {
 # 参考文献
 
 - <https://programmercarl.com/0257.%E4%BA%8C%E5%8F%89%E6%A0%91%E7%9A%84%E6%89%80%E6%9C%89%E8%B7%AF%E5%BE%84.html#%E7%AE%97%E6%B3%95%E5%85%AC%E5%BC%80%E8%AF%BE>
-
 
 
