@@ -48,10 +48,386 @@ gocode/
 │       ├── config.ts              # 站点基础配置
 │       ├── theme.ts               # 主题、插件、重定向、排序规则
 │       ├── navbar.ts              # 顶部导航
-│       └── sidebar.ts             # 左侧目录入口与结构化侧边栏范围
+│       ├── sidebar.ts             # 左侧目录入口与结构化侧边栏范围
+│       ├── client.ts              # 客户端增强组件
+│       ├── public/                # 全站静态资源
+│       └── styles/                # 全站样式覆盖
 ├── package.json
 └── deploy.sh
 ```
+
+## 从零构建同款网站
+
+从零构建一个类似本站的技术文档网站，核心工作可以拆成三层：先搭好 VuePress 2 与 VuePress Theme Hope 的站点骨架，再配置导航、侧边栏、主题增强和部署流程，最后按学习栏目组织 Markdown 内容。完成这些基础设置后，新增文章主要依靠 frontmatter 和文件结构完成，不需要频繁修改导航配置。
+
+### 初始化项目
+
+项目可以从一个空目录开始：
+
+```bash
+mkdir gocode
+cd gocode
+npm init -y
+```
+
+`package.json` 建议设置为 ESM 项目，并准备本地预览、清缓存预览、构建和主题包更新脚本：
+
+```json
+{
+  "name": "gocode",
+  "description": "GoCode · 毛毛张｜跟着毛毛张学 Go",
+  "version": "2.0.0",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "docs:build": "vuepress-vite build src",
+    "docs:clean-dev": "vuepress-vite dev src --clean-cache",
+    "docs:dev": "vuepress-vite dev src",
+    "docs:update-package": "npx vp-update"
+  }
+}
+```
+
+依赖分为 VuePress 核心、Vite 打包器、Hope 主题、Vue 运行时和 Markdown 增强能力。本站使用的依赖如下：
+
+```bash
+npm install -D vuepress @vuepress/bundler-vite vuepress-theme-hope vue vite sass-embedded mermaid katex flowchart.ts
+```
+
+如果需要完全复现当前版本，可以参考 `package.json` 中的版本号锁定依赖。版本锁定的好处是构建结果更稳定，缺点是需要定期主动升级并验证主题行为。
+
+### 创建基础目录
+
+VuePress 的内容根目录是 `src/`。站点配置放在 `src/.vuepress/`，文章按栏目放在 `src/` 下的不同目录。
+
+```text
+src/
+├── README.md
+├── backend/
+├── algorithm/
+├── computer-fundamentals/
+├── frontend/
+├── tools/
+├── resources/
+├── site-guide/
+└── .vuepress/
+    ├── config.ts
+    ├── theme.ts
+    ├── navbar.ts
+    ├── sidebar.ts
+    ├── client.ts
+    ├── public/
+    └── styles/
+```
+
+`src/README.md` 是网站首页。每个顶级栏目通常也需要一个 `README.md`，它既是栏目首页，也负责用 frontmatter 声明栏目标题、图标、排序和目录行为。
+
+### 配置站点入口
+
+`src/.vuepress/config.ts` 是 VuePress 的站点入口配置。这个文件主要声明部署路径、语言、站点标题、描述、主题和 Vite 构建设置。
+
+```ts
+import { defineUserConfig } from "vuepress";
+import { viteBundler } from "@vuepress/bundler-vite";
+
+import theme from "./theme.js";
+
+export default defineUserConfig({
+  base: "/gocode/",
+
+  lang: "zh-CN",
+  title: "GoCode · 毛毛张",
+  description: "跟着毛毛张学 Go",
+
+  theme,
+
+  bundler: viteBundler({
+    viteOptions: {
+      css: {
+        preprocessorOptions: {
+          scss: {
+            quietDeps: true,
+            silenceDeprecations: ["if-function"],
+          },
+        },
+      },
+    },
+  }),
+});
+```
+
+`base` 要和最终部署地址匹配。本站部署在 GitHub Pages 的仓库子路径下，因此设置为 `/gocode/`。如果部署到独立域名根路径，通常改成 `/`。
+
+### 配置主题能力
+
+`src/.vuepress/theme.ts` 负责 Hope 主题配置。这个文件决定站点导航、侧边栏、页脚、仓库链接、图标前缀、Markdown 增强、重定向和组件注册。
+
+```ts
+import { hopeTheme } from "vuepress-theme-hope";
+
+import navbar from "./navbar.js";
+import sidebar from "./sidebar.js";
+
+export default hopeTheme({
+  hostname: "https://zzxrepository.github.io",
+
+  author: {
+    name: "神马都会亿点点的毛毛张",
+  },
+
+  logo: "/maomao-zhang-logo-clean.png",
+  favicon: "/maomao-zhang-logo-clean.png",
+
+  repo: "zzxrepository/gocode",
+  docsBranch: "master",
+  docsDir: "src",
+
+  navbar,
+  sidebar,
+  sidebarSorter: ["readme", "order", "title", "filename"],
+
+  footer: "Copyright © 2026 神马都会亿点点的毛毛张",
+  displayFooter: true,
+
+  plugins: {
+    components: {
+      components: ["Badge", "VPCard"],
+    },
+    icon: {
+      prefix: "fa6-solid:",
+    },
+  },
+});
+```
+
+其中 `sidebarSorter` 是当前站点文章组织方式的关键设置。它让目录首页优先显示，然后按 `order`、标题和文件名排序。配合每篇文章的 frontmatter，可以形成稳定的课程式目录。
+
+### 配置顶部导航
+
+`src/.vuepress/navbar.ts` 控制顶部导航。顶级导航适合放主要学习栏目、资源导航和关于作者，不适合放过多普通文章。
+
+```ts
+import { navbar } from "vuepress-theme-hope";
+
+export default navbar([
+  { text: "首页", icon: "house", link: "/" },
+  { text: "后端开发", icon: "server", link: "/backend/" },
+  { text: "AI 应用开发", icon: "robot", link: "/ai-application-development/" },
+  { text: "算法与数据结构", icon: "diagram-project", link: "/algorithm/" },
+  { text: "计算机基础", icon: "desktop", link: "/computer-fundamentals/" },
+  { text: "前端开发", icon: "laptop-code", link: "/frontend/" },
+  { text: "开发工具", icon: "screwdriver-wrench", link: "/tools/" },
+  { text: "资源导航", icon: "compass", link: "/resources/" },
+  { text: "关于作者", icon: "user", link: "/portfolio" },
+]);
+```
+
+资源类内容建议做成独立页面，而不是做成很长的顶部下拉菜单。独立页面更适合继续扩展分类、说明和卡片样式。
+
+### 配置自动侧边栏
+
+`src/.vuepress/sidebar.ts` 控制左侧目录入口。本站的做法是顶层栏目手动声明，栏目内部交给 `children: "structure"` 自动读取文件结构。
+
+```ts
+import { sidebar } from "vuepress-theme-hope";
+
+export default sidebar({
+  "/": [
+    "",
+    {
+      text: "学习栏目",
+      icon: "graduation-cap",
+      children: [
+        { text: "后端开发", icon: "server", link: "/backend/" },
+        { text: "算法与数据结构", icon: "diagram-project", link: "/algorithm/" },
+        { text: "计算机基础", icon: "desktop", link: "/computer-fundamentals/" },
+        { text: "开发工具", icon: "screwdriver-wrench", link: "/tools/" },
+        { text: "资源导航", icon: "compass", link: "/resources/" },
+      ],
+    },
+  ],
+
+  "/algorithm/": "structure",
+  "/computer-fundamentals/": "structure",
+  "/tools/": "structure",
+  "/resources/": "structure",
+  "/site-guide/": "structure",
+});
+```
+
+对于 Go 这类层级更深的栏目，可以在 `sidebar.ts` 中固定上层分组，再让子目录自动生成。例如 `backend/go/basic/` 和 `backend/go/advanced/` 可以分别作为结构化侧边栏范围。
+
+### 准备首页
+
+首页写在 `src/README.md`。Hope 主题支持通过 frontmatter 生成首页英雄区、行动按钮和推荐栏目。
+
+```md
+---
+home: true
+icon: house
+title: 跟着毛毛张学 Go
+heroImage: /maomao-zhang-logo-clean.png
+heroText: GoCode · 毛毛张
+tagline: 跟着毛毛张学 Go，系统学习软件开发与 AI 应用开发
+actions:
+  - text: 开始学习 Go
+    icon: terminal
+    link: /backend/go/
+    type: primary
+  - text: 资源导航
+    icon: compass
+    link: /resources/
+---
+```
+
+首页的重点是提供入口，而不是承载所有内容。主要栏目、学习路线、资源导航和项目实践适合放在首页，具体文章交给栏目页和侧边栏管理。
+
+### 创建栏目与文章
+
+每个顶级栏目建议准备一个 `README.md`。例如 `src/tools/README.md`：
+
+```md
+---
+title: 开发工具
+shortTitle: 开发工具
+order: 4
+dir:
+  link: true
+  collapsible: true
+  order: 4
+icon: screwdriver-wrench
+category:
+  - 开发工具
+tag:
+  - Docker
+  - Git
+---
+
+# 开发工具
+
+这里整理日常开发和部署最常用的工具教程。
+```
+
+长教程适合使用目录型文章，例如：
+
+```text
+src/backend/go/basic/09-methods/README.md
+```
+
+短文章可以直接使用 Markdown 文件，例如：
+
+```text
+src/tools/git/branch-and-collaboration.md
+```
+
+目录型文章更适合课程章节，因为后续可以继续添加图片、示例代码和子资源。
+
+### 配置静态资源
+
+全站公用静态资源放在 `src/.vuepress/public/`。例如站点 logo、favicon、首页图片和通用封面图。
+
+```text
+src/.vuepress/public/
+├── maomao-zhang-logo-clean.png
+├── go-gopher.png
+└── assets/
+    └── image/
+        ├── go-context-cover.png
+        └── go-encoding-cover.png
+```
+
+`public` 下的资源会被复制到站点根路径。文章中引用时从根路径开始写：
+
+```md
+![Go Gopher](/go-gopher.png)
+```
+
+如果是某个栏目独有的图片，也可以放在栏目自己的 `assets/` 目录里，然后使用相对路径引用。
+
+### 配置全站样式
+
+主题样式覆盖放在 `src/.vuepress/styles/index.scss`。本站在这里处理了导航图标颜色、Go 栏目图标替换、沉浸阅读按钮和资源导航卡片样式。
+
+```scss
+.vp-nav-links > .vp-nav-item:nth-child(1) .vp-icon {
+  color: #2563eb;
+}
+
+.resource-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+```
+
+样式覆盖应尽量限制作用范围。例如资源导航页使用 `.resource-grid`、`.resource-card` 这类专用类名，避免影响普通文章的排版。
+
+### 添加客户端增强
+
+`src/.vuepress/client.ts` 可以注册客户端组件。本站用它实现了一个“沉浸阅读”按钮，用于临时隐藏导航栏、侧边栏和目录，让长文章阅读更专注。
+
+客户端增强适合放轻量交互功能，例如阅读模式、页面状态按钮、全局快捷键等。复杂业务功能不建议直接塞进文档站主题层，应该拆成独立组件或独立应用。
+
+### 配置部署脚本
+
+GitHub Pages 部署通常需要两步：先把源码推到 `master`，再把构建产物推到 `gh-pages`。
+
+```sh
+#!/usr/bin/env sh
+
+set -e
+
+git add -A
+git commit -m "gocode v1" || echo "No changes to commit for source code"
+
+git remote get-url origin
+REPO_URL="$(git remote get-url origin)"
+
+git push -u origin master
+
+BUILD_DIR="$(mktemp -d)"
+trap 'rm -rf "$BUILD_DIR"' EXIT
+npx vuepress-vite build src --dest "$BUILD_DIR"
+
+cd "$BUILD_DIR"
+git init
+git remote add origin "$REPO_URL"
+git add -A
+git commit -m 'deploy: update static files to gh-pages'
+git push -f origin HEAD:gh-pages
+cd -
+```
+
+使用临时目录构建可以避免旧的 `dist` 目录残留影响发布结果。`gh-pages` 分支通常只保留静态文件，不承载源码。
+
+### 配置 GitHub Pages
+
+仓库需要在 GitHub Pages 设置中选择 `gh-pages` 分支作为发布来源。由于本站 `base` 是 `/gocode/`，最终访问地址形如：
+
+```text
+https://zzxrepository.github.io/gocode/
+```
+
+如果仓库名、部署路径或自定义域名不同，需要同步调整 `config.ts` 中的 `base`、`theme.ts` 中的 `hostname`，以及 README 或导航中的站内链接。
+
+### 完整构建流程
+
+一个可复用的构建流程如下：
+
+```text
+1. 初始化 npm 项目并安装 VuePress、Hope 主题和 Markdown 增强依赖
+2. 创建 src/ 与 src/.vuepress/ 目录
+3. 编写 config.ts、theme.ts、navbar.ts、sidebar.ts
+4. 准备首页、顶级栏目 README 和文章目录
+5. 放置 logo、favicon、封面图等静态资源
+6. 编写 styles/index.scss 做少量主题样式覆盖
+7. 使用 npm run docs:dev 本地预览
+8. 使用 npm run docs:build 做发布前检查
+9. 使用 deploy.sh 推送源码和静态文件
+10. 在 GitHub Pages 中确认 gh-pages 分支发布成功
+```
+
+这个流程完成后，站点的日常维护重点就会从“改配置”转为“写内容”。新增普通文章时，维护 frontmatter、文件路径和栏目 README 即可；只有新增顶级栏目、特殊导航入口、资源页布局或主题能力时，才需要调整 `.vuepress` 下的配置。
 
 ## 文件和网页地址
 

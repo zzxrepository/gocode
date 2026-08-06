@@ -80,71 +80,38 @@ body.gocode-focus-reading .theme-container .vp-page [vp-content] {
   }
 }
 
-/* 资源导航页：卡片式开发百宝箱。 */
-.theme-container:has(.resource-hub) .vp-page {
-  padding-right: 2rem;
-}
-
-.theme-container:has(.resource-hub) .vp-toc-placeholder {
-  display: none;
-}
-
-[vp-content]:has(.resource-hub) {
-  max-width: 1180px;
-}
-
-[vp-content]:has(.resource-hub) #markdown-content {
-  max-width: none;
-}
-
-.resource-hub {
-  width: min(100%, 1180px);
-}
-
+/* 资源导航页：紧凑型开发百宝箱。 */
 .resource-hub__intro {
   margin: 0.75rem 0 2rem;
   color: var(--vp-c-text-mute);
   line-height: 1.8;
 }
 
-.resource-section {
-  margin-top: 2.5rem;
-}
-
-.resource-section h2 {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  margin-bottom: 1.15rem;
-  border-bottom: 0;
-  color: var(--vp-c-text);
-  font-size: 1.55rem;
-}
-
-.resource-section h2::before {
-  content: "#";
-  color: #34b27b;
-  font-weight: 800;
+[vp-content]:has(.resource-hub__intro) h2 {
+  margin-top: 2.25rem;
+  margin-bottom: 1rem;
 }
 
 .resource-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin: 0.2rem 0 1.7rem;
 }
 
 .resource-card {
   position: relative;
   display: grid;
-  grid-template-rows: auto auto 1fr;
-  min-height: 9.2rem;
-  padding: 1.05rem 1.1rem;
-  border: 1px solid color-mix(in srgb, var(--vp-c-border) 72%, transparent);
+  grid-template-columns: 2.45rem 1fr;
+  grid-template-rows: auto 1fr;
+  column-gap: 0.75rem;
+  min-height: 7rem;
+  padding: 0.95rem;
+  border: 1px solid color-mix(in srgb, var(--vp-c-border) 82%, transparent);
   border-radius: 8px;
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--vp-c-bg) 94%, white), color-mix(in srgb, var(--vp-c-bg-soft) 88%, white));
+  background: color-mix(in srgb, var(--vp-c-bg) 93%, var(--vp-c-bg-soft));
   color: inherit;
-  box-shadow: 0 8px 24px color-mix(in srgb, var(--vp-c-shadow) 70%, transparent);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--vp-c-shadow) 42%, transparent);
   text-decoration: none !important;
   transition:
     transform 0.18s ease,
@@ -154,17 +121,26 @@ body.gocode-focus-reading .theme-container .vp-page [vp-content] {
 
 .resource-card:hover {
   border-color: color-mix(in srgb, #34b27b 55%, var(--vp-c-border));
-  box-shadow: 0 12px 30px color-mix(in srgb, var(--vp-c-shadow) 82%, transparent);
-  transform: translateY(-3px);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--vp-c-shadow) 55%, transparent);
+  transform: translateY(-2px);
+}
+
+.resource-card::after {
+  position: absolute;
+  right: 0.85rem;
+  bottom: 0.65rem;
+  color: var(--vp-c-text-mute);
+  content: "↗";
+  font-size: 0.8rem;
 }
 
 .resource-card__mark {
+  grid-row: 1 / span 2;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.6rem;
-  height: 2.6rem;
-  margin-bottom: 0.8rem;
+  width: 2.35rem;
+  height: 2.35rem;
   border-radius: 8px;
   background: #eef2f7;
   color: #334155;
@@ -175,28 +151,25 @@ body.gocode-focus-reading .theme-container .vp-page [vp-content] {
 
 .resource-card strong {
   color: #34b27b;
-  font-size: 1.05rem;
+  font-size: 1rem;
+  line-height: 1.35;
 }
 
 .resource-card p {
-  margin: 0.6rem 0 0;
+  margin: 0.45rem 0 0;
   color: var(--vp-c-text-mute);
-  font-size: 0.92rem;
-  line-height: 1.62;
+  font-size: 0.88rem;
+  line-height: 1.55;
 }
 
-.resource-section--note {
-  padding: 1.2rem 1.3rem;
+.resource-note {
+  padding: 1rem 1.1rem;
   border: 1px solid color-mix(in srgb, #34b27b 30%, var(--vp-c-border));
   border-radius: 8px;
   background: color-mix(in srgb, #34b27b 8%, var(--vp-c-bg));
 }
 
-.resource-section--note h2 {
-  margin-top: 0;
-}
-
-.resource-section--note p {
+.resource-note p {
   margin-bottom: 0;
   color: var(--vp-c-text-mute);
   line-height: 1.8;
@@ -270,12 +243,6 @@ body.gocode-focus-reading .theme-container .vp-page [vp-content] {
   color: #16a34a;
 }
 
-@media (max-width: 1180px) {
-  .resource-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 900px) {
   .resource-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -283,19 +250,11 @@ body.gocode-focus-reading .theme-container .vp-page [vp-content] {
 }
 
 @media (max-width: 560px) {
-  .resource-section {
-    margin-top: 2rem;
-  }
-
-  .resource-section h2 {
-    font-size: 1.35rem;
-  }
-
   .resource-grid {
     grid-template-columns: 1fr;
   }
 
   .resource-card {
-    min-height: 8rem;
+    min-height: 6.7rem;
   }
 }
