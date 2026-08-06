@@ -13,6 +13,7 @@ tag:
   - Docker
   - Git
   - Maven
+  - 正则表达式
   - 开发环境
 ---
 
@@ -23,3 +24,4 @@ tag:
 - [Docker](/tools/docker/)：容器化开发、构建和部署。
 - [Git](/tools/git/)：版本管理与协作。
 - [Maven](/tools/maven/)：Java 项目构建与依赖管理。
+- [正则表达式](/tools/regex/)：文本查找、校验、提取和批量替换。

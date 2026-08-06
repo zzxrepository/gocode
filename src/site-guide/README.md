@@ -42,6 +42,7 @@ gocode/
 │   ├── ai-application-development/# AI 应用开发
 │   ├── frontend/                  # 前端开发
 │   ├── learning-paths/            # 学习路线
+│   ├── resources/                 # 资源导航
 │   ├── site-guide/                # 网站维护指南
 │   └── .vuepress/
 │       ├── config.ts              # 站点基础配置
@@ -216,8 +217,9 @@ src/backend/go/advanced/06-network-programming/
 | 新增一篇普通文章 | 不需要 |
 | 新增已有栏目下的子目录 | 通常不需要 |
 | 新增顶级栏目 | 需要 |
+| 新增资源导航页面里的链接 | 通常不需要，只改 `src/resources/README.md` |
 | 希望某篇文章出现在顶部导航 | 需要 |
-| 修改资源导航下拉链接 | 需要 |
+| 把某个页面做成顶部导航入口 | 需要 |
 
 顶部导航是站点入口，不适合放太多普通文章。普通文章交给自动侧边栏管理即可。
 

@@ -23,6 +23,9 @@ actions:
   - text: 查看学习路线
     icon: map
     link: /learning-paths/
+  - text: 资源导航
+    icon: compass
+    link: /resources/
   - text: 网站维护指南
     icon: book-open
     link: /site-guide/
@@ -72,7 +75,7 @@ highlights:
         link: /computer-fundamentals/
       - title: 开发工具
         icon: screwdriver-wrench
-        details: Git、Docker、Linux 命令与工程效率
+        details: Git、Docker、Maven、正则表达式与工程效率
         link: /tools/
       - title: 前端开发
         icon: laptop-code
@@ -108,6 +111,10 @@ highlights:
         icon: mobile-screen-button
         details: 手机实况照片筛选器 · Swift
         link: https://github.com/zzxrepository/MotionAlbum
+      - title: 资源导航
+        icon: compass
+        details: 编程学习、官方文档、AI 工具、模型平台和云服务入口
+        link: /resources/
 
 copyright: false
 footer: Copyright © 2026 神马都会亿点点的毛毛张
