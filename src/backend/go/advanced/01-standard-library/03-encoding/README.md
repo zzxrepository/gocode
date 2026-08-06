@@ -27,11 +27,13 @@ tag:
 
 写后端服务时，我们几乎每天都在和“数据格式”打交道。
 
-前端提交一个创建用户的请求，通常是 JSON；服务 A 调用服务 B，传过去的请求体也常常是 JSON；程序启动时读取配置文件，可能是 JSON、XML、YAML 或 TOML；对接一些历史系统、支付渠道、行业平台时，还可能遇到 XML。
+当前端提交一个创建用户的请求，通常是 JSON；服务 A 调用服务 B，传过去的请求体也常常是 JSON；程序启动时读取配置文件，可能是 JSON、XML、YAML 或 TOML；对接一些历史系统、支付渠道、行业平台时，还可能遇到 XML。
 
 也就是说，后端服务经常需要和前端、其他服务、配置文件交换数据。**JSON 是现代 Web 后端里的主角**，它简单、通用、生态成熟。不过在一些旧系统、SOAP 接口、行业协议和配置文件中，仍然可能遇到 XML，所以这一部分对 XML 做基本了解即可。
 
 这一节我们重点学习 Go 标准库里的 `encoding/json`，顺带把 `encoding/xml` 的基本用法串起来。学完以后，你应该能写出可靠的 JSON 请求解析、JSON 响应输出，也能看懂 XML 的结构体映射方式。为了不只停留在“会调 API”，这一节还会穿插看一点标准库源码主线，理解 `json` tag、字段匹配、`UseNumber`、`DisallowUnknownFields` 这些行为为什么会这样。
+
+本文源码解读基于官方最新稳定版 **Go 1.26.5**（2026-07-07 发布）。你可以对照官方源码阅读：[encoding/json](https://go.googlesource.com/go/+/refs/tags/go1.26.5/src/encoding/json/) 和 [encoding/xml](https://go.googlesource.com/go/+/refs/tags/go1.26.5/src/encoding/xml/)。如果你本地 `go version` 不同，源码细节可能略有差异，但这一节讲的主线思路是一样的。
 
 ## encoding 包族是什么
 
@@ -162,66 +164,6 @@ func main() {
 
 注意，`json.Marshal` 返回的是 `[]byte`，不是 `string`。因为在网络、文件和 HTTP 响应里，数据本质上都是字节流。
 
-### Marshal 源码主线
-
-从使用者视角看，`json.Marshal(user)` 好像只是把一个结构体变成 JSON 字符串。但在标准库内部，它做的是一件更底层的事情：**拿到任意 Go 值以后，通过反射识别它的真实类型，再选择对应的编码器把它写入缓冲区**。
-
-Go 1.22.10 的源码在 `$GOROOT/src/encoding/json/encode.go`。`Marshal` 的核心入口可以简化成这样看：
-
-```go
-func Marshal(v any) ([]byte, error) {
-	e := newEncodeState()
-	defer encodeStatePool.Put(e)
-
-	err := e.marshal(v, encOpts{escapeHTML: true})
-	if err != nil {
-		return nil, err
-	}
-	return append([]byte(nil), e.Bytes()...), nil
-}
-```
-
-这里有几个点值得注意：
-
-- `newEncodeState()` 会拿到一个编码状态对象，它内部维护着用于拼 JSON 的缓冲区；
-- `encodeStatePool` 是一个 `sync.Pool`，用来复用编码状态，减少频繁分配内存；
-- `encOpts{escapeHTML: true}` 表示默认会把 `<`、`>`、`&` 做 HTML 转义，这也是为什么某些字符串经过 `Marshal` 后看起来会出现 `\u003c` 这类结果；
-- 最后 `append([]byte(nil), e.Bytes()...)` 会复制一份结果返回，避免调用者拿到的切片还引用着池化对象里的底层数组。
-
-继续往下看，真正决定“这个值应该怎么编码”的地方，会进入反射：
-
-```go
-func (e *encodeState) reflectValue(v reflect.Value, opts encOpts) {
-	valueEncoder(v)(e, v, opts)
-}
-```
-
-`valueEncoder` 会根据 `reflect.Value` 找到它的 `reflect.Type`，再为这个类型选择一个 `encoderFunc`。如果是字符串，就用字符串编码器；如果是整数，就用整数编码器；如果是结构体，就会进入结构体编码器。
-
-结构体这一支大致会走到：
-
-```go
-func newStructEncoder(t reflect.Type) encoderFunc {
-	se := structEncoder{fields: cachedTypeFields(t)}
-	return se.encode
-}
-```
-
-这行代码很关键：`cachedTypeFields(t)` 会分析结构体有哪些可导出字段、字段名是什么、有没有 `json` tag、是否有 `omitempty` 等选项，并把结果缓存起来。也就是说，`encoding/json` 不是每次编码都从零开始解析结构体字段，它会把某个结构体类型的字段信息缓存下来，后续重复使用。
-
-所以可以把 `Marshal` 的源码主线记成：
-
-```text
-任意 Go 值
-  -> reflect.Value / reflect.Type
-  -> 根据类型选择 encoderFunc
-  -> 如果是 struct，读取并缓存字段信息
-  -> 把字段和值写入 encodeState 缓冲区
-  -> 返回 []byte
-```
-
-这也解释了一个现象：`encoding/json` 很方便，但它不是零成本的。它依赖反射和字段规则判断，所以在极端高性能场景里，有些项目会使用代码生成或第三方 JSON 库来减少反射成本。不过对绝大多数后端接口来说，标准库已经足够稳定可靠。
-
 ### 使用 MarshalIndent 输出格式化 JSON
 
 `json.Marshal` 生成的是紧凑 JSON，适合网络传输。
@@ -267,6 +209,76 @@ func main() {
 ```
 
 后端接口返回给前端时，一般不需要格式化；命令行工具、配置生成器、调试输出里更适合用 `MarshalIndent`。
+
+### Marshal 源码主线
+
+从使用者视角看，`json.Marshal(user)` 好像只是把一个结构体变成 JSON 字符串。但在标准库内部，它做的是一件更底层的事情：**拿到任意 Go 值以后，通过反射识别它的真实类型，再选择对应的编码器把它写入缓冲区**。
+
+下面的源码解读参考的是 Go 1.26.5 稳定版官方源码中的 [`src/encoding/json/encode.go`](https://go.googlesource.com/go/+/refs/tags/go1.26.5/src/encoding/json/encode.go)。为了方便理解，代码片段会保留主线逻辑，省略一部分错误包装和边界处理，并加上中文注释：
+
+```go
+func Marshal(v any) ([]byte, error) {
+	// 取一个编码状态对象。它内部有缓冲区，用来逐步拼出 JSON。
+	e := newEncodeState()
+
+	// 用完以后放回池里，减少高频 Marshal 时的内存分配。
+	defer encodeStatePool.Put(e)
+
+	// 真正编码入口。escapeHTML 为 true 表示默认会转义 <、>、&。
+	err := e.marshal(v, encOpts{escapeHTML: true})
+	if err != nil {
+		return nil, err
+	}
+
+	// 返回前复制一份结果，避免调用者引用到池化对象里的底层数组。
+	return append([]byte(nil), e.Bytes()...), nil
+}
+```
+
+这里有几个点值得注意：
+
+- `newEncodeState()` 会拿到一个编码状态对象，它内部维护着用于拼 JSON 的缓冲区；
+- `encodeStatePool` 是一个 `sync.Pool`，用来复用编码状态，减少频繁分配内存；
+- `encOpts{escapeHTML: true}` 表示默认会把 `<`、`>`、`&` 做 HTML 转义，这也是为什么某些字符串经过 `Marshal` 后看起来会出现 `\u003c` 这类结果；
+- 最后 `append([]byte(nil), e.Bytes()...)` 会复制一份结果返回，避免调用者拿到的切片还引用着池化对象里的底层数组。
+
+继续往下看，真正决定“这个值应该怎么编码”的地方，会进入反射：
+
+```go
+func (e *encodeState) reflectValue(v reflect.Value, opts encOpts) {
+	// 先根据值的类型找到对应的编码函数，再把值写入缓冲区。
+	valueEncoder(v)(e, v, opts)
+}
+```
+
+`valueEncoder` 会根据 `reflect.Value` 找到它的 `reflect.Type`，再为这个类型选择一个 `encoderFunc`。如果是字符串，就用字符串编码器；如果是整数，就用整数编码器；如果是结构体，就会进入结构体编码器。
+
+结构体这一支大致会走到：
+
+```go
+func newStructEncoder(t reflect.Type) encoderFunc {
+	// 分析结构体字段，并缓存字段名、tag、omitempty 等信息。
+	se := structEncoder{fields: cachedTypeFields(t)}
+
+	// 返回一个真正执行结构体编码的函数。
+	return se.encode
+}
+```
+
+这行代码很关键：`cachedTypeFields(t)` 会分析结构体有哪些可导出字段、字段名是什么、有没有 `json` tag、是否有 `omitempty` 等选项，并把结果缓存起来。也就是说，`encoding/json` 不是每次编码都从零开始解析结构体字段，它会把某个结构体类型的字段信息缓存下来，后续重复使用。
+
+所以可以把 `Marshal` 的源码主线记成：
+
+```text
+任意 Go 值
+  -> reflect.Value / reflect.Type
+  -> 根据类型选择 encoderFunc
+  -> 如果是 struct，读取并缓存字段信息
+  -> 把字段和值写入 encodeState 缓冲区
+  -> 返回 []byte
+```
+
+这也解释了一个现象：`encoding/json` 很方便，但它不是零成本的。它依赖反射和字段规则判断，所以在极端高性能场景里，有些项目会使用代码生成或第三方 JSON 库来减少反射成本。不过对绝大多数后端接口来说，标准库已经足够稳定可靠。
 
 ## 使用 Unmarshal 解码 JSON
 
@@ -353,15 +365,19 @@ if err := json.Unmarshal([]byte(`["Go","MySQL"]`), &names); err != nil {
 
 ### Unmarshal 源码主线
 
-`Unmarshal` 的源码入口在 `$GOROOT/src/encoding/json/decode.go`。它不是一上来就直接把字段塞进结构体，而是先做一遍 JSON 语法检查：
+再看 `Unmarshal`。在 Go 1.26.5 稳定版官方源码 [`src/encoding/json/decode.go`](https://go.googlesource.com/go/+/refs/tags/go1.26.5/src/encoding/json/decode.go) 中，它不是一上来就直接把字段塞进结构体，而是先做一遍 JSON 语法检查：
 
 ```go
 func Unmarshal(data []byte, v any) error {
+	// decodeState 保存本次解码过程中的扫描器、原始数据和错误状态。
 	var d decodeState
+
+	// 先检查 JSON 整体是否合法，避免写入一半后才发现语法错误。
 	if err := checkValid(data, &d.scan); err != nil {
 		return err
 	}
 
+	// 初始化解码状态，然后把 JSON 内容写入目标值 v。
 	d.init(data)
 	return d.unmarshal(v)
 }
@@ -669,22 +685,28 @@ func createUserHandler(w http.ResponseWriter, r *http.Request) {
 
 这一点特别适合和“反射”那一节连起来理解。结构体 tag 写在字段声明上，但真正读取它的是标准库。`encoding/json` 在分析结构体字段时，会拿到 `reflect.StructField`，然后读取字段上的 `json` tag。
 
-在 `$GOROOT/src/encoding/json/encode.go` 的 `typeFields` 里，可以看到类似这样的逻辑：
+在 Go 1.26.5 稳定版的 `typeFields` 逻辑里，可以看到类似这样的代码：
 
 ```go
+// sf 是 reflect.StructField，代表结构体里的一个字段。
 tag := sf.Tag.Get("json")
+
+// json:"-" 表示这个字段编码和解码时都跳过。
 if tag == "-" {
 	continue
 }
+
+// 拆出 tag 里的字段名和选项，例如 user_name 与 omitempty。
 name, opts := parseTag(tag)
 ```
 
 这里的 `sf` 是一个结构体字段信息，类型是 `reflect.StructField`。`sf.Tag.Get("json")` 这一步，就是通过反射读取字段后面的 tag。
 
-再看 `$GOROOT/src/encoding/json/tags.go`，`parseTag` 的逻辑并不复杂：
+`parseTag` 的逻辑并不复杂：
 
 ```go
 func parseTag(tag string) (string, tagOptions) {
+	// 以第一个逗号切开：逗号前是 JSON 字段名，逗号后是选项。
 	tag, opt, _ := strings.Cut(tag, ",")
 	return tag, tagOptions(opt)
 }
@@ -700,15 +722,20 @@ func parseTag(tag string) (string, tagOptions) {
 字段名匹配也不是随便猜的。`encoding/json` 会为结构体字段建立两张索引表：
 
 ```go
+// 精确字段名索引：优先按完全相同的字段名查找。
 exactNameIndex[field.name] = &fields[i]
+
+// 折叠大小写后的索引：用于 age 匹配 Age 这类情况。
 foldedNameIndex[string(foldName(field.nameBytes))] = &fields[i]
 ```
 
 解码对象字段时，会先做精确匹配，再做大小写折叠后的匹配：
 
 ```go
+// 先查精确匹配，例如 "user_name" 对 json:"user_name"。
 f := fields.byExactName[string(key)]
 if f == nil {
+	// 再查大小写不敏感匹配，例如 "age" 对 Age。
 	f = fields.byFoldedName[string(foldName(key))]
 }
 ```
@@ -916,18 +943,23 @@ func createUserHandler(w http.ResponseWriter, r *http.Request) {
 
 ### Decoder 源码主线
 
-`json.Decoder` 的入口在 `$GOROOT/src/encoding/json/stream.go`。它适合 HTTP 请求体、文件、网络连接这类 `io.Reader` 场景，因为它可以从流里读取 JSON，而不要求你先把整个内容手动读成 `[]byte`。
+`json.Decoder` 的源码入口在 Go 1.26.5 稳定版官方源码 [`src/encoding/json/stream.go`](https://go.googlesource.com/go/+/refs/tags/go1.26.5/src/encoding/json/stream.go)。它适合 HTTP 请求体、文件、网络连接这类 `io.Reader` 场景，因为它可以从流里读取 JSON，而不要求你先把整个内容手动读成 `[]byte`。
 
 `Decode` 的核心逻辑可以简化成这样：
 
 ```go
 func (dec *Decoder) Decode(v any) error {
+	// 从 io.Reader 读取一个完整 JSON 值，放进 Decoder 内部缓冲区。
 	n, err := dec.readValue()
 	if err != nil {
 		return err
 	}
+
+	// 用刚读到的这段 JSON 初始化 decodeState。
 	dec.d.init(dec.buf[dec.scanp : dec.scanp+n])
 	dec.scanp += n
+
+	// 真正的解码仍然交给 decodeState，通过反射写入 v。
 	return dec.d.unmarshal(v)
 }
 ```
@@ -1002,6 +1034,7 @@ func createUserHandler(w http.ResponseWriter, r *http.Request) {
 
 ```go
 func (dec *Decoder) DisallowUnknownFields() {
+	// 这里只是打开一个开关。
 	dec.d.disallowUnknownFields = true
 }
 ```
@@ -1012,6 +1045,7 @@ func (dec *Decoder) DisallowUnknownFields() {
 if f != nil {
 	// 找到了字段，继续往对应字段里解码。
 } else if d.disallowUnknownFields {
+	// 没找到字段，并且开启了严格模式，就记录 unknown field 错误。
 	d.saveError(fmt.Errorf("json: unknown field %q", key))
 }
 ```
@@ -1234,6 +1268,7 @@ type Order struct {
 
 ```go
 func (dec *Decoder) UseNumber() {
+	// 这里只是打开一个开关，影响数字进入 any 时的目标类型。
 	dec.d.useNumber = true
 }
 ```
@@ -1243,8 +1278,11 @@ func (dec *Decoder) UseNumber() {
 ```go
 func (d *decodeState) convertNumber(s string) (any, error) {
 	if d.useNumber {
+		// 开启 UseNumber 后，先把数字文本保存成 json.Number。
 		return Number(s), nil
 	}
+
+	// 默认行为：动态 JSON 数字进入 any 时转成 float64。
 	return strconv.ParseFloat(s, 64)
 }
 ```
@@ -1312,11 +1350,14 @@ type Servers struct {
 
 `encoding/xml` 的整体思路和 `encoding/json` 有相似之处：它也会通过反射分析结构体字段，也会读取 struct tag，也会缓存类型信息。但 XML 比 JSON 多了元素、属性、文本内容、命名空间等概念，所以它的字段信息更复杂。
 
-在 `$GOROOT/src/encoding/xml/typeinfo.go` 里，XML 会为结构体类型维护 `typeInfo`：
+在 Go 1.26.5 稳定版官方源码 [`src/encoding/xml/typeinfo.go`](https://go.googlesource.com/go/+/refs/tags/go1.26.5/src/encoding/xml/typeinfo.go) 中，XML 会为结构体类型维护 `typeInfo`：
 
 ```go
 type typeInfo struct {
+	// XMLName 字段对应的 XML 元信息。
 	xmlname *fieldInfo
+
+	// 普通字段对应的 XML 元信息。
 	fields  []fieldInfo
 }
 ```
@@ -1325,10 +1366,19 @@ type typeInfo struct {
 
 ```go
 type fieldInfo struct {
+	// 字段在结构体中的索引路径，用于反射定位字段。
 	idx     []int
+
+	// XML 元素名或属性名。
 	name    string
+
+	// XML 命名空间。
 	xmlns   string
+
+	// 字段模式，例如元素、属性、CDATA、chardata、omitempty。
 	flags   fieldFlags
+
+	// 父级元素路径，用于 a>b>c 这类嵌套 tag。
 	parents []string
 }
 ```
@@ -1338,7 +1388,10 @@ type fieldInfo struct {
 分析字段时，源码会读取字段上的 `xml` tag：
 
 ```go
+// 读取字段上的 xml tag。
 tag := f.Tag.Get("xml")
+
+// 按逗号拆分字段名和选项，例如 version,attr。
 tokens := strings.Split(tag, ",")
 ```
 
@@ -1569,15 +1622,6 @@ r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 decoder := json.NewDecoder(r.Body)
 ```
 
-## 练习
-
-1. 定义一个 `Article` 结构体，包含 `id`、`title`、`content`、`tags`、`published` 字段，并使用 `json.MarshalIndent` 输出格式化 JSON。
-2. 写一个 `CreateArticleRequest` 结构体，从 JSON 字符串中解码出文章标题和内容，并手动校验标题不能为空。
-3. 修改上一题，给 `CreateArticleRequest` 增加 `DisallowUnknownFields`，观察 JSON 中出现多余字段时的错误。
-4. 写一个 HTTP handler，限制请求体最大为 `512 KiB`，然后用 `json.Decoder` 解析请求。
-5. 把 `{"id":9007199254740993}` 解码到 `map[string]any`，分别观察默认数字类型和开启 `UseNumber` 后的区别。
-6. 定义一个 `BookList` XML 结构体，支持根元素 `<books>`，每本书用 `<book id="1"><title>...</title></book>` 表示，并完成 XML 的编码和解码。
-
 ## 总结
 
 `encoding` 包族负责 Go 值和外部数据格式之间的转换。做后端开发时，最常用的是 `encoding/json`。
@@ -1587,5 +1631,7 @@ JSON 编码用 `json.Marshal` 或 `json.NewEncoder(w).Encode`，解码用 `json.
 从源码主线看，`encoding/json` 的核心是反射、字段信息缓存、编码状态和解码状态。`Marshal` 会根据 `reflect.Type` 选择编码器，结构体字段会经过 `cachedTypeFields` 分析和缓存；`Unmarshal` 会先校验 JSON，再通过反射把值写入目标变量；`json` tag 会被 `StructTag.Get("json")` 读出，再由 `parseTag` 拆成字段名和选项。
 
 XML 在普通 Web API 里出现频率低一些，这一节做基本了解即可。它的处理思路和 JSON 类似：用 `encoding/xml` 完成 `Marshal`、`MarshalIndent` 和 `Unmarshal`，再通过 `xml` tag 映射元素、属性和文本内容。
+
+除了标准库，Go 生态里还有一些高性能 JSON 编解码库，例如字节开源的 [Sonic](https://pkg.go.dev/github.com/bytedance/sonic)。这类库通常会围绕性能做更多优化，比如减少反射开销、利用 SIMD 或 JIT 思路提升吞吐；但它们和标准库在兼容性、部署环境、维护成本上也会有取舍。后面如果单独讲 JSON 性能优化，可以再把 Sonic、jsoniter、easyjson 这类方案放在一起比较。
 
 如果是普通 Web API，优先掌握 JSON；如果对接旧系统、SOAP 接口或行业协议，再根据协议要求处理 XML。把这两套标准库用熟，后端服务和外部世界交换数据这件事，就有了很稳的基本功。
