@@ -79,3 +79,223 @@ body.gocode-focus-reading .theme-container .vp-page [vp-content] {
     display: none;
   }
 }
+
+/* 资源导航页：卡片式开发百宝箱。 */
+.theme-container:has(.resource-hub) .vp-page {
+  padding-right: 2rem;
+}
+
+.theme-container:has(.resource-hub) .vp-toc-placeholder {
+  display: none;
+}
+
+[vp-content]:has(.resource-hub) {
+  max-width: 1180px;
+}
+
+[vp-content]:has(.resource-hub) #markdown-content {
+  max-width: none;
+}
+
+.resource-hub {
+  width: min(100%, 1180px);
+}
+
+.resource-hub__intro {
+  margin: 0.75rem 0 2rem;
+  color: var(--vp-c-text-mute);
+  line-height: 1.8;
+}
+
+.resource-section {
+  margin-top: 2.5rem;
+}
+
+.resource-section h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 1.15rem;
+  border-bottom: 0;
+  color: var(--vp-c-text);
+  font-size: 1.55rem;
+}
+
+.resource-section h2::before {
+  content: "#";
+  color: #34b27b;
+  font-weight: 800;
+}
+
+.resource-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.resource-card {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  min-height: 9.2rem;
+  padding: 1.05rem 1.1rem;
+  border: 1px solid color-mix(in srgb, var(--vp-c-border) 72%, transparent);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--vp-c-bg) 94%, white), color-mix(in srgb, var(--vp-c-bg-soft) 88%, white));
+  color: inherit;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--vp-c-shadow) 70%, transparent);
+  text-decoration: none !important;
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.resource-card:hover {
+  border-color: color-mix(in srgb, #34b27b 55%, var(--vp-c-border));
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--vp-c-shadow) 82%, transparent);
+  transform: translateY(-3px);
+}
+
+.resource-card__mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  margin-bottom: 0.8rem;
+  border-radius: 8px;
+  background: #eef2f7;
+  color: #334155;
+  font-weight: 800;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.resource-card strong {
+  color: #34b27b;
+  font-size: 1.05rem;
+}
+
+.resource-card p {
+  margin: 0.6rem 0 0;
+  color: var(--vp-c-text-mute);
+  font-size: 0.92rem;
+  line-height: 1.62;
+}
+
+.resource-section--note {
+  padding: 1.2rem 1.3rem;
+  border: 1px solid color-mix(in srgb, #34b27b 30%, var(--vp-c-border));
+  border-radius: 8px;
+  background: color-mix(in srgb, #34b27b 8%, var(--vp-c-bg));
+}
+
+.resource-section--note h2 {
+  margin-top: 0;
+}
+
+.resource-section--note p {
+  margin-bottom: 0;
+  color: var(--vp-c-text-mute);
+  line-height: 1.8;
+}
+
+.resource-card__mark--baidu,
+.resource-card__mark--runoob {
+  background: #eaf1ff;
+  color: #2459d6;
+}
+
+.resource-card__mark--google,
+.resource-card__mark--gemini {
+  background: #edf5ff;
+  color: #2563eb;
+}
+
+.resource-card__mark--bing,
+.resource-card__mark--mdn,
+.resource-card__mark--vue,
+.resource-card__mark--hope,
+.resource-card__mark--netlify {
+  background: #e8fbf5;
+  color: #078761;
+}
+
+.resource-card__mark--github,
+.resource-card__mark--git,
+.resource-card__mark--vercel {
+  background: #eef2f7;
+  color: #111827;
+}
+
+.resource-card__mark--stackoverflow,
+.resource-card__mark--gitlab,
+.resource-card__mark--aliyun,
+.resource-card__mark--volc,
+.resource-card__mark--hf {
+  background: #fff3e3;
+  color: #c2410c;
+}
+
+.resource-card__mark--go,
+.resource-card__mark--docker,
+.resource-card__mark--bitbucket,
+.resource-card__mark--perplexity {
+  background: #e8f6ff;
+  color: #0284c7;
+}
+
+.resource-card__mark--java,
+.resource-card__mark--maven,
+.resource-card__mark--deepseek,
+.resource-card__mark--qwen,
+.resource-card__mark--huawei,
+.resource-card__mark--tencent {
+  background: #f1edff;
+  color: #6d28d9;
+}
+
+.resource-card__mark--chatgpt,
+.resource-card__mark--claude,
+.resource-card__mark--kimi,
+.resource-card__mark--glm,
+.resource-card__mark--doubao,
+.resource-card__mark--yuanbao,
+.resource-card__mark--bailian,
+.resource-card__mark--blog,
+.resource-card__mark--gitee {
+  background: #eafaf1;
+  color: #16a34a;
+}
+
+@media (max-width: 1180px) {
+  .resource-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .resource-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .resource-section {
+    margin-top: 2rem;
+  }
+
+  .resource-section h2 {
+    font-size: 1.35rem;
+  }
+
+  .resource-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .resource-card {
+    min-height: 8rem;
+  }
+}

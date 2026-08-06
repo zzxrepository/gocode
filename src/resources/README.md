@@ -15,72 +15,271 @@ tag:
   - 文档
 ---
 
-# 资源导航
+# 资源导航 <Badge text="New" type="tip" />
 
-这里整理学习编程、查询文档、使用 AI 工具和搭建个人项目时经常会用到的网站。资源导航不追求把所有链接堆在一起，而是优先保留真正高频、可靠、适合反复查阅的入口。
+<div class="resource-hub">
+  <p class="resource-hub__intro">这里整理学习编程、查询文档、使用 AI 工具、接入模型服务和搭建个人项目时经常会用到的网站。资源导航不追求堆满链接，而是优先保留高频、可靠、适合反复查阅的入口。</p>
 
-## 编程学习
+  <section class="resource-section">
+    <h2>常用搜索</h2>
+    <div class="resource-grid">
+      <a class="resource-card" href="https://www.baidu.com/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--baidu">百</span>
+        <strong>百度</strong>
+        <p>中文资料、技术博客、报错信息和国内站点检索入口。</p>
+      </a>
+      <a class="resource-card" href="https://www.google.com/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--google">G</span>
+        <strong>Google</strong>
+        <p>查询英文技术资料、官方文档、GitHub Issue 和 Stack Overflow。</p>
+      </a>
+      <a class="resource-card" href="https://www.bing.com/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--bing">B</span>
+        <strong>Bing</strong>
+        <p>微软搜索入口，适合查英文资料、图片、文档和网页快照。</p>
+      </a>
+      <a class="resource-card" href="https://www.perplexity.ai/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--perplexity">P</span>
+        <strong>Perplexity</strong>
+        <p>带来源的 AI 搜索，适合快速整理一个问题的背景资料。</p>
+      </a>
+    </div>
+  </section>
 
-| 网站 | 适合场景 |
-| --- | --- |
-| [菜鸟教程](https://www.runoob.com/) | 快速入门一门语言、查询基础语法、补齐常用概念 |
-| [MDN Web Docs](https://developer.mozilla.org/zh-CN/) | 学习 HTML、CSS、JavaScript 和浏览器 API |
-| [Go 官方文档](https://go.dev/doc/) | 查询 Go 语言规范、标准库和官方教程 |
-| [Go by Example](https://gobyexample.com/) | 通过小例子理解 Go 常用语法和标准库 |
-| [Oracle Java Documentation](https://docs.oracle.com/en/java/) | 查询 Java 平台、JDK 和标准库文档 |
+  <section class="resource-section">
+    <h2>编程学习</h2>
+    <div class="resource-grid">
+      <a class="resource-card" href="https://www.runoob.com/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--runoob">菜</span>
+        <strong>菜鸟教程</strong>
+        <p>快速入门一门语言、查询基础语法、补齐常用概念。</p>
+      </a>
+      <a class="resource-card" href="https://developer.mozilla.org/zh-CN/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--mdn">M</span>
+        <strong>MDN Web Docs</strong>
+        <p>学习 HTML、CSS、JavaScript、浏览器 API 和 Web 标准。</p>
+      </a>
+      <a class="resource-card" href="https://gobyexample.com/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--go">Go</span>
+        <strong>Go by Example</strong>
+        <p>通过短小示例理解 Go 常用语法、标准库和并发模型。</p>
+      </a>
+      <a class="resource-card" href="https://stackoverflow.com/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--stackoverflow">S</span>
+        <strong>Stack Overflow</strong>
+        <p>查询具体报错、边界问题和真实工程中的技术讨论。</p>
+      </a>
+    </div>
+  </section>
 
-## 官方文档
+  <section class="resource-section">
+    <h2>代码托管</h2>
+    <div class="resource-grid">
+      <a class="resource-card" href="https://github.com/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--github">GH</span>
+        <strong>GitHub</strong>
+        <p>管理代码仓库、Issue、PR、Actions 和开源项目协作。</p>
+      </a>
+      <a class="resource-card" href="https://gitee.com/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--gitee">G</span>
+        <strong>Gitee</strong>
+        <p>国内常用代码托管平台，适合镜像仓库和团队协作。</p>
+      </a>
+      <a class="resource-card" href="https://gitlab.com/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--gitlab">GL</span>
+        <strong>GitLab</strong>
+        <p>代码托管、CI/CD、项目管理和企业 DevOps 平台。</p>
+      </a>
+      <a class="resource-card" href="https://bitbucket.org/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--bitbucket">B</span>
+        <strong>Bitbucket</strong>
+        <p>Atlassian 体系下的 Git 托管平台，常与 Jira 配合使用。</p>
+      </a>
+    </div>
+  </section>
 
-| 网站 | 适合场景 |
-| --- | --- |
-| [VuePress 官方文档](https://vuejs.press/zh/) | 查询 VuePress 2 的配置、插件和 Markdown 能力 |
-| [VuePress Theme Hope](https://theme-hope.vuejs.press/zh/) | 查询当前站点主题的导航、侧边栏、组件和主题配置 |
-| [Docker Docs](https://docs.docker.com/) | 查询镜像、容器、Compose 和部署相关文档 |
-| [Git 官方文档](https://git-scm.com/doc) | 查询 Git 命令、概念和工作流说明 |
-| [Maven 官方文档](https://maven.apache.org/guides/) | 查询 Maven 生命周期、依赖管理和插件配置 |
+  <section class="resource-section">
+    <h2>官方文档</h2>
+    <div class="resource-grid">
+      <a class="resource-card" href="https://go.dev/doc/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--go">Go</span>
+        <strong>Go 官方文档</strong>
+        <p>查询 Go 语言规范、标准库、安装说明和官方教程。</p>
+      </a>
+      <a class="resource-card" href="https://docs.oracle.com/en/java/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--java">J</span>
+        <strong>Java Documentation</strong>
+        <p>查询 Java 平台、JDK 标准库、工具链和官方参考资料。</p>
+      </a>
+      <a class="resource-card" href="https://docs.docker.com/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--docker">D</span>
+        <strong>Docker Docs</strong>
+        <p>查询镜像、容器、Dockerfile、Compose 和部署相关文档。</p>
+      </a>
+      <a class="resource-card" href="https://git-scm.com/doc" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--git">Git</span>
+        <strong>Git 官方文档</strong>
+        <p>查询 Git 命令、分支模型、配置项和底层概念说明。</p>
+      </a>
+      <a class="resource-card" href="https://maven.apache.org/guides/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--maven">M</span>
+        <strong>Maven Guides</strong>
+        <p>查询 Maven 生命周期、依赖管理、插件配置和项目结构。</p>
+      </a>
+      <a class="resource-card" href="https://vuejs.press/zh/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--vue">V</span>
+        <strong>VuePress</strong>
+        <p>查询 VuePress 2 的配置、插件、Markdown 能力和部署方式。</p>
+      </a>
+      <a class="resource-card" href="https://theme-hope.vuejs.press/zh/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--hope">H</span>
+        <strong>Theme Hope</strong>
+        <p>查询当前站点主题的导航、侧边栏、组件和主题配置。</p>
+      </a>
+    </div>
+  </section>
 
-## AI 工具
+  <section class="resource-section">
+    <h2>AI 工具</h2>
+    <div class="resource-grid">
+      <a class="resource-card" href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--chatgpt">C</span>
+        <strong>ChatGPT</strong>
+        <p>通用问答、代码辅助、写作、学习陪练和复杂任务拆解。</p>
+      </a>
+      <a class="resource-card" href="https://claude.ai/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--claude">Cl</span>
+        <strong>Claude</strong>
+        <p>长文本阅读、写作、代码理解和需求分析辅助。</p>
+      </a>
+      <a class="resource-card" href="https://gemini.google.com/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--gemini">Ge</span>
+        <strong>Gemini</strong>
+        <p>Google 生态相关问答、多模态理解和资料整理。</p>
+      </a>
+      <a class="resource-card" href="https://kimi.moonshot.cn/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--kimi">K</span>
+        <strong>Kimi</strong>
+        <p>中文长文本阅读、资料总结、文档理解和学习辅助。</p>
+      </a>
+      <a class="resource-card" href="https://chat.deepseek.com/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--deepseek">D</span>
+        <strong>DeepSeek</strong>
+        <p>代码、推理、中文问答和技术学习场景常用助手。</p>
+      </a>
+      <a class="resource-card" href="https://chatglm.cn/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--glm">GLM</span>
+        <strong>GLM</strong>
+        <p>中文问答、写作、代码辅助和知识整理。</p>
+      </a>
+      <a class="resource-card" href="https://www.qianwen.com/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--qwen">Q</span>
+        <strong>通义千问</strong>
+        <p>阿里生态大模型助手，适合文本、多模态和知识问答。</p>
+      </a>
+      <a class="resource-card" href="https://www.doubao.com/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--doubao">豆</span>
+        <strong>豆包</strong>
+        <p>日常问答、内容理解、写作辅助和轻量创作。</p>
+      </a>
+      <a class="resource-card" href="https://yuanbao.tencent.com/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--yuanbao">元</span>
+        <strong>腾讯元宝</strong>
+        <p>中文搜索问答、资料整理、内容创作和腾讯生态入口。</p>
+      </a>
+      <a class="resource-card" href="https://huggingface.co/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--hf">HF</span>
+        <strong>Hugging Face</strong>
+        <p>查找模型、数据集、Spaces、论文关联和开源 AI 项目。</p>
+      </a>
+    </div>
+  </section>
 
-| 网站 | 适合场景 |
-| --- | --- |
-| [ChatGPT](https://chatgpt.com/) | 通用问答、代码辅助、写作和学习陪练 |
-| [Claude](https://claude.ai/) | 长文本阅读、写作、代码理解和复杂任务拆解 |
-| [Gemini](https://gemini.google.com/) | Google 生态相关问答、多模态理解和资料整理 |
-| [Kimi](https://kimi.moonshot.cn/) | 中文长文本阅读、资料总结和学习辅助 |
-| [DeepSeek](https://chat.deepseek.com/) | 代码、推理、中文问答和技术学习 |
-| [GLM](https://chatglm.cn/) | 中文问答、写作、代码和知识整理 |
-| [通义千问](https://www.qianwen.com/) | 阿里生态大模型助手、文本与多模态任务 |
-| [豆包](https://www.doubao.com/) | 日常问答、写作辅助和内容理解 |
-| [腾讯元宝](https://yuanbao.tencent.com/) | 中文搜索问答、资料整理和内容创作 |
-| [Hugging Face](https://huggingface.co/) | 查找模型、数据集、Spaces 和开源 AI 项目 |
+  <section class="resource-section">
+    <h2>模型 API 与订阅</h2>
+    <div class="resource-grid">
+      <a class="resource-card" href="https://platform.moonshot.cn/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--kimi">K</span>
+        <strong>Kimi API 平台</strong>
+        <p>接入 Moonshot/Kimi 模型 API，管理 Key、用量和账单。</p>
+      </a>
+      <a class="resource-card" href="https://platform.deepseek.com/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--deepseek">D</span>
+        <strong>DeepSeek API 平台</strong>
+        <p>接入 DeepSeek 模型 API，查看模型、余额和调用文档。</p>
+      </a>
+      <a class="resource-card" href="https://open.bigmodel.cn/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--glm">GLM</span>
+        <strong>智谱开放平台</strong>
+        <p>接入 GLM 系列模型，管理 API Key、应用和充值。</p>
+      </a>
+      <a class="resource-card" href="https://bailian.console.aliyun.com/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--bailian">百</span>
+        <strong>阿里云百炼</strong>
+        <p>接入通义系列模型，管理应用、模型服务和工作流。</p>
+      </a>
+    </div>
+  </section>
 
-## 模型 API 与订阅
+  <section class="resource-section">
+    <h2>云服务</h2>
+    <div class="resource-grid">
+      <a class="resource-card" href="https://www.aliyun.com/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--aliyun">阿</span>
+        <strong>阿里云</strong>
+        <p>云服务器、对象存储、数据库、函数计算和 AI 云服务。</p>
+      </a>
+      <a class="resource-card" href="https://www.volcengine.com/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--volc">火</span>
+        <strong>火山引擎</strong>
+        <p>云计算、音视频、数据平台、大模型和企业服务。</p>
+      </a>
+      <a class="resource-card" href="https://www.huaweicloud.com/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--huawei">华</span>
+        <strong>华为云</strong>
+        <p>云服务器、数据库、云原生、AI 服务和企业云方案。</p>
+      </a>
+      <a class="resource-card" href="https://cloud.tencent.com/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--tencent">腾</span>
+        <strong>腾讯云</strong>
+        <p>云服务器、对象存储、音视频、小程序和腾讯生态服务。</p>
+      </a>
+      <a class="resource-card" href="https://cloud.baidu.com/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--baidu">百</span>
+        <strong>百度智能云</strong>
+        <p>AI 云服务、智能应用、云基础设施和行业解决方案。</p>
+      </a>
+    </div>
+  </section>
 
-| 网站 | 适合场景 |
-| --- | --- |
-| [Kimi API 平台](https://platform.moonshot.cn/) | 接入 Moonshot/Kimi 模型 API |
-| [DeepSeek API 平台](https://platform.deepseek.com/) | 接入 DeepSeek 模型 API |
-| [智谱开放平台](https://open.bigmodel.cn/) | 接入 GLM 模型、管理 API Key 和充值 |
-| [阿里云百炼](https://bailian.console.aliyun.com/) | 接入通义系列模型、管理应用和模型服务 |
+  <section class="resource-section">
+    <h2>建站与个人项目</h2>
+    <div class="resource-grid">
+      <a class="resource-card" href="https://zzxrepository.github.io/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--blog">毛</span>
+        <strong>毛毛张的 Hexo 个人网站</strong>
+        <p>查看个人博客、项目归档、技术文章和学习沉淀。</p>
+      </a>
+      <a class="resource-card" href="https://pages.github.com/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--github">GH</span>
+        <strong>GitHub Pages</strong>
+        <p>托管静态网站、项目文档、个人主页和课程笔记。</p>
+      </a>
+      <a class="resource-card" href="https://vercel.com/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--vercel">V</span>
+        <strong>Vercel</strong>
+        <p>部署前端应用、文档站、Next.js 项目和 Serverless 服务。</p>
+      </a>
+      <a class="resource-card" href="https://www.netlify.com/" target="_blank" rel="noopener noreferrer">
+        <span class="resource-card__mark resource-card__mark--netlify">N</span>
+        <strong>Netlify</strong>
+        <p>部署静态站点、前端应用、表单和轻量后端函数。</p>
+      </a>
+    </div>
+  </section>
 
-## 云服务
-
-| 网站 | 适合场景 |
-| --- | --- |
-| [阿里云](https://www.aliyun.com/) | 云服务器、对象存储、数据库和 AI 云服务 |
-| [火山引擎](https://www.volcengine.com/) | 云计算、音视频、数据和大模型服务 |
-| [华为云](https://www.huaweicloud.com/) | 云服务器、数据库、云原生和企业云服务 |
-| [腾讯云](https://cloud.tencent.com/) | 云服务器、对象存储、音视频和小程序生态 |
-| [百度智能云](https://cloud.baidu.com/) | AI 云服务、智能应用和云基础设施 |
-
-## 建站与个人项目
-
-| 网站 | 适合场景 |
-| --- | --- |
-| [毛毛张的 Hexo 个人网站](https://zzxrepository.github.io/) | 查看个人博客、项目归档和文章沉淀 |
-| [GitHub Pages](https://pages.github.com/) | 托管静态网站和个人项目文档 |
-| [GitHub](https://github.com/) | 管理代码仓库、Issue、PR 和项目协作 |
-
-## 使用建议
-
-资源导航的价值不在于收藏很多网站，而在于遇到问题时知道应该先去哪里查。刚开始学习时，可以先用菜鸟教程这类入门网站建立整体印象；当需要确认细节、写生产代码或解决疑难问题时，再回到官方文档和权威资料。
+  <section class="resource-section resource-section--note">
+    <h2>使用建议</h2>
+    <p>资源导航的价值不在于收藏很多网站，而在于遇到问题时知道应该先去哪里查。刚开始学习时，可以先用菜鸟教程这类入门网站建立整体印象；当需要确认细节、写生产代码或解决疑难问题时，再回到官方文档和权威资料。</p>
+  </section>
+</div>
