@@ -685,7 +685,7 @@ func createUserHandler(w http.ResponseWriter, r *http.Request) {
 
 这一点特别适合和“反射”那一节连起来理解。结构体 tag 写在字段声明上，但真正读取它的是标准库。`encoding/json` 在分析结构体字段时，会拿到 `reflect.StructField`，然后读取字段上的 `json` tag。
 
-在 Go 1.26.5 稳定版的 `typeFields` 逻辑里，可以看到类似这样的代码：
+在 Go 1.26.5 稳定版官方源码 [`src/encoding/json/encode.go`](https://go.googlesource.com/go/+/refs/tags/go1.26.5/src/encoding/json/encode.go) 的 `typeFields` 逻辑里，可以看到类似这样的代码：
 
 ```go
 // sf 是 reflect.StructField，代表结构体里的一个字段。
@@ -702,7 +702,7 @@ name, opts := parseTag(tag)
 
 这里的 `sf` 是一个结构体字段信息，类型是 `reflect.StructField`。`sf.Tag.Get("json")` 这一步，就是通过反射读取字段后面的 tag。
 
-`parseTag` 的逻辑并不复杂：
+`parseTag` 在 [`src/encoding/json/tags.go`](https://go.googlesource.com/go/+/refs/tags/go1.26.5/src/encoding/json/tags.go) 里，它的逻辑并不复杂：
 
 ```go
 func parseTag(tag string) (string, tagOptions) {
@@ -1030,7 +1030,7 @@ func createUserHandler(w http.ResponseWriter, r *http.Request) {
 
 不过也要根据场景判断：如果你希望接口向前兼容，让新客户端多传一些字段但老服务仍能处理，就不一定要开启它。
 
-从源码看，`DisallowUnknownFields` 本身只是设置了一个布尔开关：
+从 Go 1.26.5 稳定版官方源码 [`src/encoding/json/stream.go`](https://go.googlesource.com/go/+/refs/tags/go1.26.5/src/encoding/json/stream.go) 看，`DisallowUnknownFields` 本身只是设置了一个布尔开关：
 
 ```go
 func (dec *Decoder) DisallowUnknownFields() {
@@ -1264,7 +1264,7 @@ type Order struct {
 
 结构体能让类型在编译期就固定下来，后面业务代码会清爽很多。
 
-从源码看，`UseNumber` 也只是给解码状态设置一个开关：
+从 Go 1.26.5 稳定版官方源码 [`src/encoding/json/stream.go`](https://go.googlesource.com/go/+/refs/tags/go1.26.5/src/encoding/json/stream.go) 看，`UseNumber` 也只是给解码状态设置一个开关：
 
 ```go
 func (dec *Decoder) UseNumber() {
@@ -1273,7 +1273,7 @@ func (dec *Decoder) UseNumber() {
 }
 ```
 
-当 JSON 数字要进入 `interface{}` / `any` 时，解码器会调用 `convertNumber`：
+当 JSON 数字要进入 `interface{}` / `any` 时，解码器会调用 [`src/encoding/json/decode.go`](https://go.googlesource.com/go/+/refs/tags/go1.26.5/src/encoding/json/decode.go) 里的 `convertNumber`：
 
 ```go
 func (d *decodeState) convertNumber(s string) (any, error) {
@@ -1628,7 +1628,7 @@ decoder := json.NewDecoder(r.Body)
 
 JSON 编码用 `json.Marshal` 或 `json.NewEncoder(w).Encode`，解码用 `json.Unmarshal` 或 `json.NewDecoder(r.Body).Decode`。解码目标要传指针，结构体字段必须导出，字段名和编码选项通过 `json` struct tag 控制。`omitempty`、`json:"-"`、`DisallowUnknownFields`、`http.MaxBytesReader`、`map[string]any`、`UseNumber` 都是实际项目里很常见的细节。
 
-从源码主线看，`encoding/json` 的核心是反射、字段信息缓存、编码状态和解码状态。`Marshal` 会根据 `reflect.Type` 选择编码器，结构体字段会经过 `cachedTypeFields` 分析和缓存；`Unmarshal` 会先校验 JSON，再通过反射把值写入目标变量；`json` tag 会被 `StructTag.Get("json")` 读出，再由 `parseTag` 拆成字段名和选项。
+从 Go 1.26.5 的源码主线看，`encoding/json` 的核心是反射、字段信息缓存、编码状态和解码状态。`Marshal` 会根据 `reflect.Type` 选择编码器，结构体字段会经过 `cachedTypeFields` 分析和缓存；`Unmarshal` 会先校验 JSON，再通过反射把值写入目标变量；`json` tag 会被 `StructTag.Get("json")` 读出，再由 `parseTag` 拆成字段名和选项。
 
 XML 在普通 Web API 里出现频率低一些，这一节做基本了解即可。它的处理思路和 JSON 类似：用 `encoding/xml` 完成 `Marshal`、`MarshalIndent` 和 `Unmarshal`，再通过 `xml` tag 映射元素、属性和文本内容。
 
