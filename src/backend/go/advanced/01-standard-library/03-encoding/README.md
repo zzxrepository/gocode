@@ -33,7 +33,7 @@ tag:
 
 这一节我们重点学习 Go 标准库里的 `encoding/json`，顺带把 `encoding/xml` 的基本用法串起来。学完以后，你应该能写出可靠的 JSON 请求解析、JSON 响应输出，也能看懂 XML 的结构体映射方式。为了不只停留在“会调 API”，这一节还会穿插看一点标准库源码主线，理解 `json` tag、字段匹配、`UseNumber`、`DisallowUnknownFields` 这些行为为什么会这样。
 
-本文源码解读基于官方最新稳定版 **Go 1.26.5**（2026-07-07 发布）。你可以对照官方源码阅读：[encoding/json](https://go.googlesource.com/go/+/refs/tags/go1.26.5/src/encoding/json/) 和 [encoding/xml](https://go.googlesource.com/go/+/refs/tags/go1.26.5/src/encoding/xml/)。如果你本地 `go version` 不同，源码细节可能略有差异，但这一节讲的主线思路是一样的。
+本文源码解读基于 **Go 1.26.5**，你可以对照官方源码阅读：[encoding/json](https://go.googlesource.com/go/+/refs/tags/go1.26.5/src/encoding/json/) 和 [encoding/xml](https://go.googlesource.com/go/+/refs/tags/go1.26.5/src/encoding/xml/)。
 
 ## encoding 包族是什么
 
@@ -69,7 +69,7 @@ err = json.Unmarshal(data, &user)
 
 ## JSON 基础
 
-JSON 是一种文本数据格式，全称是 JavaScript Object Notation。
+在介绍 `encoding/json` 之前，我们先了解一下 JSON。JSON 是一种文本数据格式，全称是 JavaScript Object Notation。
 
 它常见的数据类型包括：
 
