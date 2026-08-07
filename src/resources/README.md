@@ -261,6 +261,16 @@ tag:
     <strong>GitHub Pages 文档</strong>
     <p>用中文文档查询静态网站、项目文档和个人主页托管方式。</p>
   </a>
+  <a class="resource-card" href="https://search.google.com/search-console" target="_blank" rel="noopener noreferrer">
+    <span class="resource-card__mark resource-card__mark--google">GSC</span>
+    <strong>Google Search Console</strong>
+    <p>管理 Google 站点验证、Sitemap 提交、页面收录和搜索表现。</p>
+  </a>
+  <a class="resource-card" href="https://www.bing.com/webmasters" target="_blank" rel="noopener noreferrer">
+    <span class="resource-card__mark resource-card__mark--bing">BWT</span>
+    <strong>Bing Webmaster Tools</strong>
+    <p>管理 Bing 站点验证、Sitemap 提交、URL 提交和搜索表现。</p>
+  </a>
   <a class="resource-card" href="https://hexo.io/zh-cn/docs/" target="_blank" rel="noopener noreferrer">
     <span class="resource-card__mark resource-card__mark--hexo">H</span>
     <strong>Hexo 官方文档</strong>
