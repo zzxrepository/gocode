@@ -225,6 +225,7 @@ body.gocode-focus-reading .theme-container .vp-page [vp-content] {
 .resource-card__mark--gitlab,
 .resource-card__mark--aliyun,
 .resource-card__mark--volc,
+.resource-card__mark--natapp,
 .resource-card__mark--hf {
   background: #fff3e3;
   color: #c2410c;
@@ -243,7 +244,8 @@ body.gocode-focus-reading .theme-container .vp-page [vp-content] {
 .resource-card__mark--deepseek,
 .resource-card__mark--qwen,
 .resource-card__mark--huawei,
-.resource-card__mark--tencent {
+.resource-card__mark--tencent,
+.resource-card__mark--leancloud {
   background: #f1edff;
   color: #6d28d9;
 }

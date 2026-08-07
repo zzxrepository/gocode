@@ -240,6 +240,11 @@ tag:
     <strong>腾讯云</strong>
     <p>云服务器、对象存储、音视频、小程序和腾讯生态服务。</p>
   </a>
+  <a class="resource-card" href="https://www.leancloud.cn/" target="_blank" rel="noopener noreferrer">
+    <span class="resource-card__mark resource-card__mark--leancloud">LC</span>
+    <strong>LeanCloud</strong>
+    <p>应用后端云服务，适合数据存储、文件、云引擎、即时通讯和消息推送。</p>
+  </a>
 </div>
 
 ## 建站与个人项目
@@ -259,6 +264,11 @@ tag:
     <span class="resource-card__mark resource-card__mark--hexo">H</span>
     <strong>Hexo 官方文档</strong>
     <p>查询 Hexo 建站、配置、写作、主题、插件和部署相关说明。</p>
+  </a>
+  <a class="resource-card" href="https://natapp.cn/" target="_blank" rel="noopener noreferrer">
+    <span class="resource-card__mark resource-card__mark--natapp">Na</span>
+    <strong>NATAPP</strong>
+    <p>内网穿透服务，适合本地开发调试、临时回调地址和项目演示。</p>
   </a>
   <a class="resource-card" href="https://giscus.app/zh-CN" target="_blank" rel="noopener noreferrer">
     <span class="resource-card__mark resource-card__mark--giscus">Gi</span>
