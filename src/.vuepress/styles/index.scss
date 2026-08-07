@@ -81,13 +81,33 @@ body.gocode-focus-reading .theme-container .vp-page [vp-content] {
 }
 
 /* 资源导航页：紧凑型开发百宝箱。 */
-.resource-hub__intro {
-  margin: 0.75rem 0 2rem;
-  color: var(--vp-c-text-mute);
-  line-height: 1.8;
+.theme-container:has([vp-content] .resource-grid) {
+  @media (min-width: 1440px) {
+    .vp-sidebar .vp-sidebar-links {
+      display: none;
+    }
+
+    .vp-toc-placeholder {
+      position: fixed;
+      inset-inline-start: max(1rem, calc((var(--sidebar-space) - var(--sidebar-width)) / 2 + 1rem));
+      top: calc(var(--navbar-height) + 2rem);
+      width: calc(var(--sidebar-width) - 2rem);
+      max-width: calc(var(--sidebar-width) - 2rem);
+      padding: 0;
+    }
+
+    #toc {
+      position: static;
+      min-width: 0;
+      max-width: none;
+      padding: 0.4rem 0;
+      border-radius: 8px;
+      background: transparent;
+    }
+  }
 }
 
-[vp-content]:has(.resource-hub__intro) h2 {
+[vp-content]:has(.resource-grid) h2 {
   margin-top: 2.25rem;
   margin-bottom: 1rem;
 }
@@ -175,7 +195,6 @@ body.gocode-focus-reading .theme-container .vp-page [vp-content] {
   line-height: 1.8;
 }
 
-.resource-card__mark--baidu,
 .resource-card__mark--runoob {
   background: #eaf1ff;
   color: #2459d6;
@@ -213,15 +232,15 @@ body.gocode-focus-reading .theme-container .vp-page [vp-content] {
 }
 
 .resource-card__mark--go,
-.resource-card__mark--docker,
-.resource-card__mark--bitbucket,
-.resource-card__mark--perplexity {
+.resource-card__mark--gin,
+.resource-card__mark--docker {
   background: #e8f6ff;
   color: #0284c7;
 }
 
 .resource-card__mark--java,
 .resource-card__mark--maven,
+.resource-card__mark--gorm,
 .resource-card__mark--deepseek,
 .resource-card__mark--qwen,
 .resource-card__mark--huawei,
@@ -234,6 +253,8 @@ body.gocode-focus-reading .theme-container .vp-page [vp-content] {
 .resource-card__mark--claude,
 .resource-card__mark--kimi,
 .resource-card__mark--glm,
+.resource-card__mark--redis,
+.resource-card__mark--eino,
 .resource-card__mark--doubao,
 .resource-card__mark--yuanbao,
 .resource-card__mark--bailian,

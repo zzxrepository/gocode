@@ -17,16 +17,9 @@ tag:
 
 # 资源导航 <Badge text="New" type="tip" />
 
-<p class="resource-hub__intro">这里整理学习编程、查询文档、使用 AI 工具、接入模型服务和搭建个人项目时经常会用到的网站。资源导航不追求堆满链接，而是优先保留高频、可靠、适合反复查阅的入口。</p>
-
 ## 常用搜索
 
 <div class="resource-grid">
-  <a class="resource-card" href="https://www.baidu.com/" target="_blank" rel="noopener noreferrer">
-    <span class="resource-card__mark resource-card__mark--baidu">百</span>
-    <strong>百度</strong>
-    <p>中文资料、技术博客、报错信息和国内站点检索入口。</p>
-  </a>
   <a class="resource-card" href="https://www.google.com/" target="_blank" rel="noopener noreferrer">
     <span class="resource-card__mark resource-card__mark--google">G</span>
     <strong>Google</strong>
@@ -36,11 +29,6 @@ tag:
     <span class="resource-card__mark resource-card__mark--bing">B</span>
     <strong>Bing</strong>
     <p>微软搜索入口，适合查英文资料、图片、文档和网页快照。</p>
-  </a>
-  <a class="resource-card" href="https://www.perplexity.ai/" target="_blank" rel="noopener noreferrer">
-    <span class="resource-card__mark resource-card__mark--perplexity">P</span>
-    <strong>Perplexity</strong>
-    <p>带来源的 AI 搜索，适合快速整理一个问题的背景资料。</p>
   </a>
 </div>
 
@@ -87,11 +75,6 @@ tag:
     <strong>GitLab</strong>
     <p>代码托管、CI/CD、项目管理和企业 DevOps 平台。</p>
   </a>
-  <a class="resource-card" href="https://bitbucket.org/" target="_blank" rel="noopener noreferrer">
-    <span class="resource-card__mark resource-card__mark--bitbucket">B</span>
-    <strong>Bitbucket</strong>
-    <p>Atlassian 体系下的 Git 托管平台，常与 Jira 配合使用。</p>
-  </a>
 </div>
 
 ## 官方文档
@@ -104,8 +87,28 @@ tag:
   </a>
   <a class="resource-card" href="https://docs.oracle.com/en/java/" target="_blank" rel="noopener noreferrer">
     <span class="resource-card__mark resource-card__mark--java">J</span>
-    <strong>Java Documentation</strong>
+    <strong>Java 官方文档</strong>
     <p>查询 Java 平台、JDK 标准库、工具链和官方参考资料。</p>
+  </a>
+  <a class="resource-card" href="https://gin-gonic.com/en/docs/" target="_blank" rel="noopener noreferrer">
+    <span class="resource-card__mark resource-card__mark--gin">Gin</span>
+    <strong>Gin 文档</strong>
+    <p>查询 Gin 路由、中间件、参数绑定、部署和 API 示例。</p>
+  </a>
+  <a class="resource-card" href="https://gorm.io/docs/index.html" target="_blank" rel="noopener noreferrer">
+    <span class="resource-card__mark resource-card__mark--gorm">GM</span>
+    <strong>GORM 文档</strong>
+    <p>查询模型定义、关联、查询、事务、迁移和数据库适配。</p>
+  </a>
+  <a class="resource-card" href="https://redis.io/docs/latest/" target="_blank" rel="noopener noreferrer">
+    <span class="resource-card__mark resource-card__mark--redis">R</span>
+    <strong>Redis 文档</strong>
+    <p>查询 Redis 数据结构、命令、客户端、持久化和部署实践。</p>
+  </a>
+  <a class="resource-card" href="https://www.cloudwego.io/docs/eino/" target="_blank" rel="noopener noreferrer">
+    <span class="resource-card__mark resource-card__mark--eino">Ei</span>
+    <strong>Eino 文档</strong>
+    <p>学习用 Go 构建 LLM 应用、Agent、组件编排和扩展集成。</p>
   </a>
   <a class="resource-card" href="https://docs.docker.com/" target="_blank" rel="noopener noreferrer">
     <span class="resource-card__mark resource-card__mark--docker">D</span>
@@ -236,11 +239,6 @@ tag:
     <span class="resource-card__mark resource-card__mark--tencent">腾</span>
     <strong>腾讯云</strong>
     <p>云服务器、对象存储、音视频、小程序和腾讯生态服务。</p>
-  </a>
-  <a class="resource-card" href="https://cloud.baidu.com/" target="_blank" rel="noopener noreferrer">
-    <span class="resource-card__mark resource-card__mark--baidu">百</span>
-    <strong>百度智能云</strong>
-    <p>AI 云服务、智能应用、云基础设施和行业解决方案。</p>
   </a>
 </div>
 
