@@ -51,6 +51,8 @@ gocode/
 │       ├── sidebar.ts             # 左侧目录入口与结构化侧边栏范围
 │       ├── client.ts              # 客户端增强组件
 │       ├── public/                # 全站静态资源
+│       │   ├── CNAME              # GitHub Pages 自定义域名
+│       │   └── .nojekyll          # 关闭 GitHub Pages 的 Jekyll 处理
 │       └── styles/                # 全站样式覆盖
 ├── package.json
 └── deploy.sh
@@ -88,10 +90,10 @@ npm init -y
 }
 ```
 
-依赖分为 VuePress 核心、Vite 打包器、Hope 主题、Vue 运行时和 Markdown 增强能力。本站使用的依赖如下：
+依赖分为 VuePress 核心、Vite 打包器、Hope 主题、Vue 运行时、Markdown 增强能力和本地搜索。本站使用的依赖如下：
 
 ```bash
-npm install -D vuepress @vuepress/bundler-vite vuepress-theme-hope vue vite sass-embedded mermaid katex flowchart.ts
+npm install -D vuepress @vuepress/bundler-vite vuepress-theme-hope vue vite sass-embedded mermaid katex flowchart.ts @vuepress/plugin-slimsearch
 ```
 
 如果需要完全复现当前版本，可以参考 `package.json` 中的版本号锁定依赖。版本锁定的好处是构建结果更稳定，缺点是需要定期主动升级并验证主题行为。
@@ -133,7 +135,18 @@ import { viteBundler } from "@vuepress/bundler-vite";
 import theme from "./theme.js";
 
 export default defineUserConfig({
-  base: "/gocode/",
+  base: "/",
+
+  head: [
+    [
+      "script",
+      {
+        defer: true,
+        src: "https://cloud.umami.is/script.js",
+        "data-website-id": "6f8632c9-5b9d-425e-998f-f38c5491259b",
+      },
+    ],
+  ],
 
   lang: "zh-CN",
   title: "GoCode · 毛毛张",
@@ -156,7 +169,7 @@ export default defineUserConfig({
 });
 ```
 
-`base` 要和最终部署地址匹配。本站部署在 GitHub Pages 的仓库子路径下，因此设置为 `/gocode/`。如果部署到独立域名根路径，通常改成 `/`。
+`base` 要和最终部署地址匹配。本站当前部署在 `https://gocode.mmzhang.cn/` 的根路径下，因此设置为 `/`。如果改回 GitHub Pages 仓库子路径，例如 `https://zzxrepository.github.io/gocode/`，才需要设置为 `/gocode/`。
 
 ### 配置主题能力
 
@@ -169,7 +182,7 @@ import navbar from "./navbar.js";
 import sidebar from "./sidebar.js";
 
 export default hopeTheme({
-  hostname: "https://zzxrepository.github.io",
+  hostname: "https://gocode.mmzhang.cn",
 
   author: {
     name: "神马都会亿点点的毛毛张",
@@ -190,6 +203,23 @@ export default hopeTheme({
   displayFooter: true,
 
   plugins: {
+    comment: {
+      provider: "Giscus",
+      repo: "zzxrepository/gocode",
+      repoId: "R_kgDOQ7csNw",
+      category: "Comments",
+      categoryId: "DIC_kwDOQ7csN84DC32n",
+      mapping: "pathname",
+      strict: false,
+      reactionsEnabled: true,
+      inputPosition: "bottom",
+    },
+    slimsearch: {
+      indexContent: true,
+      suggestion: true,
+      queryHistoryCount: 5,
+      resultHistoryCount: 5,
+    },
     components: {
       components: ["Badge", "VPCard"],
     },
@@ -402,13 +432,37 @@ cd -
 
 ### 配置 GitHub Pages
 
-仓库需要在 GitHub Pages 设置中选择 `gh-pages` 分支作为发布来源。由于本站 `base` 是 `/gocode/`，最终访问地址形如：
+仓库需要在 GitHub Pages 设置中选择 `gh-pages` 分支作为发布来源。如果不配置自定义域名，项目页默认访问地址形如：
 
 ```text
 https://zzxrepository.github.io/gocode/
 ```
 
-如果仓库名、部署路径或自定义域名不同，需要同步调整 `config.ts` 中的 `base`、`theme.ts` 中的 `hostname`，以及 README 或导航中的站内链接。
+这种项目页部署方式需要把 `base` 设置为 `/gocode/`。
+
+如果使用独立域名或子域名，访问路径通常是站点根路径。本站当前使用：
+
+```text
+https://gocode.mmzhang.cn/
+```
+
+对应配置为：
+
+```text
+src/.vuepress/config.ts       base: "/"
+src/.vuepress/theme.ts        hostname: "https://gocode.mmzhang.cn"
+src/.vuepress/public/CNAME    gocode.mmzhang.cn
+```
+
+域名解析在阿里云 DNS 中添加一条记录即可：
+
+| 主机记录 | 记录类型 | 记录值 |
+| --- | --- | --- |
+| `gocode` | `CNAME` | `zzxrepository.github.io` |
+
+GitHub Pages 的 Custom domain 填 `gocode.mmzhang.cn`。DNS 校验通过后再启用 Enforce HTTPS。
+
+如果仓库名、部署路径或自定义域名不同，需要同步调整 `config.ts` 中的 `base`、`theme.ts` 中的 `hostname`、`public/CNAME`，以及 README 或导航中的站内链接。
 
 ### 完整构建流程
 
@@ -429,15 +483,123 @@ https://zzxrepository.github.io/gocode/
 
 这个流程完成后，站点的日常维护重点就会从“改配置”转为“写内容”。新增普通文章时，维护 frontmatter、文件路径和栏目 README 即可；只有新增顶级栏目、特殊导航入口、资源页布局或主题能力时，才需要调整 `.vuepress` 下的配置。
 
+## 站点增强功能
+
+搜索、评论、访问统计和自定义域名都属于站点级能力。它们通常不写在普通文章里，而是维护在 `.vuepress` 配置或 GitHub Pages 设置中。
+
+### 添加全文搜索
+
+本站使用 `@vuepress/plugin-slimsearch` 做本地全文搜索。它不需要第三方账号，也不需要服务器，适合个人文档站。
+
+依赖安装：
+
+```bash
+npm install -D @vuepress/plugin-slimsearch
+```
+
+主题配置写在 `src/.vuepress/theme.ts` 的 `plugins` 中：
+
+```ts
+plugins: {
+  slimsearch: {
+    indexContent: true,
+    suggestion: true,
+    queryHistoryCount: 5,
+    resultHistoryCount: 5,
+  },
+}
+```
+
+`indexContent: true` 表示索引正文内容。站点构建后会生成 `slimsearch.worker.js`，页面右上角会出现搜索入口，并支持 `Ctrl + K` 快捷键。
+
+### 添加评论
+
+本站使用 Giscus 作为评论系统。Giscus 基于 GitHub Discussions，适合 GitHub Pages、技术博客和开源文档站，不需要额外服务器。
+
+配置位置是 `src/.vuepress/theme.ts`：
+
+```ts
+plugins: {
+  comment: {
+    provider: "Giscus",
+    repo: "zzxrepository/gocode",
+    repoId: "R_kgDOQ7csNw",
+    category: "Comments",
+    categoryId: "DIC_kwDOQ7csN84DC32n",
+    mapping: "pathname",
+    strict: false,
+    reactionsEnabled: true,
+    inputPosition: "bottom",
+  },
+}
+```
+
+新增或重新配置 Giscus 时，先在 GitHub 仓库中开启 Discussions，并准备一个可讨论的分类，例如 `Comments`。然后在 Giscus 页面选择仓库、分类和映射方式，生成 `repoId`、`categoryId` 等参数，再填回主题配置。
+
+如果改用 Waline，配置会变成：
+
+```ts
+plugins: {
+  comment: {
+    provider: "Waline",
+    serverURL: "https://your-waline-server.example.com",
+    pageview: true,
+  },
+}
+```
+
+Waline 支持评论和阅读量，但需要单独部署服务和数据库。Giscus 与 Waline 不建议同时作为评论系统启用。
+
+### 添加访问统计
+
+本站使用 Umami Cloud 统计访问数据。Umami 不需要安装前端依赖，只需要把它生成的脚本放进 VuePress 的 `head`。
+
+配置位置是 `src/.vuepress/config.ts`：
+
+```ts
+export default defineUserConfig({
+  head: [
+    [
+      "script",
+      {
+        defer: true,
+        src: "https://cloud.umami.is/script.js",
+        "data-website-id": "6f8632c9-5b9d-425e-998f-f38c5491259b",
+      },
+    ],
+  ],
+});
+```
+
+访问统计在 Umami Cloud 后台查看。本站入口已经放在资源导航的“建站与个人项目”分区。
+
+### 维护自定义域名
+
+自定义域名需要同时维护三处：
+
+| 位置 | 当前值 | 作用 |
+| --- | --- | --- |
+| `src/.vuepress/config.ts` | `base: "/"` | 控制站内资源和路由前缀 |
+| `src/.vuepress/theme.ts` | `hostname: "https://gocode.mmzhang.cn"` | 控制 sitemap、SEO 和站点元信息 |
+| `src/.vuepress/public/CNAME` | `gocode.mmzhang.cn` | 让 GitHub Pages 绑定自定义域名 |
+
+DNS 解析使用 CNAME：
+
+```text
+gocode.mmzhang.cn -> zzxrepository.github.io
+```
+
+如果以后改成根域名 `mmzhang.cn`，需要把 GitHub Pages 的 Custom domain、`public/CNAME` 和 `theme.ts` 的 `hostname` 一起改掉；`base` 仍然保持 `/`。
+
 ## 文件和网页地址
 
 | 本地文件 | 网页地址 |
 | --- | --- |
-| `src/backend/go/basic/README.md` | `/gocode/backend/go/basic/` |
-| `src/backend/go/basic/09-methods/README.md` | `/gocode/backend/go/basic/09-methods/` |
-| `src/algorithm/leetcode/hot-100/two-sum.md` | `/gocode/algorithm/leetcode/hot-100/two-sum.html` |
+| `src/backend/go/basic/README.md` | `/backend/go/basic/` |
+| `src/backend/go/basic/09-methods/README.md` | `/backend/go/basic/09-methods/` |
+| `src/algorithm/leetcode/hot-100/two-sum.md` | `/algorithm/leetcode/hot-100/two-sum.html` |
 
-在配置里写内部链接时，通常省略部署前缀 `/gocode`，例如：
+在配置里写内部链接时，通常使用根路径，例如：
 
 ```text
 /backend/go/basic/09-methods/

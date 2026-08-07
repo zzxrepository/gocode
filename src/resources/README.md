@@ -255,6 +255,16 @@ tag:
     <strong>GitHub Pages 文档</strong>
     <p>用中文文档查询静态网站、项目文档和个人主页托管方式。</p>
   </a>
+  <a class="resource-card" href="https://giscus.app/zh-CN" target="_blank" rel="noopener noreferrer">
+    <span class="resource-card__mark resource-card__mark--giscus">Gi</span>
+    <strong>Giscus</strong>
+    <p>基于 GitHub Discussions 的静态站评论系统，适合技术博客和文档站。</p>
+  </a>
+  <a class="resource-card" href="https://cloud.umami.is/analytics/us/websites" target="_blank" rel="noopener noreferrer">
+    <span class="resource-card__mark resource-card__mark--umami">U</span>
+    <strong>Umami Cloud</strong>
+    <p>查看站点访问统计、热门页面、来源和实时访问数据。</p>
+  </a>
   <a class="resource-card" href="https://vercel.com/" target="_blank" rel="noopener noreferrer">
     <span class="resource-card__mark resource-card__mark--vercel">V</span>
     <strong>Vercel</strong>
