@@ -52,6 +52,8 @@ gocode/
 │       ├── client.ts              # 客户端增强组件
 │       ├── public/                # 全站静态资源
 │       │   ├── CNAME              # GitHub Pages 自定义域名
+│       │   ├── BingSiteAuth.xml   # Bing Webmaster Tools 站点验证文件
+│       │   ├── google*.html       # Google Search Console 站点验证文件
 │       │   └── .nojekyll          # 关闭 GitHub Pages 的 Jekyll 处理
 │       └── styles/                # 全站样式覆盖
 ├── package.json
@@ -600,6 +602,40 @@ export default defineUserConfig({
 ```
 
 访问统计在 Umami Cloud 后台查看。本站入口已经放在资源导航的“建站与个人项目”分区。
+
+### 配置搜索引擎收录
+
+本站已经配置 Google Search Console 和 Bing Webmaster Tools。搜索引擎验证文件要放在 `src/.vuepress/public/`，这样 VuePress 构建后会把它们发布到网站根目录。
+
+当前验证文件：
+
+| 平台 | 本地文件 | 线上地址 |
+| --- | --- | --- |
+| Google Search Console | `src/.vuepress/public/google17f8ecca886007f8.html` | `https://gocode.mmzhang.cn/google17f8ecca886007f8.html` |
+| Bing Webmaster Tools | `src/.vuepress/public/BingSiteAuth.xml` | `https://gocode.mmzhang.cn/BingSiteAuth.xml` |
+
+不要删除这些验证文件。Google 或 Bing 后续可能会重新检查站点所有权。
+
+站点地图由 VuePress Theme Hope 在构建时自动生成，地址是：
+
+```text
+https://gocode.mmzhang.cn/sitemap.xml
+```
+
+`robots.txt` 也会自动生成，并包含 sitemap 地址：
+
+```text
+https://gocode.mmzhang.cn/robots.txt
+```
+
+搜索平台中的配置方式：
+
+| 平台 | 推荐操作 |
+| --- | --- |
+| Google Search Console | 添加 `https://gocode.mmzhang.cn/`，使用 HTML 文件验证，然后提交 `sitemap.xml` |
+| Bing Webmaster Tools | 添加 `https://gocode.mmzhang.cn/`，使用 `BingSiteAuth.xml` 验证，然后提交 `https://gocode.mmzhang.cn/sitemap.xml` |
+
+后续更新文章时，只需要正常部署网站。构建过程会更新 `sitemap.xml`，Google 和 Bing 会按自己的抓取节奏自动发现新页面。重要新页面可以在 Google 的 URL Inspection 或 Bing 的 URL 检查里手动提交一次，加快发现。
 
 ### 维护自定义域名
 
