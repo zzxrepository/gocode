@@ -90,12 +90,12 @@ tag:
     <strong>Java 官方文档</strong>
     <p>查询 Java 平台、JDK 标准库、工具链和官方参考资料。</p>
   </a>
-  <a class="resource-card" href="https://gin-gonic.com/en/docs/" target="_blank" rel="noopener noreferrer">
+  <a class="resource-card" href="https://gin-gonic.com/zh-cn/docs/" target="_blank" rel="noopener noreferrer">
     <span class="resource-card__mark resource-card__mark--gin">Gin</span>
     <strong>Gin 文档</strong>
     <p>查询 Gin 路由、中间件、参数绑定、部署和 API 示例。</p>
   </a>
-  <a class="resource-card" href="https://gorm.io/docs/index.html" target="_blank" rel="noopener noreferrer">
+  <a class="resource-card" href="https://gorm.io/zh_CN/docs/index.html" target="_blank" rel="noopener noreferrer">
     <span class="resource-card__mark resource-card__mark--gorm">GM</span>
     <strong>GORM 文档</strong>
     <p>查询模型定义、关联、查询、事务、迁移和数据库适配。</p>
@@ -105,7 +105,7 @@ tag:
     <strong>Redis 文档</strong>
     <p>查询 Redis 数据结构、命令、客户端、持久化和部署实践。</p>
   </a>
-  <a class="resource-card" href="https://www.cloudwego.io/docs/eino/" target="_blank" rel="noopener noreferrer">
+  <a class="resource-card" href="https://www.cloudwego.io/zh/docs/eino/" target="_blank" rel="noopener noreferrer">
     <span class="resource-card__mark resource-card__mark--eino">Ei</span>
     <strong>Eino 文档</strong>
     <p>学习用 Go 构建 LLM 应用、Agent、组件编排和扩展集成。</p>
