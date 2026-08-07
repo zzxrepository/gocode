@@ -1,7 +1,7 @@
 ---
 title: 分支与协作
 shortTitle: 分支与协作
-order: 1
+order: 2
 icon: code-branch
 category:
   - Git
