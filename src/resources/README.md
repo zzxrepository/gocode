@@ -45,10 +45,10 @@ tag:
     <strong>MDN Web Docs</strong>
     <p>学习 HTML、CSS、JavaScript、浏览器 API 和 Web 标准。</p>
   </a>
-  <a class="resource-card" href="https://gobyexample.com/" target="_blank" rel="noopener noreferrer">
+  <a class="resource-card" href="https://gobyexample-cn.github.io/" target="_blank" rel="noopener noreferrer">
     <span class="resource-card__mark resource-card__mark--go">Go</span>
-    <strong>Go by Example</strong>
-    <p>通过短小示例理解 Go 常用语法、标准库和并发模型。</p>
+    <strong>Go by Example 中文版</strong>
+    <p>通过中文短示例理解 Go 常用语法、标准库和并发模型。</p>
   </a>
   <a class="resource-card" href="https://stackoverflow.com/" target="_blank" rel="noopener noreferrer">
     <span class="resource-card__mark resource-card__mark--stackoverflow">S</span>
@@ -115,10 +115,10 @@ tag:
     <strong>Docker Docs</strong>
     <p>查询镜像、容器、Dockerfile、Compose 和部署相关文档。</p>
   </a>
-  <a class="resource-card" href="https://git-scm.com/doc" target="_blank" rel="noopener noreferrer">
+  <a class="resource-card" href="https://git-scm.com/book/zh/v2" target="_blank" rel="noopener noreferrer">
     <span class="resource-card__mark resource-card__mark--git">Git</span>
-    <strong>Git 官方文档</strong>
-    <p>查询 Git 命令、分支模型、配置项和底层概念说明。</p>
+    <strong>Pro Git 中文版</strong>
+    <p>学习 Git 基础、分支、远程协作、工具和底层概念说明。</p>
   </a>
   <a class="resource-card" href="https://maven.apache.org/guides/" target="_blank" rel="noopener noreferrer">
     <span class="resource-card__mark resource-card__mark--maven">M</span>
@@ -250,10 +250,10 @@ tag:
     <strong>毛毛张的 Hexo 个人网站</strong>
     <p>查看个人博客、项目归档、技术文章和学习沉淀。</p>
   </a>
-  <a class="resource-card" href="https://pages.github.com/" target="_blank" rel="noopener noreferrer">
+  <a class="resource-card" href="https://docs.github.com/zh/pages" target="_blank" rel="noopener noreferrer">
     <span class="resource-card__mark resource-card__mark--github">GH</span>
-    <strong>GitHub Pages</strong>
-    <p>托管静态网站、项目文档、个人主页和课程笔记。</p>
+    <strong>GitHub Pages 文档</strong>
+    <p>用中文文档查询静态网站、项目文档和个人主页托管方式。</p>
   </a>
   <a class="resource-card" href="https://vercel.com/" target="_blank" rel="noopener noreferrer">
     <span class="resource-card__mark resource-card__mark--vercel">V</span>
