@@ -118,6 +118,13 @@ export default hopeTheme({
       inputPosition: "bottom",
     },
 
+    slimsearch: {
+      indexContent: true,
+      suggestion: true,
+      queryHistoryCount: 5,
+      resultHistoryCount: 5,
+    },
+
     components: {
       components: ["Badge", "VPCard"],
     },
