@@ -106,7 +106,17 @@ export default hopeTheme({
 
   // 在这里配置主题提供的插件
   plugins: {
-    // 评论功能暂未启用。配置自己的 Giscus 仓库后再在此处开启。
+    comment: {
+      provider: "Giscus",
+      repo: "zzxrepository/gocode",
+      repoId: "R_kgDOQ7csNw",
+      category: "Comments",
+      categoryId: "DIC_kwDOQ7csN84DC32n",
+      mapping: "pathname",
+      strict: false,
+      reactionsEnabled: true,
+      inputPosition: "bottom",
+    },
 
     components: {
       components: ["Badge", "VPCard"],
