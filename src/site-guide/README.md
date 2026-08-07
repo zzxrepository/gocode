@@ -256,7 +256,7 @@ export default navbar([
 
 ### 配置自动侧边栏
 
-`src/.vuepress/sidebar.ts` 控制左侧目录入口。本站的做法是顶层栏目手动声明，栏目内部交给 `children: "structure"` 自动读取文件结构。
+`src/.vuepress/sidebar.ts` 控制左侧目录入口。本站的做法是：顶层栏目首页要作为左侧栏第一项出现，形成统一的当前栏目入口；栏目内部再交给 `children: "structure"` 自动读取文件结构。
 
 ```ts
 import { sidebar } from "vuepress-theme-hope";
@@ -277,15 +277,43 @@ export default sidebar({
     },
   ],
 
+  "/backend/": [
+    { text: "后端开发", icon: "server", link: "/backend/" },
+    {
+      text: "GO",
+      icon: "terminal",
+      link: "/backend/go/",
+      collapsible: true,
+      collapsed: false,
+      children: [
+        {
+          text: "Golang 基础知识",
+          icon: "book-open",
+          collapsible: true,
+          collapsed: false,
+          prefix: "go/basic/",
+          children: "structure",
+        },
+      ],
+    },
+  ],
+
   "/algorithm/": "structure",
   "/computer-fundamentals/": "structure",
   "/tools/": "structure",
-  "/resources/": "structure",
+  "/resources/": [
+    { text: "资源导航", icon: "compass", link: "/resources/" },
+    { text: "常用搜索", icon: "magnifying-glass", link: "/resources/#常用搜索" },
+    { text: "官方文档", icon: "book-open", link: "/resources/#官方文档" },
+    { text: "AI 工具", icon: "robot", link: "/resources/#ai-工具" },
+  ],
   "/site-guide/": "structure",
 });
 ```
 
 对于 Go 这类层级更深的栏目，可以在 `sidebar.ts` 中固定上层分组，再让子目录自动生成。例如 `backend/go/basic/` 和 `backend/go/advanced/` 可以分别作为结构化侧边栏范围。
+
+资源导航这类“所有内容都在一页”的页面，可以在 `sidebar.ts` 中手写锚点链接，例如 `/resources/#官方文档`。这样左侧栏看起来像一级目录，点击时仍然停留在同一个页面内跳转。此类页面可以在 frontmatter 中设置 `toc: false`，避免右侧再出现一份重复的“此页内容”。
 
 ### 准备首页
 
@@ -609,7 +637,7 @@ gocode.mmzhang.cn -> zzxrepository.github.io
 
 ## 自动侧边栏规则
 
-当前 `src/.vuepress/sidebar.ts` 只负责定义大的栏目入口。栏目内部文章列表由 VuePress Theme Hope 的 `children: "structure"` 自动生成。
+当前 `src/.vuepress/sidebar.ts` 负责定义大的栏目入口。栏目内部文章列表由 VuePress Theme Hope 的 `children: "structure"` 自动生成。顶级栏目首页通常要在侧边栏显示为第一项，因此栏目首页的 frontmatter 要保留 `dir.link: true`，不要随意写 `index: false`。
 
 例如 Go 基础教程：
 

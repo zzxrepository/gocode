@@ -6,7 +6,7 @@ dir:
   link: true
   collapsible: true
   order: 2
-icon: docker
+icon: fa6-brands:docker
 category:
   - Docker
 tag:

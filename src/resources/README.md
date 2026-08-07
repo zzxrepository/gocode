@@ -7,6 +7,7 @@ dir:
   collapsible: true
   order: 7
 icon: compass
+toc: false
 category:
   - 资源导航
 tag:

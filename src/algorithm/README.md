@@ -2,7 +2,10 @@
 title: 算法与数据结构
 shortTitle: 算法与数据结构
 order: 2
-index: false
+dir:
+  link: true
+  collapsible: true
+  order: 2
 icon: diagram-project
 category:
   - 算法

@@ -80,33 +80,6 @@ body.gocode-focus-reading .theme-container .vp-page [vp-content] {
   }
 }
 
-/* 资源导航页：紧凑型开发百宝箱。 */
-.theme-container:has([vp-content] .resource-grid) {
-  @media (min-width: 1440px) {
-    .vp-sidebar .vp-sidebar-links {
-      display: none;
-    }
-
-    .vp-toc-placeholder {
-      position: fixed;
-      inset-inline-start: max(1rem, calc((var(--sidebar-space) - var(--sidebar-width)) / 2 + 1rem));
-      top: calc(var(--navbar-height) + 2rem);
-      width: calc(var(--sidebar-width) - 2rem);
-      max-width: calc(var(--sidebar-width) - 2rem);
-      padding: 0;
-    }
-
-    #toc {
-      position: static;
-      min-width: 0;
-      max-width: none;
-      padding: 0.4rem 0;
-      border-radius: 8px;
-      background: transparent;
-    }
-  }
-}
-
 [vp-content]:has(.resource-grid) h2 {
   margin-top: 2.25rem;
   margin-bottom: 1rem;

@@ -23,8 +23,14 @@ export default sidebar({
 
   "/backend/": [
     {
+      text: "后端开发",
+      icon: "server",
+      link: "/backend/",
+    },
+    {
       text: "GO",
       icon: "terminal",
+      link: "/backend/go/",
       collapsible: true,
       collapsed: false,
       children: [
@@ -86,6 +92,17 @@ export default sidebar({
   "/frontend/": "structure",
   "/ai-application-development/": "structure",
   "/learning-paths/": "structure",
-  "/resources/": "structure",
+  "/resources/": [
+    { text: "资源导航", icon: "compass", link: "/resources/" },
+    { text: "常用搜索", icon: "magnifying-glass", link: "/resources/#常用搜索" },
+    { text: "编程学习", icon: "graduation-cap", link: "/resources/#编程学习" },
+    { text: "代码托管", icon: "code-branch", link: "/resources/#代码托管" },
+    { text: "官方文档", icon: "book-open", link: "/resources/#官方文档" },
+    { text: "AI 工具", icon: "robot", link: "/resources/#ai-工具" },
+    { text: "模型 API 与订阅", icon: "brain", link: "/resources/#模型-api-与订阅" },
+    { text: "云服务", icon: "cloud", link: "/resources/#云服务" },
+    { text: "建站与个人项目", icon: "blog", link: "/resources/#建站与个人项目" },
+    { text: "使用建议", icon: "lightbulb", link: "/resources/#使用建议" },
+  ],
   "/site-guide/": "structure",
 });
