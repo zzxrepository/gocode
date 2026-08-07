@@ -155,19 +155,6 @@ body.gocode-focus-reading .theme-container .vp-page [vp-content] {
   line-height: 1.55;
 }
 
-.resource-note {
-  padding: 1rem 1.1rem;
-  border: 1px solid color-mix(in srgb, #34b27b 30%, var(--vp-c-border));
-  border-radius: 8px;
-  background: color-mix(in srgb, #34b27b 8%, var(--vp-c-bg));
-}
-
-.resource-note p {
-  margin-bottom: 0;
-  color: var(--vp-c-text-mute);
-  line-height: 1.8;
-}
-
 .resource-card__mark--runoob {
   background: #eaf1ff;
   color: #2459d6;

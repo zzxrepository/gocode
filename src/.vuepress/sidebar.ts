@@ -102,7 +102,6 @@ export default sidebar({
     { text: "模型 API 与订阅", icon: "brain", link: "/resources/#模型-api-与订阅" },
     { text: "云服务", icon: "cloud", link: "/resources/#云服务" },
     { text: "建站与个人项目", icon: "blog", link: "/resources/#建站与个人项目" },
-    { text: "使用建议", icon: "lightbulb", link: "/resources/#使用建议" },
   ],
   "/site-guide/": "structure",
 });

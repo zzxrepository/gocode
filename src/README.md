@@ -119,5 +119,3 @@ highlights:
 copyright: false
 footer: Copyright © 2026 神马都会亿点点的毛毛张
 ---
-
-这里持续整理学习笔记、教程和实践经验。先从你最关心的一个栏目开始，循序渐进地构建自己的技术体系。
