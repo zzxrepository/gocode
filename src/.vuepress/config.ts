@@ -4,7 +4,7 @@ import { viteBundler } from "@vuepress/bundler-vite";
 import theme from "./theme.js";
 
 export default defineUserConfig({
-  base: "/gocode/",
+  base: "/",
 
   lang: "zh-CN",
   title: "GoCode · 毛毛张",

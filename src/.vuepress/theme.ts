@@ -4,7 +4,7 @@ import navbar from "./navbar.js";
 import sidebar from "./sidebar.js";
 
 export default hopeTheme({
-  hostname: "https://zzxrepository.github.io",
+  hostname: "https://mmzhang.cn",
 
   author: {
     name: "神马都会亿点点的毛毛张",
