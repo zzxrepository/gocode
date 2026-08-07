@@ -255,6 +255,11 @@ tag:
     <strong>GitHub Pages 文档</strong>
     <p>用中文文档查询静态网站、项目文档和个人主页托管方式。</p>
   </a>
+  <a class="resource-card" href="https://hexo.io/zh-cn/docs/" target="_blank" rel="noopener noreferrer">
+    <span class="resource-card__mark resource-card__mark--hexo">H</span>
+    <strong>Hexo 官方文档</strong>
+    <p>查询 Hexo 建站、配置、写作、主题、插件和部署相关说明。</p>
+  </a>
   <a class="resource-card" href="https://giscus.app/zh-CN" target="_blank" rel="noopener noreferrer">
     <span class="resource-card__mark resource-card__mark--giscus">Gi</span>
     <strong>Giscus</strong>
@@ -264,16 +269,6 @@ tag:
     <span class="resource-card__mark resource-card__mark--umami">U</span>
     <strong>Umami Cloud</strong>
     <p>查看站点访问统计、热门页面、来源和实时访问数据。</p>
-  </a>
-  <a class="resource-card" href="https://vercel.com/" target="_blank" rel="noopener noreferrer">
-    <span class="resource-card__mark resource-card__mark--vercel">V</span>
-    <strong>Vercel</strong>
-    <p>部署前端应用、文档站、Next.js 项目和 Serverless 服务。</p>
-  </a>
-  <a class="resource-card" href="https://www.netlify.com/" target="_blank" rel="noopener noreferrer">
-    <span class="resource-card__mark resource-card__mark--netlify">N</span>
-    <strong>Netlify</strong>
-    <p>部署静态站点、前端应用、表单和轻量后端函数。</p>
   </a>
 </div>
 
