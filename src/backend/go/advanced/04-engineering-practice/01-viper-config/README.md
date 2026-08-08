@@ -15,7 +15,7 @@ tag:
   - Go
   - Viper
   - 配置管理
-  - 第三方依赖
+  - 第三方模块
   - 工程实践
 ---
 
@@ -33,7 +33,7 @@ tag:
 
 小项目可以把这些值写死在代码里，但真实公司项目不会这么做。因为同一套代码要部署到不同环境，配置会经常变化，而代码不应该因为数据库地址、日志级别或超时时间改变就重新编译。
 
-Go 标准库可以用 `os.Getenv`、`encoding/json`、`encoding/xml` 等能力读取配置，但如果项目需要同时支持配置文件、环境变量、默认值、结构体映射和配置热加载，通常会引入第三方依赖。**Viper 就是 Go 生态里很常见的配置管理库**，它来自 `github.com/spf13/viper`，不是 Go 标准库。
+Go 标准库可以用 `os.Getenv`、`encoding/json`、`encoding/xml` 等能力读取配置，但如果项目需要同时支持配置文件、环境变量、默认值、结构体映射和配置热加载，通常会引入外部模块提供的包。**Viper 就是 Go 生态里很常见的配置管理库**，它来自模块 `github.com/spf13/viper`，不是 Go 标准库。
 
 ## Viper 适合解决什么问题
 
@@ -53,7 +53,7 @@ Viper 可以把多种配置来源统一成一套读取方式：
 
 例如本地开发时使用 `config/config.yaml`，生产环境里用 Kubernetes Secret 或发布平台注入环境变量覆盖数据库密码、Redis 地址等敏感配置。
 
-## Viper 是第三方依赖
+## Viper 是第三方模块提供的包
 
 Viper 的导入路径是：
 
@@ -61,7 +61,7 @@ Viper 的导入路径是：
 import "github.com/spf13/viper"
 ```
 
-这类不属于 Go 官方标准库的包，就是第三方包。项目使用它时，需要通过 Go Modules 管理依赖：
+从代码角度看，`github.com/spf13/viper` 是被 `import` 的包；从 Go Modules 角度看，`github.com/spf13/viper` 也是提供这个包的模块路径。项目使用它时，需要通过 Go Modules 记录模块依赖：
 
 ```bash
 go get github.com/spf13/viper
