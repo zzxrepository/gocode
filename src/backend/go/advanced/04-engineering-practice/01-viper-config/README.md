@@ -53,7 +53,7 @@ Viper 可以把多种配置来源统一成一套读取方式：
 
 例如本地开发时使用 `config/config.yaml`，生产环境里用 Kubernetes Secret 或发布平台注入环境变量覆盖数据库密码、Redis 地址等敏感配置。
 
-## Viper 是第三方模块提供的包
+## Viper 属于第三方库
 
 Viper 的导入路径是：
 
@@ -61,7 +61,7 @@ Viper 的导入路径是：
 import "github.com/spf13/viper"
 ```
 
-从代码角度看，`github.com/spf13/viper` 是被 `import` 的包；从 Go Modules 角度看，`github.com/spf13/viper` 也是提供这个包的模块路径。项目使用它时，需要通过 Go Modules 记录模块依赖：
+日常分类里，可以说 Viper 是第三方库，或者说它属于第三方库这一类。更精确地说：从代码角度看，`github.com/spf13/viper` 是被 `import` 的包；从 Go Modules 角度看，`github.com/spf13/viper` 也是提供这个包的模块路径。项目使用它时，需要通过 Go Modules 记录模块依赖：
 
 ```bash
 go get github.com/spf13/viper
