@@ -300,6 +300,12 @@ func submitProfile(w http.ResponseWriter, r *http.Request) {
 
 文件上传不能仅靠 `ParseForm` 代替大小策略。要根据文件总大小、单文件大小、允许的 MIME 类型、落盘位置和病毒扫描要求单独设计；不要把上传临时目录直接交给静态文件服务。
 
+### 请求体如何知道结束
+
+`r.Body` 是流而不是已经放在内存中的 `[]byte`。HTTP/1.1 常通过 `Content-Length` 表示正文长度；长度未知时可使用分块传输编码（chunked transfer encoding）。这些报文边界由 `net/http` 解析，业务代码只应顺序读取 `r.Body`，不要自己猜测 TCP 的一次 `Read` 对应一个完整 HTTP 请求。
+
+这也解释了两个实践规则：第一，读取不可信正文必须限制大小；第二，尽量在开始写响应前读完所需输入。对 HTTP/1.x 而言，响应已经开始发送后再读取请求体未必可行；即使协议允许，也会令错误处理变得难以保持一致。
+
 ## 响应输出：先定头和状态，再写正文
 
 `ResponseWriter` 不是可反复修改的结果对象，而是一条正在发送的字节流。正确顺序是：
@@ -340,6 +346,29 @@ mux.Handle("GET /assets/", http.StripPrefix("/assets/", files))
 ```
 
 不要使用 `http.FileServer(http.Dir("/"))`，也不要把配置、私钥、源码、用户上传临时目录放进公开静态目录。生产环境通常由 CDN 或反向代理承担静态文件与缓存，Go 服务更专注于动态接口。
+
+### Cookie、重定向与浏览器同源限制
+
+Cookie 是服务端通过 `Set-Cookie` 响应头请客户端保存的一小段数据。后续请求是否带回 Cookie，取决于域名、路径、过期时间以及 `Secure`、`SameSite` 等属性。Cookie 本身不是认证；登录服务通常把难以猜测的会话标识写入 Cookie，再由服务端查询会话或验证签名。
+
+```go
+func signIn(w http.ResponseWriter, r *http.Request) {
+	// Value 只放不敏感的会话标识；密码、完整用户资料不应直接放入 Cookie。
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_id",
+		Value:    "opaque-session-id",
+		Path:     "/",          // 整个站点的请求都可携带它。
+		HttpOnly: true,         // 浏览器中的 JavaScript 无法读取，降低 XSS 泄露风险。
+		Secure:   true,         // 生产环境仅通过 HTTPS 发送；本地 HTTP 调试时需另行处理。
+		SameSite: http.SameSiteLaxMode, // 限制跨站请求自动携带的时机，缓解 CSRF 风险。
+	})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "signed in"})
+}
+```
+
+重定向是服务端返回 `Location` 头和 3xx 状态码。`303 See Other` 常用于表单 POST 后跳到一个 GET 页面；`307 Temporary Redirect` 和 `308 Permanent Redirect` 要求客户端保留原方法与正文，不能把它们与 `302` 混为一谈。是否跟随重定向是客户端策略，不是服务端能强制保证的行为。
+
+浏览器还执行同源策略：一个网页不能任意读取其他源的响应。CORS 是服务端通过 `Access-Control-Allow-Origin` 等响应头对浏览器授权的机制；它不保护非浏览器客户端，也不能代替身份认证。只为明确的可信前端源设置 CORS，避免盲目返回 `*` 与凭据组合。
 
 ## 完整服务端示例：文章 API
 
@@ -683,6 +712,10 @@ func TestCreateArticle(t *testing.T) {
 
 源码用于解释实现，不是应用应依赖的内部契约。以下片段均来自 Go 1.26.5，省略了日志、错误退避和协议分支。
 
+### 1. `ListenAndServe` 只负责建立监听器
+
+`http.ListenAndServe(":8080", h)` 是方便函数。它构造 `Server` 并调用 `Server.ListenAndServe`；后者用 `net.Listen("tcp", addr)` 建立监听器，最后进入 `Server.Serve`。因此端口、TLS、连接状态和优雅关闭等生产配置需要显式创建 `http.Server`，而不是期待 `HandleFunc` 本身管理它们。
+
 服务端的 `Server.Serve` 循环接收连接，并为连接启动 `conn.serve`。HTTP/1.x 的同一连接可依次处理多个请求；HTTP/2 的多路复用则由相应协议实现接管。
 
 ```go
@@ -699,7 +732,22 @@ for {
 }
 ```
 
-`conn.serve` 完成报文解析后，关键的请求收尾顺序如下：
+每一条连接一个 goroutine，不等于“每一个 Handler 总是一个 goroutine”。HTTP/2 在一条连接中可以并发处理多个请求流；无论协议版本如何，Handler 都必须按可并发调用来设计。`Server` 的 `ConnState` 回调可观察 `StateNew`、`StateActive`、`StateIdle`、`StateClosed` 等变化，适合连接指标，不适合承载业务状态。
+
+### 2. `conn.serve` 负责解析、调用与收尾
+
+`conn.serve` 在循环中读取请求行和头部，构造 `Request` 与内部 `response`，然后才调用 Handler。把它缩成步骤表更容易理解：
+
+| 顺序 | 标准库动作 | 应用层含义 |
+| --- | --- | --- |
+| 1 | 从连接读取并解析 HTTP 报文 | 不要自行按 TCP 包边界切请求 |
+| 2 | 为请求建立可取消 Context | 下游调用必须接收 `r.Context()` |
+| 3 | `ServeMux` 选择目标 Handler | 404/405 属于路由层语义 |
+| 4 | Handler 写 `ResponseWriter` | 头、状态码、正文只能顺序提交 |
+| 5 | 取消请求 Context、刷新响应 | 返回后不可继续使用请求对象的 I/O 部分 |
+| 6 | 判断连接能否复用 | 不可复用则关闭，否则等待下一请求 |
+
+完成报文解析后，关键的请求收尾顺序如下：
 
 ```go
 // src/net/http/server.go：一条 HTTP/1.x 请求的核心收尾顺序。
@@ -713,6 +761,14 @@ w.finishRequest() // 刷新响应并完成本次请求的服务端收尾。
 ```
 
 这解释了两个边界：`ServeHTTP` 返回后不能继续使用 `ResponseWriter` 或并发读取 `Request.Body`；想做异步任务时，应先复制并校验必要数据，再给任务独立的 Context、错误处理和持久化策略。
+
+### 3. `ServeMux` 不是按注册顺序的 `if` 链
+
+Go 1.26.5 的路由实现位于 `routing_tree.go`。路由树先按 host 分支，再按 method 分支，最后逐段匹配路径；字面路径段比 `{name}` 单段通配符更具体，`{name...}` 多段通配符最宽。这解释了为什么 `GET /articles/latest` 能优先于 `GET /articles/{id}`，也解释了为什么标准库能在“路径存在但方法不匹配”时给出 `405` 和 `Allow`，而不是把它误判为 `404`。
+
+路由树是实现细节，应用不应依赖其节点结构；可靠的使用方式是让模式表达资源和方法，让 Handler 专注输入校验、授权和业务逻辑。模式冲突会在注册阶段 panic，这比运行时随机选中一个 Handler 更早暴露接口设计问题。
+
+### 4. 响应为何只能向前写
 
 响应只能“向前写”的规则也能在源码中看到。下面是 Go 1.26.5 `response.WriteHeader` 的关键判断，省略了协议检查、日志和 header clone：
 
@@ -730,6 +786,41 @@ func (w *response) WriteHeader(code int) {
 ```
 
 `response.write` 在发现 `w.wroteHeader` 仍为 false 时会先写入 `StatusOK`，随后才写正文。这正是 `Write` 默认得到 `200`、以及响应头必须在首次写正文前设置的实现原因。业务代码不应依赖 `response` 这个内部类型；应依赖 `ResponseWriter` 文档承诺的写入顺序。
+
+当没有明确 `Content-Length` 时，标准库会根据协议和响应大小决定如何界定正文；HTTP/1.1 可能使用 chunked 编码，HTTP/2 使用帧而非文本 chunk。业务 Handler 不应手动设置 `Transfer-Encoding` 或复制 `Content-Length`，除非确实理解代理、压缩、流式传输后的语义。
+
+### 5. `Shutdown` 如何等待连接离场
+
+`Server.Shutdown` 的源码首先将 `inShutdown` 置为 true，锁住服务端状态并关闭所有 listener，使正在 `Accept` 的循环返回；随后关闭空闲连接，并轮询等待活跃连接转为空闲或关闭。核心骨架如下：
+
+```go
+func (s *Server) Shutdown(ctx context.Context) error {
+	s.inShutdown.Store(true) // 后续 Serve/ListenAndServe 不再继续提供新服务。
+
+	s.mu.Lock()
+	lnerr := s.closeListenersLocked() // 让阻塞中的 Accept 尽快返回。
+	s.mu.Unlock()
+	// 真实源码使用递增轮询间隔；此处用固定间隔保留核心等待语义。
+	timer := time.NewTimer(time.Millisecond)
+	defer timer.Stop()
+
+	for {
+		if s.closeIdleConns() {
+			return lnerr // 没有活跃 HTTP 连接时才真正完成。
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err() // 调用方决定最长等待时间。
+		case <-timer.C:
+			timer.Reset(time.Millisecond) // 继续检查：活跃请求可能刚好结束。
+		}
+	}
+}
+```
+
+这也是完整示例必须等待 `ListenAndServe` 返回 `ErrServerClosed` 的原因：关闭监听器不等于所有 Handler 都已结束。`Shutdown` 不会替业务取消自建 goroutine，也不会自动等待 Hijack 连接；这些资源的生命周期只能由应用定义。
+
+### 6. `Transport` 怎样得到并归还连接
 
 客户端的连接复用也不是 `Client` 自己完成的，而是由底层 `Transport` 管理。它持有按目标地址分组的 `idleConn`，请求需要连接时先尝试取得空闲连接；请求完成且连接仍可复用时，再将其放回池中。
 
@@ -754,7 +845,9 @@ sequenceDiagram
     T->>P: 可复用时归还连接
 ```
 
-Go 1.26.5 的 `Transport` 中确实以 `idleConn map[connectMethodKey][]*persistConn` 保存空闲连接；这就是“长期复用 Client”的直接实现原因。应用只需要依赖公开承诺：`Client` 和 `Transport` 支持并发使用，且应复用。
+Go 1.26.5 的 `Transport` 中确实以 `idleConn map[connectMethodKey][]*persistConn` 保存空闲连接。`connectMethodKey` 区分 scheme、目标地址和代理条件，避免错误地把不同目的地的连接混用；`getConn` 先尝试交付空闲连接，不存在时才异步拨号，`persistConn.roundTrip` 协调写请求与读响应，符合条件的连接最终由 `tryPutIdleConn` 放回池中。这就是“长期复用 Client”的直接实现原因。
+
+客户端若没有读到响应体结尾或关闭 `resp.Body`，`Transport` 无法安全判断连接是否已经到达下一条响应的边界，通常就不能归还这条连接。关闭响应体既是资源释放，也是连接池正确性的条件之一。
 
 ## 容易出错的边界
 
