@@ -23,21 +23,15 @@ tag:
 
 ## 前言
 
-写后端服务时，配置这件事很容易被低估。
+后端服务跑起来之前，通常先要知道这些信息：
 
-刚开始写 demo，端口、数据库地址、日志级别都可以直接写在代码里。代码跑起来了，心里还挺踏实。但服务一旦要分本地、测试、预发、生产环境，问题就来了：
+- 服务监听哪个端口。
+- 日志级别是什么。
+- MySQL、Redis、MQ、下游服务地址分别是什么。
+- 当前环境是本地、测试、预发还是生产。
+- 敏感信息应该从哪里读取。
 
-```text
-本地数据库地址是一套
-测试环境数据库地址是一套
-生产环境数据库地址又是一套
-日志级别不同
-Redis 地址不同
-外部服务地址不同
-密码和 Token 还不能提交到 Git 仓库
-```
-
-这时候如果还把配置写死在代码里，就会很难维护。同一份业务代码应该在不同环境里复用，变化的部分交给配置。
+这时候如果还把配置写死在代码里，就会很难维护。因为同一套代码要部署到不同环境，配置会经常变化，而代码不应该因为数据库地址、日志级别或超时时间改变就重新编译。
 
 Go 标准库当然能读配置，比如 `os.Getenv` 读环境变量，`encoding/json` 解析 JSON 文件。但真实项目里常见的需求往往不止这些：
 
@@ -46,57 +40,53 @@ Go 标准库当然能读配置，比如 `os.Getenv` 读环境变量，`encoding/
 3. 代码里要有默认值兜底。
 4. 最后还要转成结构体，方便后续初始化 DB、Redis、HTTP Server。
 
-Viper 解决的就是这类问题。它不是 Go 标准库，而是 Go 生态里很常见的第三方配置管理库，模块路径是：
+**Viper 解决的就是这类问题。它不是 Go 标准库，而是 Go 生态里很常见的第三方配置管理库，模块路径是**：
 
 ```text
 github.com/spf13/viper
 ```
 
-包、模块和依赖管理的基础可以先看 [包与 Go Modules](/backend/go/basic/12-packages-and-modules/)。
+## Viper 适合解决什么问题
 
-## Viper 到底帮我们做了什么
+Viper 可以把多种配置来源统一成一套读取方式：
 
-先不要急着记 API。可以先把 Viper 理解成一个“配置汇总器”。
+- 默认值：代码里兜底。
+- 配置文件：例如 YAML、JSON、TOML。
+- 环境变量：适合容器和生产环境。
+- 命令行参数：适合 CLI 程序。
+- 远程配置中心：更复杂的场景可以接入。
 
-它把不同来源的配置收进来，然后按照优先级给业务代码一个统一的读取入口。
-
-常见来源有这些：
-
-```text
-默认值
-配置文件
-环境变量
-命令行参数
-远程配置中心
-```
-
-Web 服务里最常见的一套组合是：
+在 Web 服务里，最常见的是：
 
 ```text
 默认值 + YAML 配置文件 + 环境变量覆盖
 ```
 
-比如本地开发时用 `config/config.yaml`。到了生产环境，数据库 DSN、Redis 地址、日志级别这类配置由发布平台、Kubernetes Secret 或环境变量注入。
+例如本地开发时使用 `config/config.yaml`，生产环境里用 Kubernetes Secret 或发布平台注入环境变量覆盖数据库密码、Redis 地址等敏感配置。
 
-这一层关系大概是：
+## 服务项目中的配置分层
+
+以订单服务 `order-service` 为例，它在线上通常会运行在 Kubernetes 或发布平台上。常见的配置分层是：
 
 ```text
 代码默认值
   ↓
-config.yaml
+配置文件 config.yaml
   ↓
 环境变量覆盖
 ```
 
-这样做有一个很朴素的好处：配置怎么变，代码都不用重新编译。
+为什么要这样设计？
 
-## 一个订单服务的配置例子
+- 默认值保证服务在本地能快速启动。
+- 配置文件保存非敏感配置，例如端口、日志级别、超时时间。
+- 环境变量覆盖敏感或环境相关配置，例如数据库 DSN、Redis 地址、外部服务地址。
 
-下面用一个很小的 `order-service` 来串一下。这个 demo 不追求复杂，重点看清楚三件事：
+生产环境里尤其不要把密码、Token、数据库连接串直接提交进 Git 仓库。它们通常来自 Secret、环境变量或配置中心。
 
-1. 怎么读 YAML。
-2. 怎么让环境变量覆盖 YAML。
-3. 怎么把配置映射到 Go 结构体。
+## Demo：订单服务读取配置
+
+这个 Demo 模拟一个订单服务，启动时读取配置，并把配置映射到结构体中。
 
 目录结构：
 
@@ -108,7 +98,7 @@ order-service/
 └── main.go
 ```
 
-初始化项目：
+### 初始化项目
 
 ```bash
 mkdir order-service
@@ -117,29 +107,31 @@ go mod init example.com/order-service
 go get github.com/spf13/viper
 ```
 
-后面的代码里会直接使用 `fsnotify`，写完 `main.go` 后执行：
+写完下面的 `main.go` 后执行：
 
 ```bash
+# 将 main.go 直接导入的 fsnotify 一并写入 go.mod，并清理依赖。
 go mod tidy
 ```
 
-## 配置文件
-
-先写一份本地开发用的配置。
+### 编写配置文件
 
 `config/config.yaml`：
 
 ```yaml
+# 可提交的应用默认配置；敏感信息由环境变量在部署时覆盖。
 app:
   name: order-service
   env: local
 
+# HTTP 服务的监听地址和超时设置。
 server:
   addr: ":8080"
   read_timeout: 3s
   write_timeout: 3s
 
 mysql:
+  # 本地开发 DSN；生产环境使用 ORDER_MYSQL_DSN 覆盖。
   dsn: "root:root@tcp(127.0.0.1:3306)/order?parseTime=true&loc=Local"
   max_open_conns: 50
   max_idle_conns: 10
@@ -152,9 +144,9 @@ log:
   level: info
 ```
 
-这份文件里放的是本地默认值。真实生产环境里的密码、Token、AK/SK 不应该提交到 Git 仓库，它们更适合通过环境变量、Secret 或配置中心注入。
+这份配置可以提交到仓库，因为它只保存本地开发默认值。生产环境里的 MySQL DSN、Redis 地址和日志级别可以通过环境变量覆盖。
 
-## Go 代码
+### 编写 Go 代码
 
 `main.go`：
 
@@ -173,6 +165,8 @@ import (
 )
 
 type Config struct {
+	// Config 是服务启动后传递给各组件的完整配置。
+	// mapstructure 标签把 YAML 的顶层键映射到对应字段。
 	App    AppConfig    `mapstructure:"app"`
 	Server ServerConfig `mapstructure:"server"`
 	MySQL  MySQLConfig  `mapstructure:"mysql"`
@@ -181,42 +175,53 @@ type Config struct {
 }
 
 type AppConfig struct {
+	// Name 和 Env 对应 app.name、app.env。
 	Name string `mapstructure:"name"`
 	Env  string `mapstructure:"env"`
 }
 
 type ServerConfig struct {
+	// Duration 字段接收 YAML 中的 "3s" 这类字符串。
+	// Viper 在 Unmarshal 时会借助 mapstructure 的解码钩子完成转换。
 	Addr         string        `mapstructure:"addr"`
 	ReadTimeout  time.Duration `mapstructure:"read_timeout"`
 	WriteTimeout time.Duration `mapstructure:"write_timeout"`
 }
 
 type MySQLConfig struct {
+	// DSN 通常由生产环境变量覆盖，避免把凭据写进配置文件。
 	DSN          string `mapstructure:"dsn"`
 	MaxOpenConns int    `mapstructure:"max_open_conns"`
 	MaxIdleConns int    `mapstructure:"max_idle_conns"`
 }
 
 type RedisConfig struct {
+	// Redis 的地址和逻辑库编号对应 redis.* 配置。
 	Addr string `mapstructure:"addr"`
 	DB   int    `mapstructure:"db"`
 }
 
 type LogConfig struct {
+	// Level 对应 log.level，可作为适合热更新的配置示例。
 	Level string `mapstructure:"level"`
 }
 
 func main() {
+	// 应用启动阶段集中读取、转换并校验配置；失败时直接退出，
+	// 避免服务启动后才因错误配置处理到一半的请求。
 	cfg, err := LoadConfig("./config")
 	if err != nil {
 		log.Fatalf("load config failed: %v", err)
 	}
 
+	// 将已校验的配置注入 HTTP 服务，而不是让处理函数直接读取 Viper。
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		// 健康检查只暴露应用身份和运行环境，不返回任何连接凭据。
 		fmt.Fprintf(w, "service=%s env=%s\n", cfg.App.Name, cfg.App.Env)
 	})
 
+	// 超时来自配置，服务进程会持续运行，因此文件监听可以收到后续变更。
 	server := &http.Server{
 		Addr:         cfg.Server.Addr,
 		Handler:      mux,
@@ -231,22 +236,25 @@ func main() {
 }
 
 func LoadConfig(configPath string) (*Config, error) {
-	// 不直接使用 viper 全局实例，是为了避免测试或多个配置模块互相影响。
+	// 使用独立实例，避免 viper 全局实例被其他包或测试相互污染。
 	v := viper.New()
 
-	// 这三行组合起来，表示去 ./config 目录下找 config.yaml。
+	// config + yaml + ./config 会让 Viper 查找 ./config/config.yaml。
 	v.SetConfigName("config")
 	v.SetConfigType("yaml")
 	v.AddConfigPath(configPath)
 
+	// 先注册低优先级默认值，再注册可覆盖它们的环境变量。
 	setDefaults(v)
 	bindEnvs(v)
 
+	// 读取并解析 YAML，解析结果先保存到 Viper 的内部配置映射中。
 	if err := v.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("read config file: %w", err)
 	}
 
 	var cfg Config
+	// Unmarshal 按 Viper 的优先级合并各来源，再映射为强类型结构体。
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("unmarshal config: %w", err)
 	}
@@ -255,13 +263,14 @@ func LoadConfig(configPath string) (*Config, error) {
 		return nil, err
 	}
 
-	// 这里只演示监听配置变更。注意：已经返回出去的 cfg 不会自动变化。
+	// 这里只演示监听和记录变更；返回的 cfg 不会自动被修改。
 	watchConfig(v)
 
 	return &cfg, nil
 }
 
 func setDefaults(v *viper.Viper) {
+	// 默认值只在其他来源没有提供同名键时生效。
 	v.SetDefault("app.env", "local")
 	v.SetDefault("server.addr", ":8080")
 	v.SetDefault("server.read_timeout", "3s")
@@ -273,10 +282,14 @@ func setDefaults(v *viper.Viper) {
 }
 
 func bindEnvs(v *viper.Viper) {
+	// app.env 会映射为 ORDER_APP_ENV；点号转换为下划线。
 	v.SetEnvPrefix("ORDER")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	// 开启按需查询环境变量，而不是在启动时复制整个系统环境。
 	v.AutomaticEnv()
 
+	// 对需要 Unmarshal 到结构体的关键键显式绑定，
+	// 这样 Viper 能把这些环境变量纳入结构体解码的键集合。
 	mustBindEnv(v, "app.env")
 	mustBindEnv(v, "mysql.dsn")
 	mustBindEnv(v, "redis.addr")
@@ -284,12 +297,14 @@ func bindEnvs(v *viper.Viper) {
 }
 
 func mustBindEnv(v *viper.Viper, key string) {
+	// key 是固定的代码常量；绑定失败意味着程序配置写错，直接终止更合适。
 	if err := v.BindEnv(key); err != nil {
 		panic(fmt.Sprintf("bind env %s: %v", key, err))
 	}
 }
 
 func validateConfig(cfg *Config) error {
+	// 在启动期校验连接所需的关键配置，避免运行期才暴露错误。
 	if cfg.App.Name == "" {
 		return fmt.Errorf("app.name is required")
 	}
@@ -306,10 +321,14 @@ func validateConfig(cfg *Config) error {
 }
 
 func watchConfig(v *viper.Viper) {
+	// 先注册回调，再开始监听，避免监听刚启动时遗漏处理逻辑。
 	v.OnConfigChange(func(e fsnotify.Event) {
+		// Viper 已重新读取文件；业务组件若要动态生效，
+		// 还需要在这里安全地更新日志器、开关或连接池。
 		log.Printf("config file changed: %s", e.Name)
 	})
 
+	// Viper 通过 fsnotify 监听配置文件所在目录，以兼容原子替换文件的写入方式。
 	v.WatchConfig()
 }
 ```
@@ -322,9 +341,9 @@ func watchConfig(v *viper.Viper) {
 
 第三，`watchConfig` 这里只打印变更，不假装热加载已经生效。Viper 能监听文件变化，但业务组件要不要动态更新，是另外一回事。
 
-## 运行一下
+### 启动服务
 
-直接使用配置文件启动：
+直接使用配置文件：
 
 ```bash
 go run .
@@ -336,7 +355,7 @@ go run .
 starting service addr=:8080 log=info
 ```
 
-另开一个终端访问健康检查：
+服务保持运行后，在另一个终端验证健康检查：
 
 ```bash
 curl http://127.0.0.1:8080/healthz
@@ -346,7 +365,7 @@ curl http://127.0.0.1:8080/healthz
 service=order-service env=local
 ```
 
-如果想模拟生产环境，可以用环境变量覆盖配置：
+用环境变量覆盖配置：
 
 ```bash
 ORDER_APP_ENV=prod \
@@ -356,15 +375,16 @@ ORDER_MYSQL_DSN='order_app:secret@tcp(mysql.prod.svc.cluster.local:3306)/order?p
 go run .
 ```
 
-环境变量为什么是这些名字？来自这三行：
+这里的环境变量命名规则来自这段配置：
 
 ```go
+// 设置环境变量前缀，所有变量以 ORDER_ 开头。
 v.SetEnvPrefix("ORDER")
+// 将配置键中的点号转换为环境变量常用的下划线。
 v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-v.AutomaticEnv()
 ```
 
-`ORDER` 是统一前缀，点号会被替换成下划线，所以映射关系是：
+所以：
 
 ```text
 app.env     -> ORDER_APP_ENV
@@ -373,81 +393,107 @@ redis.addr  -> ORDER_REDIS_ADDR
 log.level   -> ORDER_LOG_LEVEL
 ```
 
-这样生产环境就可以在不改配置文件、不重新编译代码的情况下，把敏感配置注入进来。
+## 配置加载的工程化设计
 
-## 顺着 Viper 的源码思路看一遍
+真实项目里，配置读取通常不是随手 `viper.GetString("mysql.dsn")` 到处写，而是启动时统一读取，再转换成强类型结构体：
 
-只会用 API 还不太够。Viper 有几个行为刚开始容易迷糊，比如环境变量为什么能覆盖配置文件、`Unmarshal` 为什么有时读不到环境变量、热加载为什么没有自动改掉已经返回的结构体。
+这样做有几个好处：
 
-这些问题顺着它的设计看就清楚很多。
+- 配置字段集中管理，便于代码审查。
+- 编译器能帮忙检查字段类型。
+- 服务启动时可以统一校验必填项。
+- 后续初始化 DB、Redis、HTTP Server 时，只需要传结构体。
 
-一个 `*viper.Viper` 实例内部会维护多类配置来源。可以先抽象成这样：
+在服务项目中，配置通常会继续拆分到 `internal/config` 包里，然后由 `main` 负责加载：
 
 ```text
-defaults   SetDefault 写入的默认值
-config     ReadInConfig 解析出来的配置文件内容
-env        BindEnv 记录的环境变量绑定关系
+cmd/order-service/main.go
+internal/config/config.go
+internal/server/server.go
+internal/repository/mysql.go
+```
+
+`main` 是装配入口，负责加载配置、初始化日志、连接数据库、启动 HTTP 服务。业务代码不应该直接依赖 Viper，否则配置读取逻辑会散落在各处。
+
+## Viper 的读取机制
+
+理解 Viper 的源码结构后，就能知道前面这些调用分别在做什么。Viper 并不是“把 YAML 直接填进结构体”的单一解析器；一个 `*viper.Viper` 实例同时保存配置文件、默认值、显式覆盖值、环境变量绑定、命令行参数等多个来源。
+
+### 配置先进入不同的来源层
+
+`viper.New()` 会初始化多组内部映射。可以把它抽象为：
+
+```text
+defaults   代码默认值
+config     配置文件解析后的值
+env        配置键到环境变量名的绑定关系
 pflags     命令行参数
-override   Set 显式写入的覆盖值
+override   调用 Set 写入的显式覆盖值
 ```
 
-比如：
+例如 `SetDefault("log.level", "info")` 写入 `defaults`；`ReadInConfig()` 找到 `config.yaml` 后，按 YAML 解析并写入 `config`；`BindEnv("log.level")` 则记录 `log.level` 应查询哪个环境变量。
 
-```go
-v.SetDefault("log.level", "info")
-```
+### 读取时按优先级查找
 
-写入的是默认值层。
-
-```go
-v.ReadInConfig()
-```
-
-会找到 `config.yaml`，解析后写入配置文件层。
-
-```go
-v.BindEnv("log.level")
-```
-
-不是立刻读取环境变量，而是记录：以后读取 `log.level` 时，记得去环境变量里找一找。
-
-## 配置读取的优先级
-
-Viper 读取某个 key 时，会按优先级一层层找。简化一下，大概是：
+当 Viper 读取一个键时，内部会按优先级逐层查找。简化后的逻辑如下，代码中的注释对应每一层的目的：
 
 ```go
 func find(key string) any {
+	// 业务代码显式 Set 的值拥有最高优先级。
 	if value := override[key]; value != nil {
 		return value
 	}
 
+	// 已被修改过的命令行参数覆盖后续来源。
 	if value := changedFlagValue(key); value != nil {
 		return value
 	}
 
+	// 环境变量通常承载部署环境差异和敏感信息。
 	if value := lookupEnv(key); value != nil {
 		return value
 	}
 
+	// 配置文件保存可版本管理的基础配置。
 	if value := configFileValue(key); value != nil {
 		return value
 	}
 
+	// 远程键值存储适合由配置中心提供动态配置。
 	if value := remoteStoreValue(key); value != nil {
 		return value
 	}
 
+	// 代码默认值是最后的后备来源。
 	return defaultValue(key)
 }
 ```
 
-本文 demo 里只用了三层，所以可以先记成：
+因此本文 Demo 中 `ORDER_LOG_LEVEL=warn` 会覆盖 YAML 里的 `log.level: info`。完整优先级还包括远程键值存储；本文只使用默认值、配置文件和环境变量三层。
+
+### `Unmarshal` 为什么能得到强类型配置
+
+`Unmarshal(&cfg)` 不是只读取 YAML。Viper 会先收集已知键，再按上述优先级得到一份合并后的设置，最后交给 `mapstructure` 解码到 `Config`。`mapstructure:"read_timeout"` 这类标签负责字段名匹配，Viper 默认的解码钩子还能把 `"3s"` 转成 `time.Duration`。
+
+这里显式调用 `BindEnv` 很重要：`AutomaticEnv()` 只是在每次读取键时尝试查询匹配的环境变量，并不会把整个系统环境预先复制进配置映射。对需要直接 `Unmarshal` 的关键键进行绑定，能让它们稳定进入结构体解码流程。
+
+### 热加载实际做了什么
+
+`WatchConfig()` 使用 `fsnotify` 监听配置文件所在目录。检测到写入、创建或原子替换后，Viper 会再次执行 `ReadInConfig()` 更新自己的 `config` 映射，再调用 `OnConfigChange` 注册的回调。
+
+这解释了前面代码里的限制：回调发生时，Viper 的内部数据已经更新，但 `LoadConfig` 返回的 `cfg` 仍是原来的 Go 结构体。要让日志级别或功能开关真正热更新，应用还需要重新解码并以线程安全的方式把新配置交给对应组件。
+
+## Viper 的配置覆盖顺序
+
+Viper 支持多种配置来源。常见情况下，环境变量会覆盖配置文件，配置文件会覆盖默认值。
+
+在这个 Demo 里可以理解为：
 
 ```text
 环境变量 > config.yaml > 默认值
 ```
 
-例如配置文件里是：
+例如 `config.yaml` 里写的是：
 
 ```yaml
 log:
@@ -460,110 +506,21 @@ log:
 ORDER_LOG_LEVEL=warn go run .
 ```
 
-最终读到的就是 `warn`。
-
-这也是 Viper 最实用的地方：基础配置可以放文件，环境差异和敏感信息交给部署系统。
-
-## 为什么要 BindEnv
-
-这里有个容易踩的点：`AutomaticEnv()` 和 `Unmarshal()` 的关系。
-
-`AutomaticEnv()` 的意思是：当你读取某个 key 时，Viper 会尝试去系统环境变量里找对应的值。
-
-但它不会在启动时把整个系统环境变量都复制进 Viper 的配置映射里。也就是说，如果你希望环境变量稳定参与结构体解码，最好对关键 key 显式 `BindEnv`：
-
-```go
-mustBindEnv(v, "app.env")
-mustBindEnv(v, "mysql.dsn")
-mustBindEnv(v, "redis.addr")
-mustBindEnv(v, "log.level")
-```
-
-这就是为什么 demo 里既写了 `AutomaticEnv()`，又写了 `BindEnv()`。前者负责按需查环境变量，后者让这些 key 在结构体映射时更稳定。
-
-## Unmarshal 做了什么
-
-`Unmarshal(&cfg)` 不是简单地把 YAML 填进结构体。
-
-更接近真实情况的是：
+最终读到的就是：
 
 ```text
-先收集已知配置 key
-按优先级合并不同来源的值
-再交给 mapstructure 解码到结构体
+warn
 ```
 
-结构体字段上的标签：
-
-```go
-Server ServerConfig `mapstructure:"server"`
-ReadTimeout time.Duration `mapstructure:"read_timeout"`
-```
-
-是给 `mapstructure` 用的。它负责把 YAML 里的 `server.read_timeout` 映射到 Go 结构体字段上。
-
-像 `3s` 这种字符串能转成 `time.Duration`，也是 Viper 配合 `mapstructure` 解码钩子完成的。
-
-所以，如果项目配置越来越多，不建议到处 `GetString`、`GetInt`。统一 `Unmarshal` 成结构体，后续读起来更清楚，也方便校验。
-
-## 热加载不是自动生效
-
-`WatchConfig()` 背后使用 `fsnotify` 监听配置文件变化。文件变了以后，Viper 会重新读取配置，并触发 `OnConfigChange` 注册的回调。
-
-但有个关键点：Viper 内部配置更新了，不代表你已经返回出去的 `cfg` 结构体也自动更新了。
-
-前面代码里：
-
-```go
-cfg, err := LoadConfig("./config")
-```
-
-`cfg` 是一个普通 Go 结构体指针。`WatchConfig()` 后面监听到文件变化，并不会自动改这个结构体。
-
-所以热加载要分情况看：
-
-1. 日志级别、功能开关这类配置，可以在回调里重新解码并安全更新。
-2. 数据库连接池、Redis 客户端这类资源型配置，通常不能只改字段，往往需要重新初始化。
-3. HTTP 监听端口这类配置，一般更适合重启服务生效。
-
-Viper 负责发现配置变了，真正让配置安全生效，是应用自己要处理的工程问题。
-
-## 真实项目里怎么放
-
-真实服务里，不建议让业务层直接依赖 Viper。更常见的目录是：
-
-```text
-cmd/order-service/main.go
-internal/config/config.go
-internal/server/server.go
-internal/repository/mysql.go
-```
-
-`internal/config` 负责读取、解析、校验配置。`main` 负责把配置传给日志、数据库、HTTP Server 等组件。
-
-业务代码最好依赖已经解析好的结构体：
-
-```go
-type Repository struct {
-	dsn string
-}
-```
-
-而不是在业务函数里写：
-
-```go
-viper.GetString("mysql.dsn")
-```
-
-原因也很简单：配置读取一旦散落在业务代码里，测试不好写，依赖关系也不清楚。启动时集中读取，后面显式传递，项目会更稳。
+这正是生产环境常用的方式：基础配置放文件，环境差异和敏感信息由发布系统注入。
 
 ## 常见坑
 
 ### 不要把密码提交进仓库
 
-`config.yaml` 可以放本地默认值，但生产密码、Token、AK/SK 不要写进 Git 仓库。
+配置文件可以放默认值，但生产密码、Token、AK/SK 不要写进 Git 仓库。
 
-更推荐：
+推荐：
 
 ```text
 本地默认配置：config.yaml
@@ -575,6 +532,7 @@ viper.GetString("mysql.dsn")
 不要在业务代码里到处写：
 
 ```go
+// 业务层直接读取全局配置，会让依赖关系分散且难以测试。
 viper.GetString("mysql.dsn")
 ```
 
@@ -587,6 +545,7 @@ viper.GetString("mysql.dsn")
 例如数据库 DSN 为空时，启动阶段就应该返回错误：
 
 ```go
+// 启动期发现必填项为空时立即返回，阻止服务带病启动。
 if cfg.MySQL.DSN == "" {
 	return fmt.Errorf("mysql.dsn is required")
 }
@@ -596,35 +555,35 @@ if cfg.MySQL.DSN == "" {
 
 Viper 可以监听配置文件变化，但不是所有配置都适合热加载。
 
-日志级别、功能开关可以考虑动态调整。数据库连接池、服务监听端口这类配置，通常要重新初始化资源，甚至直接重启服务更稳。
+例如日志级别可以动态调整，功能开关也可以动态调整；但数据库连接池、服务监听端口这类配置，通常需要重新初始化资源，不能只打印一条“配置变了”就算生效。
 
 ## 什么时候不用 Viper
 
 Viper 很方便，但不是所有项目都需要它。
 
-如果只是一个很小的命令行工具，只读两三个环境变量，用标准库就够了：
+如果只是一个很小的工具程序，只读两三个环境变量，用标准库就够了：
 
 ```go
+// 小型程序直接读取一个环境变量时，标准库已经足够。
 dsn := os.Getenv("MYSQL_DSN")
 ```
 
-如果是 Web 服务、后台任务、微服务项目，并且需要同时支持配置文件、环境变量、默认值和结构体映射，Viper 会更省心。
+如果是 Web 服务、后台任务、微服务项目，并且需要同时支持配置文件和环境变量，Viper 会更省心。
 
 ## 总结
 
-Viper 的价值不是“帮你读取 YAML”这么简单。
+Viper 是 Go 生态中常用的第三方配置管理库。它适合把默认值、配置文件、环境变量等来源整合起来，再映射成强类型结构体。
 
-它真正适合解决的是：一个服务在不同环境下，如何把默认值、配置文件、环境变量等来源合并起来，再交给业务代码使用。
+真实项目里推荐这样使用：
 
-这篇文章里可以先记住这条线：
+- 配置读取集中放在 `internal/config`。
+- 默认值写在代码里兜底。
+- 非敏感配置写在 YAML 文件里。
+- 敏感配置通过环境变量、Secret 或配置中心注入。
+- 启动时统一校验配置。
+- 业务代码依赖配置结构体，而不是直接依赖 Viper。
 
-1. 默认值负责兜底。
-2. YAML 负责保存可提交的基础配置。
-3. 环境变量负责覆盖环境差异和敏感信息。
-4. `Unmarshal` 负责把配置转成结构体。
-5. 业务代码尽量依赖结构体，而不是直接依赖 Viper。
-
-最后再记一句话：Viper 负责把配置读进来，真正让配置可维护、可校验、可部署，靠的是项目里的工程约束。
+记住一句话：**Viper 负责把配置读进来，工程实践负责让配置可维护、可校验、可部署。**
 
 ## 参考资料
 
