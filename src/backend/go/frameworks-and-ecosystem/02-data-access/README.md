@@ -13,11 +13,14 @@ category:
   - 数据访问
 tag:
   - Go
+  - MySQL
+  - sqlx
   - ORM
   - GORM
+  - Redis
   - 数据库
 ---
 
 # 02. 数据访问
 
-这里整理数据库访问与 ORM 相关内容。从 GORM 开始，介绍模型定义、查询、事务、迁移和常见的工程边界；`database/sql` 的标准库基础位于“Golang 进阶知识 → 标准库”。
+Go 程序访问数据存储时，需要处理驱动、连接池、查询、事务、模型映射和缓存一致性等问题。本专题涵盖 MySQL 驱动、`sqlx`、GORM 与 Redis 客户端的使用边界。

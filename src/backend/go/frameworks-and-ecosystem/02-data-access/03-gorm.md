@@ -1,8 +1,8 @@
 ---
 permalink: /backend/go/frameworks-and-ecosystem/02-data-access/01-gorm/
-title: 01. GORM：模型映射、CRUD 与事务
-shortTitle: 01. GORM
-order: 1
+title: 03. GORM：模型映射、CRUD 与事务
+shortTitle: 03. GORM
+order: 3
 category:
   - Go
   - Golang 框架与生态
@@ -16,7 +16,7 @@ tag:
   - 事务
 ---
 
-# 01. GORM：模型映射、CRUD 与事务
+# 03. GORM：模型映射、CRUD 与事务
 
 ## 前言
 
