@@ -1,7 +1,7 @@
 ---
 permalink: /backend/go/advanced/02-concurrency/03-select/
-title: 03. Select：等待多个事件
-shortTitle: 03. Select
+title: 03. select：处理多个并发事件
+shortTitle: 03. select
 order: 3
 category:
   - Go
@@ -10,20 +10,21 @@ category:
 tag:
   - Go
   - select
+  - Channel
   - context
-  - timeout
+  - 超时
   - 并发编程
 ---
 
-# 03. Select：等待多个事件
+# 03. select：处理多个并发事件
 
 ## 前言
 
-服务端等待的通常不止一个事件：下游结果可能先返回，客户端可能断开，请求可能超时，服务也可能正在关闭。`select` 让一个 goroutine 同时等待多个 channel 操作，谁先就绪就处理谁。
+一个服务调用多个下游时，主流程不只是在等“一个结果”：报价可能先返回，库存服务可能超时，用户可能已经断开连接。若只写 `<-resultCh`，程序只能等固定的一个 Channel；`select` 让一个 goroutine 同时等待多个发送或接收事件。
 
-它不是 `switch` 的并发版。`switch` 判断普通值；`select` 判断发送或接收能否立即进行。把取消和超时写进 `select`，才能让并发程序在不再需要结果时及时收尾。
+`select` 不是 `switch` 的并发版，也不是拿来轮询状态的语法糖。它的价值在于把“结果到了、超时了、该取消了”放在同一个等待点中处理。
 
-## 基本规则
+## `select` 的基本规则
 
 ```go
 select {
@@ -34,16 +35,18 @@ case <-ctx.Done():
 }
 ```
 
-- 没有 case 就绪时，`select` 阻塞。
-- 多个 case 同时就绪时，语言规范会在可执行 case 中做均匀伪随机选择；不要把它当作优先级或公平性保证。
-- `default` 会让没有 case 就绪的 `select` 立即返回；循环中滥用它会形成忙等并占满 CPU。
+- 所有 `case` 必须是 Channel 的发送或接收操作；
+- 如果至少一个通信操作可以立刻进行，运行时会从可执行的分支中选择一个；不要依赖多个就绪分支的固定顺序；
+- 如果没有分支可执行且没有 `default`，当前 goroutine 阻塞；
+- 有 `default` 时会立刻执行它，因此常用于非阻塞尝试，也最容易写出空转循环；
+- `nil` Channel 的分支永远不会就绪，可以用来动态禁用一个分支。
 
-## 真实场景：聚合下游结果并处理超时
+## 场景：并发询价，但受请求截止时间约束
 
-订单确认页需要同时查询库存、运费和优惠。每个异步任务只会产生一个结果，因此结果 channel 设为容量 1：即使调用方超时返回，刚结束的生产者也不会卡在发送处。
+下面的聚合接口同时向三个供应商询价。任何一个供应商返回后，结果都会送入同一个 `quotes` Channel；主流程等待全部结果，或在请求超时后立刻停止等待。
 
 ```go
-package checkout
+package pricing
 
 import (
 	"context"
@@ -51,117 +54,155 @@ import (
 	"time"
 )
 
-type Result[T any] struct {
-	Value T
-	Err   error
+type Provider interface {
+	Name() string
+	Quote(ctx context.Context, sku string) (int64, error)
 }
 
-// async 将一个阻塞调用变成“一次结果”的 channel。
-func async[T any](ctx context.Context, fn func(context.Context) (T, error)) <-chan Result[T] {
-	resultCh := make(chan Result[T], 1)
-
-	go func() {
-		value, err := fn(ctx)
-		// 容量为 1 保证调用方提前退出时，这个单次发送仍可完成并让 goroutine 结束。
-		resultCh <- Result[T]{Value: value, Err: err}
-	}()
-	return resultCh
+type quoteResult struct {
+	provider string
+	price    int64
+	err      error
 }
 
-type Summary struct {
-	StockOK bool
-	Freight int64
-	Discount int64
-}
-
-func LoadSummary(parent context.Context, productID, userID int64) (Summary, error) {
+// CollectQuotes 在调用方的 deadline 内收集所有供应商报价。
+func CollectQuotes(parent context.Context, providers []Provider, sku string) ([]quoteResult, error) {
 	ctx, cancel := context.WithTimeout(parent, 800*time.Millisecond)
-	defer cancel() // 返回后通知仍在运行的下游调用尽快停止。
+	defer cancel() // 返回后通知尚未结束的下游调用停止。
 
-	stockCh := async(ctx, func(ctx context.Context) (bool, error) {
-		return queryStock(ctx, productID)
-	})
-	freightCh := async(ctx, func(ctx context.Context) (int64, error) {
-		return queryFreight(ctx, productID)
-	})
-	discountCh := async(ctx, func(ctx context.Context) (int64, error) {
-		return queryDiscount(ctx, userID)
-	})
+	quotes := make(chan quoteResult, len(providers))
+	for _, provider := range providers {
+		go func(provider Provider) {
+			price, err := provider.Quote(ctx, sku)
+			// 缓冲区足够容纳每个任务一个结果；主流程超时返回后，发送方不会被卡住。
+			quotes <- quoteResult{provider: provider.Name(), price: price, err: err}
+		}(provider)
+	}
 
-	var summary Summary
-	for received := 0; received < 3; received++ {
+	results := make([]quoteResult, 0, len(providers))
+	for received := 0; received < len(providers); {
 		select {
-		case result := <-stockCh:
-			if result.Err != nil {
-				return Summary{}, fmt.Errorf("查询库存: %w", result.Err)
+		case result := <-quotes:
+			received++
+			if result.err != nil {
+				return nil, fmt.Errorf("供应商 %s 询价: %w", result.provider, result.err)
 			}
-			summary.StockOK = result.Value
-		case result := <-freightCh:
-			if result.Err != nil {
-				return Summary{}, fmt.Errorf("查询运费: %w", result.Err)
-			}
-			summary.Freight = result.Value
-		case result := <-discountCh:
-			if result.Err != nil {
-				return Summary{}, fmt.Errorf("查询优惠: %w", result.Err)
-			}
-			summary.Discount = result.Value
+			results = append(results, result)
 		case <-ctx.Done():
-			return Summary{}, fmt.Errorf("加载结算信息: %w", ctx.Err())
+			return nil, fmt.Errorf("询价超时: %w", ctx.Err())
 		}
 	}
-	return summary, nil
+	return results, nil
 }
 ```
 
-示例中的 `queryStock` 等函数必须把 `ctx` 继续传给 HTTP、RPC 或数据库调用。否则 `cancel()` 只能让外层返回，不能停止真正耗时的下游操作。
+这里的 `context` 与 `select` 各有职责：`context` 把取消信号传给 `Quote` 及其 HTTP、数据库调用；`select` 让当前函数不必傻等结果，而是在取消发生时立即返回。只在外层 `select` 超时、却不把 `ctx` 传给下游，往往仍会留下继续运行的 goroutine。
 
-## `time.After` 和超时控制
+## 超时：优先复用调用方的 `context`
 
-临时等待一个事件可以写成：
+HTTP handler、RPC handler 和数据库操作通常已经拿到了一个 `context`。给当前操作设定时限时，派生一个更短的 context 即可：
+
+```go
+ctx, cancel := context.WithTimeout(request.Context(), 200*time.Millisecond)
+defer cancel() // 及时释放计时器并传播取消。
+
+select {
+case response := <-responseCh:
+	return response, nil
+case <-ctx.Done():
+	return Response{}, ctx.Err()
+}
+```
+
+`time.After` 也能产生一个到期信号，适合一次性的小示例：
 
 ```go
 select {
-case message := <-messages:
-	consume(message)
-case <-time.After(200 * time.Millisecond):
-	return ErrTimeout
+case value := <-resultCh:
+	return value
+case <-time.After(time.Second):
+	return fallback
 }
 ```
 
-但在请求处理或循环中，更推荐从入口创建一个 `context.WithTimeout` 并一路传递。这样 HTTP、数据库和业务循环都共享同一份截止时间，避免每层各自设置计时器而出现总耗时失控。
+但业务调用通常不应只靠它。`time.After` 只能让当前 `select` 放弃等待，不能自动停止正在执行的 HTTP 请求、数据库查询或 goroutine；可取消的 `context` 才能把停止意图继续向下传递。
 
-## 如何安全地退出循环
+## 在循环中退出 `select`
 
-关闭的 channel 会一直处于可接收状态。若在循环里继续保留它，`select` 会反复选中该 case，读到元素零值。收到关闭信号后，应返回、跳出循环，或把对应 channel 设为 `nil` 以禁用该 case。
+`break` 默认只跳出 `select`，不会跳出外层 `for`。事件循环需要结束时，使用具名标签更清晰：
 
 ```go
-for updates != nil {
+loop:
+	for {
+		select {
+		case message, ok := <-messages:
+			if !ok {
+				break loop // 跳出 for，而不是只跳出 select。
+			}
+			handle(message)
+		case <-ctx.Done():
+			break loop
+		}
+	}
+```
+
+已关闭的 Channel 会不断立即返回零值，因此若一个循环还要继续监听其他 Channel，应在确认关闭后将变量设为 `nil`：
+
+```go
+for updates != nil || errors != nil {
 	select {
 	case update, ok := <-updates:
 		if !ok {
-			updates = nil // nil channel 永远不会就绪，等价于移除此 case。
+			updates = nil // 禁用这个 case，避免已关闭 Channel 持续抢占执行机会。
 			continue
 		}
-		handle(update)
-	case <-ctx.Done():
-		return ctx.Err()
+		apply(update)
+	case err, ok := <-errors:
+		if !ok {
+			errors = nil
+			continue
+		}
+		logError(err)
 	}
 }
 ```
 
-## 从实现理解 `select`
+## `default` 的适用边界
 
-运行时会先检查各个通信 case 是否可执行；如果都不可执行，就把当前 goroutine 登记到相关 channel 的等待队列并挂起。任一通信成功后，运行时唤醒该 goroutine，并清理它在其他等待队列中的登记。
+`default` 表示“当前没有任何通信可以立刻完成时，不阻塞”。它适合尝试投递一个可丢弃的通知：
 
-这也是为什么一个 `select` 同时监听多个 channel 是可行的，但把它包在带 `default` 的无限循环里会很危险：运行时没有机会挂起当前 goroutine，代码会不停空转。
+```go
+select {
+case metrics <- event:
+	// 指标队列有空间，正常投递。
+default:
+	// 指标不能影响主请求；队列满时允许丢弃并记录监控。
+}
+```
+
+不要在无限循环中无条件使用 `default`：
+
+```go
+// 错误示例：没有消息时会持续占用 CPU。
+for {
+	select {
+	case message := <-messages:
+		handle(message)
+	default:
+	}
+}
+```
+
+如果确实是轮询任务，通常应等待 ticker，而不是忙等。
 
 ## 总结
 
-`select` 是并发程序的事件协调器。优先把请求取消和截止时间放进 case；对关闭的 channel 明确退出或禁用；不要依赖 case 的执行顺序，也不要用 `default` 轮询代替真正的等待。这样多个异步结果、超时和服务退出才能被清晰地编排在同一个控制流中。
+`select` 让一个 goroutine 能等待多个 Channel 事件。它最常用于结果聚合、请求取消、超时和事件循环。使用时要明确下游任务的停止方式，避免已关闭 Channel 反复触发，谨慎使用 `default`，并在循环中用标签或返回语句真正退出。
+
+至此，并发这一组建立了完整顺序：goroutine 负责启动任务，Channel 负责传递数据和结束信号，`select` 负责在多个可能发生的事件之间作出响应。
 
 ## 参考资料
 
-- [Go 语言规范：Select statements](https://go.dev/ref/spec#Select_statements)
+- [Go 语言规范：Select 语句](https://go.dev/ref/spec#Select_statements)
 - [context 包文档](https://pkg.go.dev/context)
-- [select 运行时实现：runtime/select.go](https://go.dev/src/runtime/select.go)
+- [Go 官方：Pipelines and cancellation](https://go.dev/blog/pipelines)

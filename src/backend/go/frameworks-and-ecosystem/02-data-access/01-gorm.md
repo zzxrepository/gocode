@@ -1,6 +1,6 @@
 ---
 permalink: /backend/go/frameworks-and-ecosystem/02-data-access/01-gorm/
-title: 01. GORM：模型、查询与事务
+title: 01. GORM：模型映射、CRUD 与事务
 shortTitle: 01. GORM
 order: 1
 category:
@@ -12,27 +12,28 @@ tag:
   - GORM
   - ORM
   - MySQL
+  - CRUD
   - 事务
 ---
 
-# 01. GORM：模型、查询与事务
+# 01. GORM：模型映射、CRUD 与事务
 
 ## 前言
 
-GORM 是 Go 生态中常用的第三方 ORM（对象关系映射）库。它能把结构体、查询条件和关联关系映射为 SQL，减少重复的扫描与拼接代码。但 ORM 并不会替你设计索引、判断事务边界或修复慢查询。
+GORM 是 Go 生态中的第三方 ORM。它把结构体、查询条件和关联关系映射为 SQL，能减少常规 CRUD 的样板代码；它不是数据库，也不能替业务决定索引、锁、事务边界或数据迁移方案。
 
-GORM 的底层仍使用 Go 的 `database/sql` 连接池和数据库驱动。因此推荐的学习顺序是：先掌握 [`database/sql`](/backend/go/advanced/01-standard-library/04-database-sql/)，再用 GORM 提高常见数据访问的表达效率。本文统一使用传统 API，避免和泛型 API 混用。
+GORM 的数据库驱动和连接池仍落在 [`database/sql`](/backend/go/advanced/01-standard-library/04-database-sql/) 上。理解 SQL、连接池和事务边界，才能看清 ORM 如何组织这些能力，而不是把链式 API 当成魔法。
 
 ## 安装与初始化
 
-以 MySQL 为例：
+以 MySQL 为例，需要 GORM 核心模块和 MySQL dialect：
 
 ```bash
 go get gorm.io/gorm
 go get gorm.io/driver/mysql
 ```
 
-应用启动时只初始化一次 `*gorm.DB`，并通过 `db.DB()` 取得底层 `*sql.DB` 配置连接池。
+应用启动时初始化一次 `*gorm.DB`，再通过 `DB()` 取得底层 `*sql.DB` 配置连接池：
 
 ```go
 package store
@@ -49,14 +50,14 @@ import (
 func OpenMySQL(dsn string) (*gorm.DB, error) {
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {
-		return nil, fmt.Errorf("打开 GORM: %w", err)
+		return nil, fmt.Errorf("open GORM: %w", err)
 	}
 
 	sqlDB, err := db.DB()
 	if err != nil {
-		return nil, fmt.Errorf("获取底层连接池: %w", err)
+		return nil, fmt.Errorf("get underlying sql.DB: %w", err)
 	}
-	// 连接池由 database/sql 管理，参数应结合实例数和数据库容量评估。
+	// 连接池属于 database/sql；这些参数必须结合压测和数据库容量确定。
 	sqlDB.SetMaxOpenConns(30)
 	sqlDB.SetMaxIdleConns(10)
 	sqlDB.SetConnMaxIdleTime(5 * time.Minute)
@@ -66,17 +67,17 @@ func OpenMySQL(dsn string) (*gorm.DB, error) {
 	defer cancel()
 	if err := sqlDB.PingContext(ctx); err != nil {
 		_ = sqlDB.Close()
-		return nil, fmt.Errorf("检查数据库连接: %w", err)
+		return nil, fmt.Errorf("ping database: %w", err)
 	}
 	return db, nil
 }
 ```
 
-DSN、用户名和密码应来自配置或密钥管理系统，不能写死在源码或提交到仓库。
+DSN 中的账号和密码来自配置或密钥管理系统，不能写进源码和仓库。进程退出时关闭的是 `sqlDB`，而不是每次请求后关闭 `*gorm.DB`。
 
-## 模型不是数据库设计的替代品
+## 模型描述映射，不替代数据库设计
 
-以下模型描述订单创建场景。显式声明关键约束，避免让读者猜测数据库意图。
+下面的模型对应商品和订单。GORM 会按约定把 `ProductID` 映射为 `product_id`，也可以用 tag 明确约束与索引意图。
 
 ```go
 type Product struct {
@@ -87,39 +88,93 @@ type Product struct {
 
 type Order struct {
 	ID        uint64    `gorm:"primaryKey"`
-	ProductID uint64    `gorm:"not null;index"`
+	ProductID uint64    `gorm:"not null;index"` // 订单按商品查询时需要索引。
 	Quantity  int       `gorm:"not null"`
 	Status    string    `gorm:"size:32;not null"`
-	CreatedAt time.Time // GORM 按约定映射为 created_at 并在创建时写入。
+	CreatedAt time.Time // 按约定映射为 created_at，并在创建时写入。
 }
 ```
 
-开发环境可以用 `AutoMigrate` 创建缺失的表、列和索引：
+`AutoMigrate` 可以在本地开发时创建缺失表、列和索引：
 
 ```go
 if err := db.AutoMigrate(&Product{}, &Order{}); err != nil {
-	return fmt.Errorf("迁移表结构: %w", err)
+	return fmt.Errorf("migrate schema: %w", err)
 }
 ```
 
-生产表结构变更应采用版本化迁移脚本并经过评审。`AutoMigrate` 不会替代灰度、数据回填、索引评估和回滚方案。
+生产环境的表结构变更仍应使用版本化迁移：评审 SQL、评估锁表时间、安排回填和回滚。模型 tag 不能替代这些工作。
 
-## 真实场景：创建订单并原子扣减库存
-
-“扣库存”和“写订单”必须同时成功或同时失败。下面的 `Transaction` 回调返回 `nil` 时提交，返回错误时回滚；事务内部只能使用回调参数 `tx`。
+## 常规 CRUD：每次操作都检查结果
 
 ```go
-var ErrInsufficientStock = errors.New("商品不存在或库存不足")
+func CreateProduct(ctx context.Context, db *gorm.DB, product *Product) error {
+	// WithContext 把请求取消和截止时间传给本次数据库操作。
+	return db.WithContext(ctx).Create(product).Error
+}
+
+func FindProduct(ctx context.Context, db *gorm.DB, productID uint64) (Product, error) {
+	var product Product
+	err := db.WithContext(ctx).First(&product, productID).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return Product{}, fmt.Errorf("product %d not found", productID)
+	}
+	if err != nil {
+		return Product{}, fmt.Errorf("find product: %w", err)
+	}
+	return product, nil
+}
+
+func ListCreatedOrders(ctx context.Context, db *gorm.DB, productID uint64) ([]Order, error) {
+	var orders []Order
+	err := db.WithContext(ctx).
+		Where("product_id = ? AND status = ?", productID, "created"). // 参数值仍要使用占位符。
+		Order("id DESC").
+		Limit(50).
+		Find(&orders).Error
+	return orders, err
+}
+```
+
+创建、查询、更新、删除等终结操作之后都要检查 `Error`。更新和删除还常常要检查 `RowsAffected`，它决定“目标不存在”是否应被视为业务错误。
+
+## 零值更新是 GORM 的常见误区
+
+结构体作为更新值时，GORM 默认会跳过零值。`false`、`0` 和空字符串本来可能是你想写入的值，却可能被省略。对 HTTP 请求这类外部输入，使用 `map` 或 `Select` 明确允许更新的字段更安全：
+
+```go
+result := db.WithContext(ctx).
+	Model(&Order{}).
+	Where("id = ?", orderID).
+	Updates(map[string]any{
+		"status": "cancelled", // map 会保留零值，也避免整块请求结构体被意外写入。
+	})
+if result.Error != nil {
+	return result.Error
+}
+if result.RowsAffected == 0 {
+	return fmt.Errorf("order %d not found", orderID)
+}
+```
+
+参数化同样不是可选项。`Where("id = ?", id)` 会绑定值；动态列名、排序字段和 SQL 片段无法由占位符保护，必须映射到代码白名单，不能直接写成 `Order(userInput)`。
+
+## 事务：ORM 语法没有改变事务原则
+
+创建订单仍然需要原子扣库存。`Transaction` 回调返回 `nil` 时提交，返回错误时回滚；回调中的每一条操作都必须使用 `tx`。
+
+```go
+var ErrInsufficientStock = errors.New("product not found or insufficient stock")
 
 func CreateOrder(ctx context.Context, db *gorm.DB, productID uint64, quantity int) (uint64, error) {
 	if quantity <= 0 {
-		return 0, errors.New("购买数量必须大于 0")
+		return 0, errors.New("quantity must be positive")
 	}
 
 	var order Order
 	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		result := tx.Model(&Product{}).
-			// 条件与扣减放在同一条 UPDATE 中，防止“先查再扣”的并发超卖。
+			// 把条件和扣减合为一条 UPDATE，避免“先查再扣”的并发超卖。
 			Where("id = ? AND stock >= ?", productID, quantity).
 			Update("stock", gorm.Expr("stock - ?", quantity))
 		if result.Error != nil {
@@ -130,77 +185,35 @@ func CreateOrder(ctx context.Context, db *gorm.DB, productID uint64, quantity in
 		}
 
 		order = Order{ProductID: productID, Quantity: quantity, Status: "created"}
-		if err := tx.Create(&order).Error; err != nil {
-			return err
-		}
-		return nil
+		return tx.Create(&order).Error // 使用 tx，不能换回外层 db。
 	})
 	if err != nil {
-		return 0, fmt.Errorf("创建订单: %w", err)
+		return 0, fmt.Errorf("create order: %w", err)
 	}
 	return order.ID, nil
 }
 ```
 
-这段代码的正确性来自数据库条件更新和事务，而不是来自 GORM 语法。即使用原生 SQL，边界也完全相同。
+这里的正确性来自事务和 SQL 条件更新，不来自 GORM 的链式写法。即使改写为 `database/sql`，业务边界仍然一样。
 
-## 查询、更新与零值
+## GORM 从调用到 SQL 做了什么
 
-查询用户输入时始终使用占位符：
+链式调用会把模型、条件、排序、上下文等信息累积到本次操作的 `Statement` 中。遇到 `Find`、`Create`、`Updates` 等终结方法后，GORM 的回调链根据模型和 dialect 生成 SQL，再交给底层连接池执行，最后把扫描结果、`Error` 和 `RowsAffected` 回填到 `*gorm.DB`。
 
-```go
-func FindOrders(ctx context.Context, db *gorm.DB, productID uint64) ([]Order, error) {
-	var orders []Order
-	err := db.WithContext(ctx).
-		Where("product_id = ?", productID). // 参数值由驱动绑定，不拼接到 SQL 字符串中。
-		Order("id DESC").
-		Limit(50).
-		Find(&orders).Error
-	return orders, err
-}
-```
+这解释了三个工程习惯：
 
-结构体作为条件或更新值时，GORM 默认忽略零值。这对 `false`、`0` 和空字符串尤其容易造成误解。更新接口更适合使用 `map` 明确列出允许写入的列：
-
-```go
-result := db.WithContext(ctx).
-	Model(&Order{}).
-	Where("id = ?", orderID).
-	Updates(map[string]any{
-		"status": "cancelled", // map 会保留零值；这里也避免把整个请求结构体写入数据库。
-	})
-if result.Error != nil {
-	return result.Error
-}
-if result.RowsAffected == 0 {
-	return errors.New("订单不存在")
-}
-```
-
-动态排序字段、列名和 SQL 片段不能用占位符绑定，必须由代码白名单决定。`Order(userInput)` 不是安全的输入处理方式。
-
-## GORM 在执行什么
-
-链式调用会逐步构造本次操作的模型、条件、排序和上下文；`Find`、`Create`、`Updates`、`Delete` 等终结操作再进入对应回调链。GORM 根据 `Statement` 中的信息生成 SQL，交给 dialect 和底层连接池执行，最后把结果扫描回结构体并填充 `Error`、`RowsAffected` 等字段。
-
-因此要养成三个习惯：
-
-1. 每次终结操作后检查 `Error`，更新和删除还要按业务需要检查 `RowsAffected`。
-2. 请求处理入口传入的 `ctx` 要通过 `WithContext` 传到查询和事务。
-3. 用日志、慢查询和执行计划观察真实 SQL；ORM 不能自动保证索引正确或查询高效。
-
-## 什么时候用 GORM，什么时候直接写 SQL
-
-GORM 适合常规 CRUD、模型关联、条件组合和统一的数据访问约定。复杂报表、数据库特有函数、性能敏感批处理或需要精确控制 SQL 时，可以使用 `Raw`、`Exec` 或直接使用 `database/sql`。两者不是互斥关系；关键是保持参数绑定、事务边界和可观测性。
+1. 开发时开启适量 SQL 日志，确认 ORM 实际发出了什么查询；生产环境控制日志量并结合慢查询观测。
+2. 复杂报表、数据库特有函数或性能敏感批处理可以使用 `Raw`、`Exec`，必要时直接使用 `database/sql`。
+3. ORM 生成 SQL 不等于 SQL 一定高效。索引、执行计划、锁等待和事务隔离仍要在数据库层验证。
 
 ## 总结
 
-GORM 是第三方 ORM，不是 Web 框架，也不是 `database/sql` 的替代品。它通过模型和链式 API 降低常见数据访问的样板代码，但连接池仍由底层 `database/sql` 管理，事务和索引仍是业务与数据库共同的责任。把 context、条件更新、错误检查和版本化迁移落实好，GORM 才会真正提升开发效率。
+GORM 是建立在 `database/sql` 和数据库驱动之上的第三方 ORM。它擅长模型映射和常规 CRUD，但连接池、请求 context、参数绑定、事务和索引仍需要应用明确管理。把 ORM 当成一种表达 SQL 的工具，而不是替你承担数据库设计的黑盒，才能在项目中用得稳。
 
 ## 参考资料
 
 - [GORM 官方文档](https://gorm.io/docs/)
 - [GORM：连接数据库](https://gorm.io/docs/connecting_to_the_database.html)
-- [GORM：Context](https://gorm.io/docs/context.html)
+- [GORM：查询](https://gorm.io/docs/query.html)
 - [GORM：事务](https://gorm.io/docs/transactions.html)
-- [GORM 核心回调实现](https://github.com/go-gorm/gorm/blob/master/callbacks.go)
+- [GORM 源码：回调注册](https://github.com/go-gorm/gorm/blob/master/callbacks.go)

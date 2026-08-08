@@ -1,6 +1,6 @@
 ---
 permalink: /backend/go/advanced/01-standard-library/04-database-sql/
-title: 04. database/sql：关系型数据库访问
+title: 04. database/sql：连接池、查询与事务
 shortTitle: 04. database/sql
 order: 4
 category:
@@ -16,27 +16,24 @@ tag:
   - 标准库
 ---
 
-# 04. database/sql：关系型数据库访问
+# 04. database/sql：连接池、查询与事务
 
 ## 前言
 
-`database/sql` 是 Go 标准库提供的关系型数据库访问接口。它定义连接池、查询、事务和行扫描等通用能力，但不直接实现 MySQL、PostgreSQL 或 SQLite 协议；具体数据库由驱动提供。
+`database/sql` 是 Go 标准库的关系型数据库访问层。它不认识 MySQL、PostgreSQL 或 SQLite 的网络协议；它定义统一的查询、事务和连接池接口，再由具体数据库驱动完成协议实现。
 
-因此，`database/sql` 应放在“标准库”。GORM 则是更高层的第三方 ORM，适合放在“框架与生态 → 数据访问”。先理解 `database/sql` 的连接池、context、事务和资源释放，使用 GORM 时才不会把 ORM 当成黑盒。
+GORM 等 ORM 的数据库驱动和连接池仍建立在这层能力之上。理解 `*sql.DB`、`*sql.Rows` 和 `*sql.Tx` 的资源边界，才能在 ORM 出现问题时知道该往哪里排查。
 
-## 三层关系：应用、标准库和驱动
+## 应用、标准库与驱动的关系
 
 ```text
 业务代码
-  ↓ 调用 QueryContext / ExecContext / BeginTx
-database/sql（标准库：统一接口与连接池）
-  ↓ driver.Driver / driver.Connector
-MySQL、PostgreSQL 等数据库驱动（第三方模块）
-  ↓
-数据库服务
+  -> database/sql：连接池、Query/Exec、事务接口
+  -> 数据库驱动：把调用转换为 MySQL、PostgreSQL 等协议
+  -> 数据库服务
 ```
 
-以 MySQL 为例，驱动需要通过空白导入完成注册：
+以 MySQL 为例，驱动是第三方模块，需要单独安装：
 
 ```bash
 go get github.com/go-sql-driver/mysql
@@ -45,13 +42,16 @@ go get github.com/go-sql-driver/mysql
 ```go
 import (
 	"database/sql"
-	_ "github.com/go-sql-driver/mysql" // 只执行驱动的 init 注册，不直接调用其导出标识符。
+
+	_ "github.com/go-sql-driver/mysql" // 仅执行驱动 init，将 "mysql" 注册给 database/sql。
 )
 ```
 
-## 初始化的是连接池，不是“一条连接”
+空白导入不是“没有使用的导入”。驱动在初始化时向 `database/sql` 注册名称，之后 `sql.Open("mysql", dsn)` 才知道该使用哪个驱动。
 
-`sql.Open` 返回的 `*sql.DB` 是数据库句柄和连接池，适合在应用启动时创建一次并复用。`Open` 不保证已经建立可用连接，启动检查应使用带超时的 `PingContext`。
+## `sql.DB` 是连接池，不是一条数据库连接
+
+`sql.Open` 返回的 `*sql.DB` 是可以被多个 goroutine 共享的数据库句柄和连接池。它不保证此刻已经连上数据库，因此启动阶段还应调用 `PingContext` 做连通性检查。
 
 ```go
 package store
@@ -68,10 +68,10 @@ import (
 func OpenMySQL(dsn string) (*sql.DB, error) {
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("创建数据库句柄: %w", err)
+		return nil, fmt.Errorf("open database handle: %w", err)
 	}
 
-	// 这些值必须结合数据库容量、实例数和压测结果配置，不能照抄固定数字。
+	// 这些数值不是通用答案，要结合实例数量、数据库上限和压测结果调整。
 	db.SetMaxOpenConns(30)
 	db.SetMaxIdleConns(10)
 	db.SetConnMaxIdleTime(5 * time.Minute)
@@ -80,18 +80,41 @@ func OpenMySQL(dsn string) (*sql.DB, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	if err := db.PingContext(ctx); err != nil {
-		_ = db.Close() // 初始化失败时释放已创建的连接池资源。
-		return nil, fmt.Errorf("检查数据库连接: %w", err)
+		_ = db.Close() // 初始化失败也要释放已经创建的连接池。
+		return nil, fmt.Errorf("ping database: %w", err)
 	}
 	return db, nil
 }
 ```
 
-进程退出时调用一次 `db.Close()`，停止连接池接收新请求并释放空闲连接；不要在每个 HTTP 请求结束时关闭 `*sql.DB`。
+应用启动时创建一次，进程退出时关闭一次：
 
-## 真实场景：查询订单与扣减库存
+```go
+db, err := OpenMySQL(dsn)
+if err != nil {
+	return err
+}
+defer db.Close() // 只在应用生命周期结束时关闭，不要每个请求都 Close。
+```
 
-单行查询使用 `QueryRowContext`，错误会在 `Scan` 时返回。多行查询使用 `QueryContext`，必须关闭 `Rows` 并在循环后检查 `Rows.Err()`。
+把 `MaxOpenConns` 设得过小会让请求等待连接；设得过大则可能让多个服务实例压垮数据库。观察 `db.Stats()`、慢查询和数据库连接数，再做调整。
+
+## 三种最常用的 SQL 调用
+
+假设有一张订单表：
+
+```sql
+CREATE TABLE orders (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  product_id BIGINT NOT NULL,
+  quantity INT NOT NULL,
+  status VARCHAR(32) NOT NULL
+);
+```
+
+### 查询一行：`QueryRowContext`
+
+`QueryRowContext` 的错误会在 `Scan` 时返回。查询不到记录时，使用 `errors.Is(err, sql.ErrNoRows)` 判断，而不是比较错误字符串。
 
 ```go
 type Order struct {
@@ -111,25 +134,96 @@ func FindOrder(ctx context.Context, db *sql.DB, orderID int64) (Order, error) {
 	err := db.QueryRowContext(ctx, query, orderID).Scan(
 		&order.ID, &order.ProductID, &order.Quantity, &order.Status,
 	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Order{}, fmt.Errorf("order %d not found", orderID)
+	}
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return Order{}, fmt.Errorf("订单 %d 不存在", orderID)
-		}
-		return Order{}, fmt.Errorf("查询订单: %w", err)
+		return Order{}, fmt.Errorf("query order: %w", err)
 	}
 	return order, nil
 }
+```
 
+### 查询多行：`QueryContext`
+
+`QueryContext` 返回 `*sql.Rows`，必须关闭。循环结束后还要检查 `Rows.Err()`，因为迭代过程中的网络或驱动错误会在那里出现。
+
+```go
+func ListCreatedOrders(ctx context.Context, db *sql.DB, limit int) ([]Order, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT id, product_id, quantity, status
+		FROM orders
+		WHERE status = ?
+		ORDER BY id DESC
+		LIMIT ?`, "created", limit)
+	if err != nil {
+		return nil, fmt.Errorf("query orders: %w", err)
+	}
+	defer rows.Close() // 归还查询占用的连接和结果集资源。
+
+	orders := make([]Order, 0)
+	for rows.Next() {
+		var order Order
+		if err := rows.Scan(&order.ID, &order.ProductID, &order.Quantity, &order.Status); err != nil {
+			return nil, fmt.Errorf("scan order: %w", err)
+		}
+		orders = append(orders, order)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate orders: %w", err)
+	}
+	return orders, nil
+}
+```
+
+### 修改数据：`ExecContext`
+
+`INSERT`、`UPDATE`、`DELETE` 通常用 `ExecContext`。返回的 `sql.Result` 可取得受影响行数；是否需要 `LastInsertId` 取决于驱动和数据库。
+
+```go
+result, err := db.ExecContext(ctx,
+	`UPDATE orders SET status = ? WHERE id = ?`, "cancelled", orderID)
+if err != nil {
+	return fmt.Errorf("cancel order: %w", err)
+}
+affected, err := result.RowsAffected()
+if err != nil {
+	return fmt.Errorf("read affected rows: %w", err)
+}
+if affected == 0 {
+	return fmt.Errorf("order %d not found or unchanged", orderID)
+}
+```
+
+## 参数绑定不是可选项
+
+占位符把 SQL 结构与数据值分开，避免用户输入改变 SQL 的语义：
+
+```go
+// 正确：orderID 是参数值，不会被拼接到 SQL 文本中。
+row := db.QueryRowContext(ctx, "SELECT status FROM orders WHERE id = ?", orderID)
+
+// 错误：不要用 fmt.Sprintf 或字符串拼接用户输入。
+// query := fmt.Sprintf("SELECT status FROM orders WHERE id = %s", userInput)
+```
+
+MySQL 常用 `?`，PostgreSQL 常用 `$1`、`$2`。占位符只能代替值，不能代替表名、列名和排序方向；这些 SQL 结构若必须动态变化，只能由代码白名单决定。
+
+## 事务：同一业务原子操作使用同一个 `*sql.Tx`
+
+创建订单时，“扣库存”和“插订单”必须同时成功或同时失败。事务开始后，所有语句都必须通过 `tx` 执行，不能混入外层 `db`。
+
+```go
 func CreateOrder(ctx context.Context, db *sql.DB, productID int64, quantity int) (int64, error) {
 	if quantity <= 0 {
-		return 0, fmt.Errorf("数量必须大于 0")
+		return 0, errors.New("quantity must be positive")
 	}
 
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
-		return 0, fmt.Errorf("开启事务: %w", err)
+		return 0, fmt.Errorf("begin transaction: %w", err)
 	}
-	// Commit 成功后 Rollback 会返回 sql.ErrTxDone，可安全忽略；异常路径则确保回滚。
+	// Commit 成功后 Rollback 会返回 sql.ErrTxDone，可以忽略；异常路径则会真正回滚。
 	defer tx.Rollback()
 
 	result, err := tx.ExecContext(ctx,
@@ -137,14 +231,14 @@ func CreateOrder(ctx context.Context, db *sql.DB, productID int64, quantity int)
 		quantity, productID, quantity,
 	)
 	if err != nil {
-		return 0, fmt.Errorf("扣减库存: %w", err)
+		return 0, fmt.Errorf("decrease stock: %w", err)
 	}
 	affected, err := result.RowsAffected()
 	if err != nil {
-		return 0, fmt.Errorf("读取扣减结果: %w", err)
+		return 0, fmt.Errorf("read stock update result: %w", err)
 	}
 	if affected != 1 {
-		return 0, fmt.Errorf("商品不存在或库存不足")
+		return 0, errors.New("product not found or insufficient stock")
 	}
 
 	result, err = tx.ExecContext(ctx,
@@ -152,64 +246,34 @@ func CreateOrder(ctx context.Context, db *sql.DB, productID int64, quantity int)
 		productID, quantity, "created",
 	)
 	if err != nil {
-		return 0, fmt.Errorf("创建订单: %w", err)
+		return 0, fmt.Errorf("insert order: %w", err)
 	}
 	orderID, err := result.LastInsertId()
 	if err != nil {
-		return 0, fmt.Errorf("读取订单 ID: %w", err)
+		return 0, fmt.Errorf("read order id: %w", err)
 	}
-
 	if err := tx.Commit(); err != nil {
-		return 0, fmt.Errorf("提交事务: %w", err)
+		return 0, fmt.Errorf("commit transaction: %w", err)
 	}
 	return orderID, nil
 }
 ```
 
-库存条件写在同一条 `UPDATE` 中，避免“先查库存、再扣减”之间被其他请求抢走库存。事务内的所有 SQL 必须通过 `tx` 执行；混用外层 `db` 会让语句跑到另一个连接上，破坏原子性。
+把库存判断放进同一条 `UPDATE`，避免“先查询库存、再扣减”之间被其他并发请求抢走库存。事务保证多个操作的原子边界，条件更新处理的是并发竞争条件，两者缺一不可。
 
-## 参数、空值与资源释放
+## `database/sql` 在内部负责什么
 
-SQL 参数必须使用占位符，不能用 `fmt.Sprintf` 或字符串拼接：
+每次 `QueryContext`、`ExecContext` 或 `BeginTx` 都会向 `*sql.DB` 借一个可用连接；操作完成、`Rows.Close`、事务提交或回滚后，连接才有机会回到池中。`context` 到期时，标准库会尝试让驱动取消正在进行的操作，因此数据库访问必须优先使用带 `Context` 的方法。
 
-```go
-// 安全：驱动把 userID 作为参数值传递。
-row := db.QueryRowContext(ctx, "SELECT name FROM users WHERE id = ?", userID)
-
-// 危险：攻击者可以改变 SQL 结构。
-// query := fmt.Sprintf("SELECT name FROM users WHERE id = %s", userInput)
-```
-
-占位符样式取决于数据库和驱动：MySQL 常用 `?`，PostgreSQL 驱动常用 `$1`、`$2`。占位符只能绑定值，表名、列名和排序方向等结构必须来自代码中的白名单。
-
-数据库 `NULL` 不能直接扫描到普通 `string`、`int` 等非空类型时，使用 `sql.NullString`、`sql.NullInt64` 等类型区分“空值”和“零值”。
-
-```go
-var nickname sql.NullString
-if err := row.Scan(&nickname); err != nil {
-	return err
-}
-if nickname.Valid {
-	// Valid 为 true 才表示数据库列不是 NULL。
-	useNickname(nickname.String)
-}
-```
-
-## `database/sql` 的内部职责
-
-`*sql.DB` 内部维护空闲连接和等待获取连接的请求。一次查询会从池中获取连接，执行驱动实现的操作，然后在结果关闭、事务结束或语句完成后归还连接。`QueryContext`、`ExecContext` 和 `BeginTx` 接受 `context`，让客户端取消或截止时间有机会传递到驱动和数据库。
-
-所以连接池配置不是孤立调优项。多个服务实例的 `MaxOpenConns` 总和必须小于数据库能承受的连接数，并预留管理连接与其他应用的空间。先观察等待连接数、等待时间、慢查询和数据库负载，再调整参数。
+`database/sql` 不替你做三件事：设计表结构和索引、决定事务边界、解释具体数据库的锁与隔离级别。它提供的是可靠且统一的访问骨架。
 
 ## 总结
 
-`database/sql` 是标准库，不是具体数据库驱动，也不是 ORM。它提供可复用的 `*sql.DB` 连接池、带 context 的查询与事务接口。生产代码应复用数据库句柄、为每次操作传入 context、及时关闭 `Rows`、检查 `Scan` 和 `Rows.Err`，并让同一业务原子操作始终使用同一个 `*sql.Tx`。
-
-掌握这些边界后，再使用 GORM 可以更清楚地判断 ORM 生成的 SQL、事务和连接池行为。
+`database/sql` 是标准库的数据库访问与连接池接口，不是驱动，也不是 ORM。应用应复用一个 `*sql.DB`，所有请求传递 `context`，多行查询及时关闭 `Rows`，并让原子业务操作始终通过同一个 `*sql.Tx` 执行。理解这层以后，GORM 生成的 SQL、事务和连接池行为就不再是黑盒。
 
 ## 参考资料
 
 - [Go 官方：Accessing relational databases](https://go.dev/doc/database/)
+- [Go 官方：Managing connections](https://go.dev/doc/database/manage-connections)
 - [database/sql 包文档](https://pkg.go.dev/database/sql)
-- [Go 官方：Querying for data](https://go.dev/doc/database/querying)
 - [Go 官方：Executing transactions](https://go.dev/doc/database/execute-transactions)

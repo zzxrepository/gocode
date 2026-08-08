@@ -1,7 +1,7 @@
 ---
 permalink: /backend/go/advanced/03-web-development/01-http-server/
-title: 01. HTTP 服务与 net/http
-shortTitle: 01. HTTP 服务
+title: 01. net/http：构建 HTTP 服务
+shortTitle: 01. net/http
 order: 1
 category:
   - Go
@@ -13,37 +13,52 @@ tag:
   - HTTP
   - Web 编程
   - HTTP 服务
-  - 服务端开发
 ---
 
-# 01. HTTP 服务与 net/http
+# 01. net/http：构建 HTTP 服务
 
 ## 前言
 
-Gin 等 Web 框架能提高开发效率，但它们最终仍建立在 Go 的 `net/http` 之上。理解 `net/http`，才能看清 HTTP 请求如何进入处理函数、`context` 如何随请求传播、为什么一个共享变量会在高并发下出错，以及优雅关闭服务真正关闭了什么。
+`net/http` 是 Go 标准库中处理 HTTP 的包，同时提供服务端和客户端能力。一个 HTTP 服务要把请求接进程序，完成路由、解析、业务调用、响应和优雅退出；这些环节构成了服务端开发最核心的运行路径。
 
-`net/http` 是标准库包，但这里把它放在“Web 编程基础”，因为学习目标不是枚举 API，而是建立一个可用于真实服务的 HTTP 入口。后续学习 Gin 时，路由、中间件、请求绑定和响应处理都会有对应关系。
+Gin 等 Web 框架最终也要把请求交给 `net/http`。先把这层看明白，之后理解框架中的路由、中间件、请求上下文和优雅停机就不会只是在背 API。
 
-## 核心模型
+## 一个 HTTP 服务到底在做什么
 
-HTTP 服务最小的抽象是 `http.Handler`：
+一次请求大致经过下面这条路径：
+
+```text
+客户端连接
+  -> http.Server 接收并解析 HTTP 报文
+  -> ServeMux 根据路径和方法找到 Handler
+  -> Handler 读取 Request、调用业务代码
+  -> ResponseWriter 写入状态码、响应头和响应体
+```
+
+核心接口只有一个：
 
 ```go
 type Handler interface {
-	ServeHTTP(http.ResponseWriter, *http.Request)
+	ServeHTTP(ResponseWriter, *Request)
 }
 ```
 
-- `*http.Request` 保存方法、路径、请求头、请求体，以及本次请求的 `Context`。
-- `http.ResponseWriter` 用于设置响应头、状态码和响应体。
-- `http.ServeMux` 把路径匹配到 `Handler`。
-- `http.Server` 管理监听、超时和关闭。
+普通函数也可以通过 `http.HandlerFunc` 适配为 `Handler`，所以最常见的写法是：
 
-同一个 handler 会被多个请求并发调用。handler 应把请求相关数据放在局部变量中；共享缓存、计数器、连接等状态必须由同步机制或专门组件管理。
+```go
+mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+	// r 保存请求方法、路径、请求头、请求体和请求上下文。
+	// w 用于写回状态码、响应头和响应体。
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("ok\n"))
+})
+```
 
-## 真实场景：订单创建接口
+`ResponseWriter` 一旦开始写入响应体，默认状态码就会变成 `200 OK`。因此应先设置响应头和状态码，再写响应体。
 
-下面实现一个简化的订单入口。重点不在业务本身，而在 HTTP 边界应该完成的工作：限制请求体、校验输入、传递请求 context、写出一致的 JSON 响应，并在进程退出时停止接收新请求。
+## 从一个完整的小服务开始
+
+下面用“创建订单”接口串起最小但完整的服务端流程。业务实现通过接口注入，HTTP 层只负责协议处理，不直接写 SQL。
 
 ```go
 package main
@@ -52,6 +67,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -60,172 +77,187 @@ import (
 	"time"
 )
 
-type CreateOrderRequest struct {
-	ProductID int64 `json:"product_id"`
+type OrderService interface {
+	Create(ctx context.Context, productID int64, quantity int) (int64, error)
+}
+
+type Server struct {
+	orders OrderService
+}
+
+type createOrderRequest struct {
+	ProductID int64 `json:"productId"`
 	Quantity  int   `json:"quantity"`
 }
 
-type OrderService interface {
-	// CreateOrder 接收请求 context，使客户端取消和服务关闭能传到数据库或 RPC 调用。
-	CreateOrder(ctx context.Context, productID int64, quantity int) (int64, error)
+type createOrderResponse struct {
+	ID int64 `json:"id"`
 }
 
-// ErrInsufficientStock 是业务层暴露给 HTTP 层的稳定错误语义。
-// HTTP 层据此决定返回 409，而不需要理解库存扣减的数据库细节。
-var ErrInsufficientStock = errors.New("insufficient stock")
+func NewHandler(orders OrderService) http.Handler {
+	server := &Server{orders: orders}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", server.healthz)
+	mux.HandleFunc("/orders", server.ordersHandler)
+	return mux
+}
 
-func createOrderHandler(service OrderService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
-			return
-		}
-
-		// 先限制 Body，再解码，避免异常大的 JSON 占用过多内存。
-		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-		defer r.Body.Close()
-
-		var input CreateOrderRequest
-		decoder := json.NewDecoder(r.Body)
-		decoder.DisallowUnknownFields() // 及早发现客户端拼错字段，而不是静默忽略。
-		if err := decoder.Decode(&input); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-			return
-		}
-		if input.ProductID <= 0 || input.Quantity <= 0 || input.Quantity > 100 {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid product_id or quantity"})
-			return
-		}
-
-		orderID, err := service.CreateOrder(r.Context(), input.ProductID, input.Quantity)
-		if err != nil {
-			// 示例只区分业务错误和内部错误；真实项目应有统一错误码和日志字段。
-			if errors.Is(err, ErrInsufficientStock) {
-				writeJSON(w, http.StatusConflict, map[string]string{"error": "insufficient stock"})
-				return
-			}
-			log.Printf("create order failed: %v", err)
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
-			return
-		}
-
-		writeJSON(w, http.StatusCreated, map[string]any{"order_id": orderID})
+func (s *Server) healthz(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
 	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (s *Server) ordersHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	// 限制请求体大小，避免客户端用超大 JSON 占满服务内存。
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	defer r.Body.Close()
+
+	var input createOrderRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields() // 拼错字段应尽早暴露，而不是悄悄被忽略。
+	if err := decoder.Decode(&input); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	// 一个请求体只能包含一个 JSON 值，拒绝后面偷偷追加的第二段内容。
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		writeError(w, http.StatusBadRequest, "request body must contain one JSON value")
+		return
+	}
+	if input.ProductID <= 0 || input.Quantity <= 0 {
+		writeError(w, http.StatusBadRequest, "productId and quantity must be positive")
+		return
+	}
+
+	// r.Context 会在客户端断开或服务关闭时被取消，应继续传给业务和下游调用。
+	orderID, err := s.orders.Create(r.Context(), input.ProductID, input.Quantity)
+	if err != nil {
+		log.Printf("create order: %v", err) // 服务端记录细节，响应不泄露内部错误。
+		writeError(w, http.StatusInternalServerError, "create order failed")
+		return
+	}
+	writeJSON(w, http.StatusCreated, createOrderResponse{ID: orderID})
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {
-	// 状态码和 Header 必须在首次写入响应体之前设置。
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
+	w.WriteHeader(status) // 必须在 Encode 前写入，避免被默认的 200 覆盖。
 	if err := json.NewEncoder(w).Encode(value); err != nil {
-		log.Printf("write response failed: %v", err)
+		log.Printf("write JSON response: %v", err)
 	}
 }
 
-func logging(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		started := time.Now()
-		next.ServeHTTP(w, r) // 中间件通过包装 Handler 在调用前后附加横切逻辑。
-		log.Printf("method=%s path=%s duration=%s", r.Method, r.URL.Path, time.Since(started))
-	})
+func writeError(w http.ResponseWriter, status int, message string) {
+	writeJSON(w, status, map[string]string{"error": message})
 }
 
-// NewServer 只负责 HTTP 装配，具体的 OrderService 由应用启动代码注入。
-func NewServer(service OrderService) *http.Server {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-	})
-	mux.Handle("/v1/orders", createOrderHandler(service))
+func main() {
+	orders := newOrderService() // 业务层可以使用 database/sql、GORM 或远程服务。
 
-	return &http.Server{
+	httpServer := &http.Server{
 		Addr:              ":8080",
-		Handler:           logging(mux),
-		ReadHeaderTimeout: 5 * time.Second, // 限制读取请求头，降低慢速连接占用风险。
-		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      15 * time.Second,
-		IdleTimeout:       60 * time.Second,
-		MaxHeaderBytes:    1 << 20,
+		Handler:           NewHandler(orders),
+		ReadHeaderTimeout: 5 * time.Second,  // 防止慢速请求长期占用连接。
+		IdleTimeout:       60 * time.Second, // 空闲 keep-alive 连接的最大等待时间。
 	}
-}
 
-// Run 在收到终止信号后执行优雅关闭；业务代码不应在 handler 中直接调用 os.Exit。
-func Run(server *http.Server) error {
-	serverErr := make(chan error, 1)
 	go func() {
-		// 通过 channel 把监听失败传回调用方，不能只在 goroutine 中打印后继续运行。
-		serverErr <- server.ListenAndServe()
+		log.Printf("HTTP server listening on %s", httpServer.Addr)
+		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("HTTP server failed: %v", err)
+		}
 	}()
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
-	defer signal.Stop(stop)
+	<-stop // 等待容器或本地终端发出的停止信号。
 
-	select {
-	case err := <-serverErr:
-		if errors.Is(err, http.ErrServerClosed) {
-			return nil
-		}
-		return err
-	case <-stop:
-	}
-
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		return err
+	if err := httpServer.Shutdown(ctx); err != nil {
+		log.Printf("graceful shutdown failed: %v", err)
 	}
-	if err := <-serverErr; err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return err
-	}
-	return nil
 }
 ```
 
-应用入口可以在初始化数据库等依赖后调用 `Run(NewServer(orderService))`。`Shutdown` 会先停止接收新连接，再等待正在处理的请求结束，直到 context 到期。它不会替业务代码取消任意后台 goroutine；后台任务仍需要自己的生命周期管理。
+启动后可用下面的命令验证路由和 JSON 响应：
 
-## 请求、响应与中间件
+```bash
+curl -i http://localhost:8080/healthz
+curl -i -X POST http://localhost:8080/orders \
+  -H 'Content-Type: application/json' \
+  -d '{"productId": 1001, "quantity": 2}'
+```
 
-响应头和状态码在第一次写入响应体后就不能可靠修改。因此应先完成参数校验和业务判断，再调用 `WriteHeader` 或写 JSON。对于大文件上传和 JSON 接口，都要限制 body 大小；只依赖反向代理限制并不足以覆盖服务内部的错误调用路径。
+## 请求数据应从哪里读取
 
-中间件本质上是 `Handler -> Handler` 的高阶函数。日志、恢复、认证、限流和追踪都可以通过包装 handler 实现。中间件不要把用户身份、数据库事务等请求状态放进全局变量；应使用局部变量，必要时通过 `context` 传递小而明确的请求元数据。
+`*http.Request` 里包含 HTTP 请求的全部信息。常用入口如下：
 
-## `http.Client` 也要复用
+| 需求 | 常用位置 |
+| --- | --- |
+| 请求方法 | `r.Method` |
+| 路径 | `r.URL.Path` |
+| 查询参数 | `r.URL.Query().Get("page")` |
+| 请求头 | `r.Header.Get("Authorization")` |
+| Cookie | `r.Cookie("session")` |
+| JSON 或表单主体 | `r.Body`、`r.ParseForm()` |
+| 取消与截止时间 | `r.Context()` |
 
-调用下游服务时，`http.Client` 与其底层 `Transport` 应在应用启动时创建并复用。它们可被多个 goroutine 并发使用，并会复用空闲连接；每个请求新建 client 会失去连接池收益。
+参数存在不等于参数合法。分页大小、订单数量、枚举值、身份信息都要在 HTTP 层或业务层按各自职责校验。不要把用户输入直接拼进 SQL、文件路径或下游 URL。
+
+## 路由和中间件是怎样组合的
+
+标准库的 `ServeMux` 负责把路径映射到 Handler。跨请求的通用逻辑，例如访问日志、恢复 panic、认证和链路追踪，适合用“包装 Handler”的方式实现。
 
 ```go
-var paymentClient = &http.Client{
-	Timeout: 800 * time.Millisecond, // 为单次下游调用设置明确上限。
+func logging(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		started := time.Now()
+		next.ServeHTTP(w, r) // 调用下一层；不调用就等于中断请求链。
+		log.Printf("method=%s path=%s cost=%s", r.Method, r.URL.Path, time.Since(started))
+	})
 }
 
-func callPayment(ctx context.Context, url string) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
-	return paymentClient.Do(req)
+handler := logging(NewHandler(orders))
+```
+
+中间件不是越多越好。认证、日志、超时和恢复等应有明确位置；把业务规则塞进多层匿名包装后，排查请求路径会非常困难。
+
+## 为什么 Handler 必须按并发环境设计
+
+`http.Server` 会并发处理请求。同一个 Handler 可能同时被多个 goroutine 调用，所以不能把“当前用户”“当前订单”等可变请求状态存到 `Server` 的普通字段中。
+
+```go
+// 错误示例：并发请求会争抢 currentUser。
+type Server struct {
+	currentUser string
 }
 ```
 
-调用成功后必须关闭 `resp.Body`。否则连接可能无法回收到连接池，最终耗尽可用连接。
+请求状态应该存在局部变量、`r.Context()` 或专门的并发安全组件中。共享缓存、连接池和统计信息则需要明确的同步策略。
 
-## `net/http` 的执行路径
+## 优雅关闭关闭的是什么
 
-从源码结构看，`http.Server` 接受连接后把连接交给内部服务逻辑；请求会被解析为 `Request`，再通过 `ServeMux` 选出 handler，最终调用 `ServeHTTP`。框架做的事情大多是在这条路径上增加路由匹配、上下文、绑定、校验和中间件组合。
+`ListenAndServe` 返回前，服务器会持续接受新连接。收到 `SIGTERM` 后直接退出，会中断正在处理的请求。`Shutdown` 的行为是：停止接受新连接，关闭空闲连接，并等待正在处理的请求结束，直到传入的 context 到期。
 
-这解释了两个实践规则：一是 handler 必须支持并发调用；二是不要使用包级 `DefaultServeMux` 管理大型服务。显式创建 `ServeMux`，能让路由归属、测试和多服务进程中的隔离更清楚。
+因此每个下游调用都应使用请求 context，并设置合理的超时。否则 handler 卡在不可取消的数据库调用或网络调用上，优雅关闭也只能等到超时。
 
 ## 总结
 
-`net/http` 提供了足够构建生产级服务的基本件：`Handler`、`ServeMux`、`Server`、`Request`、`ResponseWriter` 和 `Client`。可靠的 HTTP 入口需要在边界完成输入限制与校验，向下传递 `context`，配置服务超时，并在退出时调用 `Shutdown`。这些原则迁移到 Gin 等框架后依然成立。
+`net/http` 的服务端核心是 `Handler`、`Request`、`ResponseWriter` 和 `Server`。一个可靠的 HTTP 服务应明确路由和方法，限制并校验输入，先写状态码再写响应体，把 `r.Context()` 传入业务调用，并在进程退出时通过 `Shutdown` 收尾。
+
+理解这套基础后，再使用 Gin 等框架时，看到的只是更高效的路由和中间件表达，而不是另一套完全不同的 HTTP 模型。
 
 ## 参考资料
 
 - [net/http 包文档](https://pkg.go.dev/net/http)
-- [http.Server.Shutdown 文档](https://pkg.go.dev/net/http#Server.Shutdown)
-- [net/http 源码](https://go.dev/src/net/http/server.go)
+- [net/http：Server.Shutdown](https://pkg.go.dev/net/http#Server.Shutdown)
+- [encoding/json 包文档](https://pkg.go.dev/encoding/json)
