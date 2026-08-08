@@ -73,10 +73,10 @@ npm run docs:clean-dev
 npm run docs:build
 ```
 
-构建并发布：
+发布静态站点（源码已提交并推送到 `master` 后）：
 
 ```bash
-npm run docs:build && ./deploy.sh
+./deploy.sh
 ```
 
 ## 内容维护规则
@@ -90,6 +90,14 @@ npm run docs:build && ./deploy.sh
 - 全站共用静态资源放在 `src/.vuepress/public/`。
 - 资源导航里如果有官方中文文档，优先放中文链接。
 - 资源导航要控制质量，不要堆砌低质量、重复、很少用的网站。
+
+## 教程写作要求
+
+- 教程必须是可独立阅读的文章：读者不需要知道需求来源或此前的对话，也能理解它要解决的问题、核心概念、示例和结论。
+- 对话只用于确定选题与范围，不能把需求沟通、写作计划、个人背景或问答内容整理进正文。
+- 实质性教程应包含 `## 前言` 和 `## 总结`。示例、前提条件、使用边界和方案对比应围绕解释主题服务。
+- 技术术语应准确、稳定；涉及版本、协议、框架行为等内容时，以官方文档、规范或项目原始文档为准。
+- `## 参考资料` 按实际需要添加，只列出实际用于核对或支撑文章的资料，优先官方文档、规范和项目文档，不添加凑数链接。
 
 ## 当前站点配置
 
@@ -115,9 +123,9 @@ gocode.mmzhang.cn -> CNAME -> zzxrepository.github.io
 - 评论：Giscus，配置在 `src/.vuepress/theme.ts`。
 - 访问统计：Umami Cloud 脚本，配置在 `src/.vuepress/config.ts`。
 
-## 给后续 AI 助手的维护流程
+## 维护与发布流程
 
-以后更新这个项目时，先读 `AGENTS.md`，再读这个文件和 `src/site-guide/README.md`。
+以后更新这个项目时，先读本 README，再读 `src/site-guide/README.md`，然后阅读当前栏目首页和目标文章。
 
 只改文章或资源内容时：
 
@@ -146,6 +154,7 @@ gocode.mmzhang.cn -> CNAME -> zzxrepository.github.io
 - 不要同时混用多个评论系统，除非毛毛张明确要求。
 - 根目录 README 只写项目用途和维护操作；很长的网站搭建说明放到 `src/site-guide/README.md`。
 - 除非明确要求不发布，每次完成项目更新后都要构建、提交任务相关改动、推送 `master` 并部署 `gh-pages`。
+- `./deploy.sh` 只负责构建并发布静态文件到 `gh-pages`；源码必须先由明确的提交推送步骤发布到 `master`。
 
 ## 更多说明
 

@@ -430,20 +430,15 @@ src/.vuepress/public/
 
 ### 配置部署脚本
 
-GitHub Pages 部署通常需要两步：先把源码推到 `master`，再把构建产物推到 `gh-pages`。
+GitHub Pages 部署通常需要两步：先明确提交任务相关的源码并推送到 `master`，再把构建产物推到 `gh-pages`。部署脚本只处理第二步，避免把工作区中无关的改动一并提交。
 
 ```sh
 #!/usr/bin/env sh
 
 set -e
 
-git add -A
-git commit -m "gocode v1" || echo "No changes to commit for source code"
-
 git remote get-url origin
 REPO_URL="$(git remote get-url origin)"
-
-git push -u origin master
 
 BUILD_DIR="$(mktemp -d)"
 trap 'rm -rf "$BUILD_DIR"' EXIT
@@ -507,8 +502,9 @@ GitHub Pages 的 Custom domain 填 `gocode.mmzhang.cn`。DNS 校验通过后再�
 6. 编写 styles/index.scss 做少量主题样式覆盖
 7. 使用 npm run docs:dev 本地预览
 8. 使用 npm run docs:build 做发布前检查
-9. 使用 deploy.sh 推送源码和静态文件
-10. 在 GitHub Pages 中确认 gh-pages 分支发布成功
+9. 提交任务相关源码并推送到 master
+10. 使用 deploy.sh 推送静态文件到 gh-pages
+11. 在 GitHub Pages 中确认 gh-pages 分支发布成功
 ```
 
 这个流程完成后，站点的日常维护重点就会从“改配置”转为“写内容”。新增普通文章时，维护 frontmatter、文件路径和栏目 README 即可；只有新增顶级栏目、特殊导航入口、资源页布局或主题能力时，才需要调整 `.vuepress` 下的配置。
@@ -714,7 +710,7 @@ sidebarSorter: ["readme", "order", "title", "filename"]
 3. 写元信息：补齐 title / shortTitle / icon / order / category / tag
 4. 写正文：一级标题和 title 保持一致，重点文章在标题下方放封面图
 5. 查效果：执行 npm run docs:build，确认文章进入侧边栏且构建通过
-6. 发上线：需要发布时执行 ./deploy.sh
+6. 发布：除非明确要求不发布，提交任务相关源码并推送 master，再执行 ./deploy.sh
 ```
 
 ### 教程写作规范
@@ -903,10 +899,10 @@ npm run docs:clean-dev
 npm run docs:build
 ```
 
-部署到 GitHub Pages：
+源码已提交并推送到 `master` 后，部署到 GitHub Pages：
 
 ```bash
-npm run docs:build && ./deploy.sh
+./deploy.sh
 ```
 
 ## 常见问题
@@ -983,7 +979,8 @@ index: false
 3. 编写正文
 4. npm run docs:dev 本地预览
 5. npm run docs:build 构建检查
-6. 需要发布时执行 npm run docs:build && ./deploy.sh
+6. 提交任务相关源码并推送 master
+7. 执行 ./deploy.sh 发布 gh-pages
 ```
 
 核心原则是：**内容顺序由 frontmatter 管，栏目入口由 sidebar.ts 管，顶部曝光由 navbar.ts 管。**

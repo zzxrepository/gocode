@@ -3,20 +3,11 @@
 # 确保脚本抛出遇到的错误
 set -e
 
-# ===================== 第一步：提交项目源码到 master 分支 =====================
-# 1. 添加所有源码文件（.gitignore 中配置的文件会自动忽略）
-# git init
-git add -A
-git commit -m "gocode v1" || echo "No changes to commit for source code"
-
-# 3. 确认已关联远程仓库
+# 源码应在运行本脚本前完成提交并推送到 master。
+# 此脚本只负责构建静态站点并发布到 gh-pages。
 git remote get-url origin
 REPO_URL="$(git remote get-url origin)"
 
-# 4. 推送源码到远程 master 分支
-git push -u origin master
-
-# ===================== 第二步：推送静态文件到 gh-pages 分支 =====================
 # 生成静态文件到临时目录，避免旧 dist 目录中的 Git 元数据影响构建
 BUILD_DIR="$(mktemp -d)"
 trap 'rm -rf "$BUILD_DIR"' EXIT
@@ -37,4 +28,4 @@ git push -f origin HEAD:gh-pages
 # 返回项目根目录
 cd -
 
-echo "✅ 部署完成！源码已推送到 master 分支，静态文件已推送到 gh-pages 分支"
+echo "部署完成：静态文件已推送到 gh-pages 分支"
