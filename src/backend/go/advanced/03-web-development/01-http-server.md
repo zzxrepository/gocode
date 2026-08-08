@@ -19,13 +19,11 @@ tag:
 
 ## 前言
 
-`net/http` 是 Go 标准库的 HTTP 实现。它既能发起客户端请求，也能构建服务端；服务端最核心的接口只有 `http.Handler`。框架会提供更丰富的路由、中间件和参数绑定，但最终仍要把请求交给一个 `Handler`。
+`net/http` 是 Go 标准库的 HTTP 实现：既能作为客户端发起请求，也能在服务端接收连接、解析 HTTP 报文并写回响应。应用代码通常不必处理 TCP 读写和报文格式，只需把业务逻辑组织成 `http.Handler`；路由、请求生命周期和响应提交则由标准库协同完成。
 
-从历史上看，`net/http` 在 **Go 1.0** 正式发布时就已是标准库的一部分；Go 1 的发布说明还记录了当时对 `http` 与 `httputil` 的一次拆分重构。因此，它不是 Go 1.7 或 Go 1.22 才引入的包。
+`net/http` 在 **Go 1.0** 正式发布时就已是标准库的一部分。它的接口很小，却足以构成大量 Web 框架的底座：框架可以增加路由、中间件和参数绑定，最终仍会把请求交给一个 `Handler`。这里所有公开 API 的行为和源码解读均以当前稳定版 **Go 1.26.5** 为准，源码位置为 `src/net/http/server.go`。
 
-本文以当前稳定版 **Go 1.26.5** 的公开文档与 `src/net/http/server.go` 源码为事实依据。为读懂今天的 API，还需要知道两个演进节点：Go 1.7 将 `context` 纳入标准库，并为 `http.Request` 增加了 `Context` 与 `WithContext`；Go 1.22 增强了 `ServeMux`，使路由模式可同时写请求方法和路径参数，例如 `GET /tasks/{id}`。本文示例使用后者，故要求 Go 1.22 或更高版本，并可直接用于 Go 1.26.5。
-
-目标不是记住所有 API，而是建立一条完整的请求链：**连接进来后，谁选择 Handler；Handler 怎样读取输入并写出响应；客户端离开和进程停止时，怎样让工作干净结束。**
+理解 HTTP 服务，关键不在于罗列 API，而在于看清一条请求的边界：**连接如何抵达 Handler，输入何时应被读取和校验，响应何时不可撤回，以及客户端离开或进程停止时如何结束工作。** 内容沿着这条链路，从最小服务逐步走到可安全停止的 JSON API。
 
 ## 先运行一个最小服务
 
@@ -112,7 +110,7 @@ func (f HandlerFunc) ServeHTTP(w ResponseWriter, r *Request) {
 }
 ```
 
-Go 1.22 的 `ServeMux` 模式可以写为：
+Go 1.26.5 中，`ServeMux` 的模式可以写为：
 
 ```text
 [METHOD ][HOST]/PATH
@@ -155,7 +153,7 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 
 标准库的 `response.WriteHeader` 会记录第一次最终状态码；第二次调用不会覆盖它，而是记一条“superfluous WriteHeader”日志。`Write` 在尚未提交时会先调用 `WriteHeader(StatusOK)`。这就是下面两种错误写法不可靠的原因：先 `Encode` 再写 `400`，或业务函数和外层错误处理器都各写一次响应。
 
-服务端通常应先读取并校验所需的 `r.Body`，再开始响应。Go 1.7 的 `net/http` 文档特别说明：开始写响应后，后续读取请求体未必还能正常工作。
+服务端通常应先读取并校验所需的 `r.Body`，再开始响应。Go 1.26.5 的 `net/http` 文档也明确提醒：开始写响应后，后续读取请求体未必还能正常工作。
 
 ## 一个完整示例：任务 JSON API
 
@@ -514,8 +512,4 @@ func (srv *Server) Shutdown(ctx context.Context) error {
 
 - [net/http 包文档（Go 1.26.5）](https://pkg.go.dev/net/http@go1.26.5)
 - [Go 1 Release Notes：`http` 与 `httputil` 的历史重构](https://go.dev/doc/go1)
-- [Go 1.7 Release Notes：context 与 Request.Context](https://go.dev/doc/go1.7)
-- [Go 1.22 Release Notes：ServeMux 路由增强](https://go.dev/doc/go1.22)
-- [Go Blog：Routing Enhancements for Go 1.22](https://go.dev/blog/routing-enhancements)
-- [Go Blog：Go Concurrency Patterns: Context](https://go.dev/blog/context)
 - [Go 1.26.5 `net/http/server.go`](https://cs.opensource.google/go/go/+/go1.26.5:src/net/http/server.go)
