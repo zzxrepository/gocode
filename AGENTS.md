@@ -1,13 +1,80 @@
-# GoCode 项目维护规则
+# GoCode 项目说明与维护规则
+
+GoCode 是个人编程学习网站，使用 VuePress 2 与 VuePress Theme Hope 搭建，并通过 GitHub Pages 部署在：
+
+```text
+https://gocode.mmzhang.cn/
+```
+
+站点用于沉淀编程学习笔记、官方文档入口、AI 应用开发资料、后端开发知识、算法与数据结构、计算机基础、前端基础、开发工具、资源导航和网站维护说明。
+
+## 技术栈
+
+- VuePress 2
+- VuePress Theme Hope
+- Vite 打包器
+- Markdown 内容，统一放在 `src/` 下
+- GitHub Pages 静态站部署，发布分支是 `gh-pages`
+- 自定义域名通过 `src/.vuepress/public/CNAME` 维护
+- 评论系统使用 Giscus，基于 GitHub Discussions
+- 站内搜索使用 SlimSearch 本地全文搜索
+- 访问统计使用 Umami Cloud
+
+## 项目结构
+
+```text
+gocode/
+├── src/
+│   ├── README.md                  # 网站首页
+│   ├── backend/                   # 后端开发笔记
+│   ├── algorithm/                 # 算法与数据结构
+│   ├── computer-fundamentals/     # 计算机网络、操作系统等基础
+│   ├── frontend/                  # 前端基础
+│   ├── tools/                     # 开发工具
+│   ├── ai-application-development/# AI 应用开发
+│   ├── learning-paths/            # 学习路线
+│   ├── resources/                 # 资源导航
+│   ├── site-guide/                # 网站维护指南
+│   └── .vuepress/
+│       ├── config.ts              # base、head 脚本、主题入口
+│       ├── theme.ts               # 主题、插件、搜索、评论、重定向
+│       ├── navbar.ts              # 顶部导航
+│       ├── sidebar.ts             # 侧边栏入口规则
+│       ├── public/                # 静态资源、CNAME、.nojekyll
+│       └── styles/                # 主题样式覆盖
+├── package.json
+├── package-lock.json
+└── deploy.sh
+```
+
+## 常用命令
+
+```bash
+npm install             # 安装依赖
+npm run docs:dev        # 本地预览
+npm run docs:clean-dev  # 清缓存后本地预览
+npm run docs:build      # 发布前构建检查
+./deploy.sh             # 源码已推送 master 后，发布静态站点到 gh-pages
+```
+
+## 站点配置
+
+```text
+src/.vuepress/config.ts       base: "/"
+src/.vuepress/theme.ts        hostname: "https://gocode.mmzhang.cn"
+src/.vuepress/public/CNAME    gocode.mmzhang.cn
+gocode.mmzhang.cn             CNAME -> zzxrepository.github.io
+```
+
+除非部署域名发生变化，不要随意修改 `base`、`hostname` 和 `CNAME`。搜索配置在 `src/.vuepress/theme.ts`，评论配置在同一文件，Umami Cloud 脚本配置在 `src/.vuepress/config.ts`。完整的建站、发布和维护说明位于 `src/site-guide/README.md`。
 
 ## 开始前
 
 每次处理本项目时，按以下顺序阅读：
 
 1. 本文件 `AGENTS.md`
-2. 根目录 `README.md`
-3. `src/site-guide/README.md`
-4. 当前栏目首页和目标文章
+2. `src/site-guide/README.md`
+3. 当前栏目首页和目标文章
 
 遵循已有的 frontmatter、目录、命名和导航约定。保留与当前任务无关的工作区改动，不擅自回滚、删除或提交它们。
 
