@@ -1,6 +1,6 @@
 ---
 permalink: /backend/go/advanced/02-concurrency/01-goroutines/
-title: 01. Goroutine：并发任务的启动、调度与收尾
+title: 01. Goroutine：把独立工作并发地推进
 shortTitle: 01. Goroutine
 order: 1
 category:
@@ -16,205 +16,241 @@ tag:
   - 并发编程
 ---
 
-# 01. Goroutine：并发任务的启动、调度与收尾
+# 01. Goroutine：把独立工作并发地推进
 
 ## 前言
 
-一个页面要同时读取用户资料、积分和优惠券时，三个查询彼此独立。若按顺序调用，总等待时间接近三次调用之和；若同时发起，只需要等待最慢的那一次。goroutine 就是把这种“可以同时推进”的工作写出来的工具。
+一个接口要读取用户资料、订单摘要和优惠券时，这三件事通常互不依赖。按顺序执行，等待时间大约是三次查询的总和；同时发起，再等待全部结果，用户通常只需等待最慢的一次。这样的需求并不稀有：批量处理文件、向多个服务取数、后台消费任务，都在处理多件可以独立向前推进的工作。
 
-不过，`go f()` 只负责启动，不负责等待、取消或回收。写 goroutine 前先把问题说完整：**谁等待全部任务结束？调用方放弃后，任务怎样停下来？** 下面用一个带截止时间的资料查询来回答这两个问题。
+goroutine 是 Go 为这种工作组织提供的执行单元。它不是“让程序一定更快”的开关：任务之间仍要同步结果、限制并发量，并在调用方离开时停止。若只会写 `go f()`，很容易得到无法等待、无法取消、悄悄泄漏的后台任务。
 
-## `go` 语句承诺了什么
+这里从一次并发查询开始，先弄清 `go` 到底改变了什么，再用 `WaitGroup` 和 `context` 完成等待与取消，最后阅读 Go 1.26.5 runtime 如何调度 goroutine。阅读时应区分两个词：**并发**是让多项工作交替推进的程序结构；**并行**才是多项工作在多个 CPU 核上同时运行。前者不以多核为前提，后者也不保证业务结果的执行顺序。
 
-语言规范把 `go` 后面看作一次函数调用：函数值和实参先按普通调用规则求值，再由新的 goroutine 执行调用；发起方不等待它返回，返回值也会被丢弃。
+## 先看 `go` 语句改变了什么
+
+普通函数调用必须等函数返回：
 
 ```go
-// makeID() 在当前 goroutine 中先执行；它的结果才交给新 goroutine。
-go save(makeID())
+profile, err := loadProfile(ctx, userID) // 当前 goroutine 在这里等待 I/O 和函数返回。
+if err != nil {
+	return err
+}
+_ = profile
 ```
 
-这一区分在资源交接时很重要。例如 `go use(file)` 传入的是当下的 `file` 值；启动后再给变量重新赋值，不会改变已经传入的实参。反过来，若 goroutine 闭包直接读取外部可变对象，谁在什么时候修改它就必须有明确约束。把启动所需的值作为函数参数传入，通常是最清楚的边界。
+在函数调用前加上 `go`，调用者不再等待该函数结束：
 
-因此，goroutine 不保证立刻运行，也不保证运行顺序。正确性不能依赖某次打印“恰好先出现”。特别是 `main` 函数返回时，进程会退出，不会等其他 goroutine 做完。
+```go
+go refreshCache(ctx) // 启动新的 goroutine；下一行会立刻继续执行。
+log.Println("刷新任务已经提交")
+```
 
-`sync.WaitGroup` 只表达“这一组任务什么时候全部结束”：`Add` 登记数量，任务结束时 `Done` 归还一次，`Wait` 等到计数为零。它不传递结果，也不会取消任务；取消交给 `context.Context`，而任务必须主动检查 `ctx.Done()` 才能响应。
+`go` 后必须是一次函数或方法调用。函数值和参数仍然会在**当前** goroutine 中先求值，然后新 goroutine 才独立开始执行；返回值会被丢弃。因此下面的写法既不能接收错误，也不能得知何时完成：
 
-这三个动作可按职责区分：
+```go
+go saveOrder(ctx, order) // saveOrder 即使返回 error，调用方也看不到。
+```
 
-| 需求 | 这里使用的工具 | 它没有解决什么 |
-| --- | --- | --- |
-| 启动独立工作 | `go` | 不等待、不取消、不返回结果 |
-| 知道所有工作已退出 | `WaitGroup` | 不传值、不选择首个错误 |
-| 表达调用方不再等待 | `context` | 不会强行中止不配合的代码 |
+不要用 `time.Sleep` 猜测任务是否结束。睡短了会偶发失败，睡长了会平白增加延迟；正确程序应等待一个明确的完成条件。
 
-这张表也说明为什么它们常常一起出现：启动后的任务需要一个收尾点，而收尾点要能在请求失效时尽快抵达。
+## 一个完整示例：并发取数、收集错误、响应取消
 
-选择并发前还要确认任务确实独立：它们不应要求彼此的中间结果，也不应无节制地同时压向同一个有限下游。这里的三个来源可以独立查询，因此并发只缩短等待时间，不改变结果含义。
-
-当任务之间存在先后依赖时，应先把依赖结果传递完成，再启动下一步；不要为了“看起来并发”而破坏数据依赖。
-
-并发结构首先应服务于正确性，延迟改善是建立在正确边界之上的结果。
-
-## 一个完整例子：带截止时间地并发读取资料
-
-把下面内容保存为 `main.go` 后执行 `go run main.go`。第三个查询故意比 80ms 的截止时间慢，用来观察取消如何结束阻塞中的工作。
+下面的程序模拟同时读取三种资料。示例刻意没有共享 map：每个 goroutine 只写自己的结果变量，主 goroutine 在 `Wait` 以后再读取它们。`WaitGroup` 负责“全部完成”，`context` 负责“没必要再做时尽快离开”。
 
 ```go
 package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 )
 
-// Source 描述一项独立的资料来源。delay 只用于让示例可重复运行。
-type Source struct {
-	name  string
-	delay time.Duration
+// profile 是一次查询得到的独立结果。
+type profile struct {
+	name string
 }
 
-// Record 是每项查询交给调用方的结果。
-type Record struct {
-	Source string
-	Value  string
-}
-
-// query 模拟一个会等待下游响应的调用。
-// 真实 HTTP、SQL 或 RPC 调用也应接收同一个 ctx，让取消继续向下传递。
-func query(ctx context.Context, source Source) (Record, error) {
+// load 模拟一个能感知取消的 I/O 操作。
+func load(ctx context.Context, name string, delay time.Duration) (profile, error) {
 	select {
-	case <-time.After(source.delay):
-		// 下游按时返回时，构造该来源的结果。
-		return Record{Source: source.name, Value: source.name + " 的数据"}, nil
+	case <-time.After(delay):
+		// I/O 完成时返回自己的结果；真实代码可在这里调用数据库或 HTTP 客户端。
+		return profile{name: name}, nil
 	case <-ctx.Done():
-		// 调用方已取消或超时，不再继续无意义的等待。
-		return Record{}, ctx.Err()
+		// 调用方超时或取消后，不再继续等待。
+		return profile{}, ctx.Err()
 	}
-}
-
-func loadProfile(ctx context.Context, sources []Source) ([]Record, error) {
-	records := make([]Record, len(sources))
-	errs := make([]error, len(sources))
-
-	var wg sync.WaitGroup
-	for index, source := range sources {
-		wg.Add(1) // 先登记，再启动；不能与会看到零计数的 Wait 并发新增任务。
-
-		go func(index int, source Source) {
-			defer wg.Done() // 无论查询成功还是因取消返回，都恰好归还一次。
-
-			record, err := query(ctx, source)
-			if err != nil {
-				errs[index] = err
-				return
-			}
-
-			// 每个 goroutine 只写自己独占的下标；Wait 后主 goroutine 才读取。
-			records[index] = record
-		}(index, source) // 显式传参，避免闭包意外依赖下一轮循环变量。
-	}
-
-	wg.Wait() // 这里只等待任务结束，不代表它们以某种顺序执行过。
-	for index, err := range errs {
-		if err != nil {
-			return nil, fmt.Errorf("读取 %s: %w", sources[index].name, err)
-		}
-	}
-	return records, nil
 }
 
 func main() {
-	// cancel 必须调用：即使提前成功，它也会释放 deadline timer 等关联资源。
-	ctx, cancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
-	defer cancel()
+	// 这个 deadline 代表整次“聚合查询”的预算，而不是单个任务的额外等待时间。
+	ctx, cancel := context.WithTimeout(context.Background(), 800*time.Millisecond)
+	defer cancel() // 提前返回时也释放 Context 关联的计时器资源。
 
-	sources := []Source{
-		{name: "用户资料", delay: 20 * time.Millisecond},
-		{name: "积分", delay: 45 * time.Millisecond},
-		{name: "优惠券", delay: 120 * time.Millisecond}, // 会收到 ctx 的超时信号。
+	var (
+		wg      sync.WaitGroup
+		user    profile
+		coupons profile
+		orders  profile
+		errs    = make(chan error, 3) // 每个任务最多写一个错误，因此容量等于任务数。
+	)
+
+	// run 将“登记任务、启动 goroutine、无论如何 Done”放在一起，避免遗漏 Done。
+	run := func(dst *profile, name string, delay time.Duration) {
+		wg.Add(1) // Add 必须发生在 goroutine 可能调用 Done 之前。
+		go func() {
+			defer wg.Done() // 即使下面提前 return，也会把计数减一。
+
+			result, err := load(ctx, name, delay)
+			if err != nil {
+				errs <- err // 有缓冲，失败任务不必等待主 goroutine 开始收错误。
+				return
+			}
+			*dst = result // 每个任务写不同地址；Wait 后主 goroutine 才读，因而没有竞争。
+		}()
 	}
 
-	records, err := loadProfile(ctx, sources)
-	if err != nil {
-		fmt.Println("加载失败：", err)
-		return
+	run(&user, "用户资料", 200*time.Millisecond)
+	run(&orders, "订单摘要", 350*time.Millisecond)
+	run(&coupons, "优惠券", time.Second) // 会超过整体 800ms 预算。
+
+	wg.Wait()   // 等待所有已登记任务退出；它不主动取消任何任务。
+	close(errs) // 此时不会再有发送者，主 goroutine 才拥有关闭 errs 的资格。
+
+	for err := range errs {
+		// context deadline 是预期的业务结果，其他错误才需要按业务决定如何处理。
+		if !errors.Is(err, context.DeadlineExceeded) {
+			fmt.Println("查询失败：", err)
+		}
 	}
-	fmt.Println("加载成功：", records)
+	fmt.Printf("user=%+v orders=%+v coupons=%+v\n", user, orders, coupons)
 }
 ```
 
-运行时通常会看到“加载失败：读取 优惠券: context deadline exceeded”。前两项虽然早已成功，函数仍选择返回整体错误：这是该函数的业务约定，而不是 goroutine 的固定行为。若页面允许部分资料展示，可以把 `Record` 和错误一起返回；关键是把约定写在返回类型和调用处，而不是依赖调度顺序。
+这个例子故意让优惠券查询超时。它说明了三种责任不能混在一起：`WaitGroup` 只等待，不传结果也不传播失败；`context` 只广播“应停止”，不等待任务退出；`errs` 是应用自定义的错误传递通道。实际项目还应为“一个任务失败是否立即取消全部任务”定义策略，常见做法是 `context.WithCancel` 配合第一个错误调用 `cancel()`。
 
-逐段看这段代码的生命周期：
+## `WaitGroup` 的正确边界
 
-1. `main` 创建带 80ms 截止时间的 context，并承诺离开时调用 `cancel`。
-2. `loadProfile` 为每个来源预留一个独占结果位置，再在启动前完成 `wg.Add(1)`。
-3. 每个查询要么等到自己的响应，要么等到 `ctx.Done()`；无论哪条路径，`defer wg.Done()` 都会执行。
-4. 主 goroutine 不通过睡眠猜测结果，而是停在 `wg.Wait()`，直到三个任务都已经离开。
-5. 最后才检查错误并读取结果，因此“任务收尾”与“汇总结果”之间有清晰边界。
+`WaitGroup` 是一个任务计数器：`Add(n)` 登记 n 项工作，`Done()` 减一，`Wait()` 阻塞到计数归零。它不关心 goroutine 具体做什么，也不能替代锁来保护共享变量。
 
-这个例子刻意等待所有已启动任务退出后再返回，这在需要保证无遗留工作时很合适。另一种设计可能在首个错误发生时立即向其他任务发出取消并继续等待它们收尾；那会增加结果传递协议，应该在需要“首个错误”语义时再引入，而不是让一个入门示例承担所有模式。
+```go
+var wg sync.WaitGroup
 
-示例也没有尝试记录固定的完成顺序。`records` 的顺序来自输入切片的下标；日志的输出顺序则来自调度和响应时间。把这两种顺序分开，读日志时就不会误以为它们是程序保证。
+wg.Add(2) // 先登记，避免 Wait 先看到 0 而过早返回。
+go func() {
+	defer wg.Done() // 用 defer 防止分支 return 时忘记完成登记。
+	workA()
+}()
+go func() {
+	defer wg.Done()
+	workB()
+}()
 
-这里不需要互斥锁：三个 goroutine 分别拥有 `records[index]` 与 `errs[index]` 的一个位置，且 `wg.Wait()` 返回前主 goroutine 不读取它们。若改成在 goroutine 中对同一个切片 `append`，就不再是独占写入，需要重新设计同步方式。
+wg.Wait() // Done 使计数变为 0 后才返回。
+```
 
-`context` 不是强制终止线程的按钮。示例中的 `query` 通过 `select` 监听取消；若真实调用没有使用支持 context 的 API，`cancel()` 只能通知，无法替它把工作“杀掉”。
+Go 1.26.5 提供 `wg.Go(func() { ... })`，可将登记、启动和完成通知合在一起；传入函数必须正常返回，不能 panic。传统 `Add`、`go`、`defer Done` 仍值得掌握，因为它在旧代码和需要明确包装逻辑时更常见。
 
-请求入口通常已经有一个 `ctx`，例如 HTTP 请求的 `r.Context()`。派生的 `WithTimeout` 不应替换掉它，而应以它为父 context：父请求断开时，子 context 也会取消；内部设置的更短截止时间则限制本次聚合的最大等待。这让取消方向始终从调用方流向下游。
+使用时牢记四条规则：
 
-这里还有一条常被忽略的同步关系：某个任务调用 `Done` 之前的写入，在对应的 `Wait` 返回后对等待者可见。它只覆盖这一轮“任务完成 → 读取结果”；若主 goroutine 在 `Wait` 前读 `records`，或者两个任务写同一位置，仍然是竞态，应让数据拥有关系或同步关系变得明确。
+- 第一次从 0 增加任务数必须发生在 `Wait` 之前；不要一边等一边从 0 开始加入新任务。
+- 一个 `WaitGroup` 首次使用后不能复制；作为参数通常传 `*sync.WaitGroup`。
+- 每次 `Add(1)` 必须恰好配一个 `Done()`，否则会永久等待或触发负计数 panic。
+- `Wait` 返回只说明任务已经调用 `Done`。若任务写共享内存，仍要让读写遵守同步边界；若需要返回值，使用 channel、受保护的结构或专门的结果类型。
+
+## goroutine 的生命周期：完成不是唯一的退出方式
+
+`main` 返回时，进程会立即结束；其余 goroutine 不会被自动等待，也不能指望它们执行完整收尾。一个长期 goroutine 至少要能回答三个问题：谁启动它、何时停止它、谁等待它退出。
+
+`context.Context` 是最常用的停止信号。它应从请求或服务根节点向下传递，不能随手换成 `context.Background()`，否则就把上游的取消切断了。循环中每一次可能长期阻塞的发送、接收、I/O 或等待，都要有机会观察 `ctx.Done()`：
+
+```go
+func consume(ctx context.Context, jobs <-chan string) error {
+	for {
+		select {
+		case job, ok := <-jobs:
+			if !ok {
+				return nil // 发送方明确宣布：不会再有任务。
+			}
+			if err := handle(ctx, job); err != nil {
+				return err
+			}
+		case <-ctx.Done():
+			return ctx.Err() // 上游离开后，本 goroutine 也能结束。
+		}
+	}
+```
+
+取消是协作式的：调用 `cancel()` 不会强行杀掉 goroutine，只会关闭 `Done` 通道。函数是否迅速退出，取决于它是否检查该信号、下游 API 是否接受 Context，以及是否被无法中断的调用卡住。
+
+## 为什么要限制并发
+
+“每个任务一个 goroutine”适合少量、短暂且资源独立的任务；它不等于无限制地启动任务。若每个任务都会占用数据库连接、文件描述符或下游 HTTP 配额，持续创建 goroutine 只会把拥塞从入口转移到下游。
+
+简单的并发闸门可以用有缓冲 channel 表示：只有拿到一个位置才启动工作，结束后归还位置。更复杂的生产者—消费者与关闭顺序放在 Channel 一节完整讨论。
+
+```go
+limit := make(chan struct{}, 8) // 同一时刻最多允许 8 项工作进入临界资源区。
+
+for _, job := range jobs {
+	limit <- struct{}{} // 缓冲满时阻塞，形成背压，而不是无限创建 goroutine。
+	go func(job Job) {
+		defer func() { <-limit }() // 无论成功失败都归还位置。
+		process(job)
+	}(job) // 将循环变量作为参数传入，代码意图在所有 Go 版本都清晰。
+}
+```
+
+并发限制不是固定填一个“看起来合适”的数字。它应基于下游连接池、CPU、内存、请求延迟和压测结果设置，并在过载时配合排队上限、超时或拒绝策略。
+
+## 源码视角：G、M、P 如何让工作运行
+
+语言规范只承诺 `go` 启动独立的并发控制流，不承诺调度顺序。Go 1.26.5 runtime 用常说的 GMP 模型实现这一点：**G** 是 goroutine 的运行时对象，**M** 是操作系统线程，**P** 是执行 Go 代码所需的逻辑处理器与本地运行队列。一个 M 必须持有 P，才能运行用户态 Go 代码。
 
 ```mermaid
 sequenceDiagram
-    participant M as 主 goroutine
-    participant A as 用户资料 G
-    participant B as 积分 G
-    participant C as 优惠券 G
-    M->>A: go query(ctx)
-    M->>B: go query(ctx)
-    M->>C: go query(ctx)
-    M->>M: wg.Wait()
-    A-->>M: Done()
-    B-->>M: Done()
-    M-->>C: ctx.Done()（80ms 超时）
-    C-->>M: Done() + context deadline exceeded
+    participant G1 as 当前 G
+    participant R as runtime
+    participant P as P 的本地运行队列
+    participant M as 持有 P 的 M
+    participant G2 as 新 G
+
+    G1->>R: 执行 go f(x)
+    R->>R: 在 G1 中完成 f 与 x 的求值
+    R->>G2: 分配或复用 G，设置入口函数
+    R->>P: 将 G2 放入本地可运行队列
+    M->>P: 调度器取一个可运行 G
+    M->>G2: 执行 f(x)
 ```
 
-## 从运行时看：启动不等于马上执行
+`runtime/proc.go` 中，编译器为 `go` 语句生成的路径最终会创建新 G，并将它放进可运行队列；调度器再从本地队列、全局队列或其他 P 的队列取得工作。局部队列优先减少争用，工作窃取帮助负载不均的 P 互相分担。这些数据结构是运行时实现细节，业务代码不能依赖“某个 goroutine 必定在哪个线程、何时运行”。
 
-在本机 Go 1.22.10 的 `runtime/proc.go` 中，注释直接说明编译器会把 `go` 语句转成对 `newproc` 的调用。`newproc` 创建一个处于可运行状态的 G，并用 `runqput` 放入当前 P 的可运行队列；随后 `wakep` 在需要时唤醒执行它的 M。
+阻塞并不总是占住一个操作系统线程。channel 等待、计时器和许多网络 I/O 会让当前 G 停放，M 可以改去运行其他 G；当 G 可继续执行时再被置为 runnable。长时间纯 CPU 计算、cgo 或某些系统调用仍可能影响调度，因此 CPU 密集型任务同样需要限制规模。
 
-常见的 GMP 说法可以这样读：**G** 是 goroutine 的执行上下文，**M** 是操作系统线程，**P** 是运行 Go 代码所需的调度资源和本地队列。M 必须持有 P 才能运行 G。调度器会从 P 的本地队列、全局队列或其他 P 的队列取得 G；当 G 因 channel、网络 I/O 等阻塞时，M 可以去运行别的 G。
-
-这解释了两个事实：goroutine 的创建很轻量，且阻塞一个 goroutine 不必占住一个线程；但它不构成业务顺序保证，也不保证 CPU 并行。可同时运行多少 Go 代码还受 `GOMAXPROCS` 和机器资源影响。
-
-并发与并行可简单区分：单核上两个查询在等待 I/O 时交替推进，是并发；多个 P 分别让 M 在不同 CPU 核上运行 Go 代码，才是并行。goroutine 提供的是表达并发的方式，不应把它直接等同于“创建一个新线程”。
-
-`sync/waitgroup.go` 的 `Add` 维护任务计数与等待者数量，`Wait` 在计数非零时休眠，最后一次 `Done` 让等待者继续。这个实现细节支持“结束发生在 Wait 返回之前”的同步关系；它不是用来保护任意共享变量的锁。
-
-可以把一次启动过程按时间拆开：当前 G 先把参数准备好，运行时把新 G 标成 runnable 并排队；某个持有 P 的 M 之后才会取到它执行。若当前 G 立刻到达 `Wait`，它会让出执行机会；这不是“新任务一定先跑”，而是等待点给调度器提供了可切换的机会。
-
-源码路径用于建立直觉即可，不要把内部字段或队列长度当作业务接口。运行时会随 Go 版本调整；应用代码应依赖语言规范、`sync` 和 `context` 文档承诺的行为。
+`sync.WaitGroup` 的源码也揭示了它为什么只能做等待：Go 1.26.5 用一个原子 `state` 同时保存任务计数和等待者数量；`Done()` 等价于 `Add(-1)`，计数降到 0 时才通过信号量唤醒所有 `Wait()`。它没有保存错误、结果或取消原因，所以这些能力必须由上层组合出来。
 
 ## 容易出错的边界
 
-- 不要用 `time.Sleep` 等 goroutine：它既不能证明任务完成，也会让等待时间依赖机器负载。
-- `Add` 应在启动任务前完成；`Done` 用 `defer` 紧贴 goroutine 开头，避免遗漏或重复，计数变成负数会 panic。
-- `WaitGroup` 使用后不能复制；一轮 `Wait` 尚未返回时，不要为下一轮任务重新 `Add`。
-- `cancel` 应尽快调用，并把 `ctx` 传到真正可能阻塞的 API；仅创建 context 不会自动停止任何工作。
-- 循环中启动 goroutine 时，把当前下标和值作为参数传入。即使 Go 1.22 改善了循环变量语义，显式传参仍能把任务拥有的数据写清楚。
-- `go` 调用的返回值会被丢弃。需要结果时，要把结果存到具有明确所有权的位置，或交给后续定义的数据传递协议。
+- 启动 goroutine 后立刻让 `main` 或 HTTP Handler 返回；没有等待与取消策略的后台工作不可靠。
+- 把 `time.Sleep` 当同步工具；它只等待时间，不表达任务是否完成。
+- 以为 `WaitGroup` 能防数据竞争；使用 `go test -race` 或 `go run -race` 检查共享内存访问。
+- 在 goroutine 中写入同一个 map、slice 或计数器却没有同步；并发读写 map 也不安全。
+- 把请求 Context 替换成 `Background`；这样客户端断开后下游工作仍可能继续。
+- 因为 goroutine 轻量就无限创建；真正先耗尽的往往是内存、连接、队列或下游服务。
 
 ## 总结
 
-goroutine 只让任务并发开始；`WaitGroup` 给出明确的收尾点，`context` 给出明确的放弃条件。先建立这两条生命周期边界，再讨论数据怎样在 goroutine 之间流动，程序才不会把“能跑”误当成“能长期运行”。
+goroutine 用来让相互独立的工作并发推进，但可靠的并发代码一定同时写清三件事：怎样等待完成、怎样传递结果或错误、怎样在不再需要时停止。`WaitGroup` 解决等待，`context` 解决生命周期，channel 或受保护的数据结构解决交接与共享。
+
+理解这些边界后，下一步才适合用 channel 设计生产者和消费者之间的数据流；否则 `go` 只会把串行代码中的资源和错误问题变成更难复现的并发问题。
 
 ## 参考资料
 
-- [Go 语言规范：Go 语句](https://go.dev/ref/spec#Go_statements)
-- [sync.WaitGroup](https://pkg.go.dev/sync#WaitGroup)
-- [context 包](https://pkg.go.dev/context)
-- [Go 1.22.10 `runtime/proc.go`](https://cs.opensource.google/go/go/+/go1.22.10:src/runtime/proc.go)
+- [Go 语言规范：Go statements](https://go.dev/ref/spec#Go_statements)
+- [Effective Go：Goroutines](https://go.dev/doc/effective_go#goroutines)
+- [Go 1.26.5 `runtime/proc.go` 源码](https://cs.opensource.google/go/go/+/go1.26.5:src/runtime/proc.go)
+- [Go 1.26.5 `sync/waitgroup.go` 源码](https://cs.opensource.google/go/go/+/go1.26.5:src/sync/waitgroup.go)
+- [Go 并发模式：Context](https://go.dev/blog/context)

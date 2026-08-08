@@ -1,6 +1,6 @@
 ---
 permalink: /backend/go/advanced/02-concurrency/03-select/
-title: 03. select：在多个并发事件之间响应
+title: 03. select：在多个并发事件之间作出选择
 shortTitle: 03. select
 order: 3
 category:
@@ -16,40 +16,158 @@ tag:
   - 并发编程
 ---
 
-# 03. select：在多个并发事件之间响应
+# 03. select：在多个并发事件之间作出选择
 
 ## 前言
 
-同时向几个数据源查询价格时，调用方关心的不止一个事件：任何一个结果可能先返回，整体可能超时，调用方也可能主动取消。只写 `<-results` 只能等结果，取消发生时就无从离开。`select` 把这些可等待事件放在同一个位置，让程序对真正先发生的事件作出响应。
+等待一个 channel 时，程序只关心一件事：“值什么时候到？”真实并发程序通常还要同时关心更多事件：查询结果先返回还是请求超时、任务 channel 是否关闭、调用方是否取消、另一个输入流是否已经准备好。若先顺序等待 A 再等待 B，A 长期没有数据就会让 B 的结果永远得不到处理。
 
-这里解决一个具体问题：**怎样收集多个并发结果，同时保证超时或取消后不会把发送结果的 goroutine 留在原地等待？**
+`select` 是 Go 对“等待多个通信事件”的回答。它不是 `switch` 的并发版，也不保证某个 case 总是优先；它在一组发送或接收中选出当前能推进的一项。掌握它的关键是先理解 channel 的阻塞规则，再理解 `select` 的精确定义：case 表达式何时求值、多个 case 同时就绪时如何选择、`default` 会怎样改变等待行为。
 
-## `select` 的最小规则
+这里先从一个聚合查询的超时问题出发，再建立 `select` 的规则，最后用一个可取消 worker pool 组合 goroutine、channel 和 Context。Go 1.26.5 的 runtime 源码会解释它怎样避免固定偏向与多 channel 锁死。
 
-每个 `case` 必须是一次 channel 发送或接收。若有一个或多个 case 可以立即通信，规范从它们中均匀伪随机地选一个；所以 case 的书写顺序不是优先级。若都不能进行且没有 `default`，当前 goroutine 阻塞。
+## 为什么顺序接收不够
+
+下面的代码希望处理任意一个先到的结果，但实际上必须先等 `slow`：
+
+```go
+first := <-slow // slow 没有值时，程序不会观察 fast。
+second := <-fast
+fmt.Println(first, second)
+```
+
+`select` 将这些“可能阻塞”的通信放在同一个等待点：
 
 ```go
 select {
-case value := <-results:
-	use(value)
-case <-ctx.Done():
-	return ctx.Err()
+case value := <-slow:
+	fmt.Println("slow 先到：", value)
+case value := <-fast:
+	fmt.Println("fast 先到：", value)
 }
 ```
 
-进入 `select` 时，case 中 channel 表达式和发送值会按源码顺序各求值一次。不要把昂贵计算或副作用藏在发送 case 右边，以为“没选中就不会执行”：
+它只执行一个 case 后就结束。若要持续处理事件，应把 `select` 放在循环中，并清楚定义循环何时退出。
+
+## `select` 的五条基本规则
+
+每个 `case` 必须是发送或接收；可以有最多一个 `default`。进入 `select` 时，语言规范规定如下：
+
+1. 所有接收操作的 channel 表达式，以及发送操作的 channel 和右值表达式，按源码顺序各求值一次。
+2. 若一个或多个通信可以立即进行，从其中一个作均匀伪随机选择。
+3. 若没有 case 就绪且有 `default`，立即执行 `default`。
+4. 若没有 case 就绪也没有 `default`，当前 goroutine 阻塞，直到有通信能进行。
+5. 只有被选中的接收 case 才会执行其左侧赋值与分支语句。
+
+“伪随机选择”不是给业务排序用的随机数。它的目的在于避免总偏向源码中靠前的 channel；程序正确性必须能接受任意一个同时就绪的 case 被选中。
+
+下面的例子中两个缓冲 channel 都已就绪，多次运行可能打印不同结果：
 
 ```go
-// buildReport() 进入 select 时就会执行，即使最终选中 ctx.Done()。
+left := make(chan string, 1)
+right := make(chan string, 1)
+left <- "L"
+right <- "R"
+
 select {
-case out <- buildReport():
-case <-ctx.Done():
+case value := <-left:
+	fmt.Println("选择 left：", value)
+case value := <-right:
+	fmt.Println("选择 right：", value)
 }
 ```
 
-## 一个完整例子：可取消的多源聚合
+## `default`：非阻塞尝试，而不是“超时”
 
-保存为 `main.go` 后执行 `go run main.go`。第三个来源在 250ms 截止时间内来不及完成，聚合函数返回超时；同一个 `ctx` 会通知仍在等待的来源停止。
+有 `default` 的 `select` 从不等待。它适合“尽力发送”“有就取一个”或在循环里做有限的其他工作：
+
+```go
+func trySend(out chan<- string, message string) bool {
+	select {
+	case out <- message:
+		return true // 缓冲有空位，或接收者已经等待。
+	default:
+		return false // 当前无法发送；调用方决定丢弃、记录或稍后重试。
+	}
+}
+```
+
+下面是常见错误：`default` 使循环反复立即返回，CPU 会忙等。
+
+```go
+for {
+	select {
+	case value := <-events:
+		handle(value)
+	default:
+		// 没有任何阻塞，循环会高速空转。
+	}
+}
+```
+
+若没有必要轮询，就删除 `default`；若确实要定期做事，加入 timer、退避或其他明确的等待事件。
+
+## 超时与取消：等待结束后还要让工作停止
+
+用 `time.After` 可以给一次简单等待加时间限制：
+
+```go
+select {
+case result := <-resultCh:
+	return result, nil
+case <-time.After(time.Second):
+	return Result{}, errors.New("等待结果超时")
+}
+```
+
+这只让**调用者停止等待**。若计算 goroutine 仍在向无接收者的 `resultCh` 发送，它会泄漏。对请求链路，应优先传入 `context.Context`：超时或客户端离开时，`ctx.Done()` 会关闭，所有协作方都可以选择退出。
+
+```go
+func fetch(ctx context.Context, result <-chan string) (string, error) {
+	select {
+	case value, ok := <-result:
+		if !ok {
+			return "", errors.New("结果流提前结束")
+		}
+		return value, nil
+	case <-ctx.Done():
+		return "", ctx.Err() // 返回 deadline exceeded 或 canceled，保留上游原因。
+	}
+}
+```
+
+`time.After` 在每次循环中创建定时器通常不是最清晰的做法。需要反复重置或停止的超时，使用一个 `time.Timer` 并遵守当前 Go 版本文档；单次请求 deadline 则优先由 `context.WithTimeout` 统一管理。
+
+## nil channel：动态移除一个 case
+
+对 nil channel 的发送与接收永远不能进行。因此在 `select` 中把一个 channel 变量设为 nil，等价于暂时移除该 case，而不是关闭它。
+
+这尤其适合合并多个有限输入。关闭的 channel 会永远立刻可接收；若不设为 nil，循环会不断选中它，造成空转。
+
+```go
+for left != nil || right != nil {
+	select {
+	case value, ok := <-left:
+		if !ok {
+			left = nil // 不再选择已经耗尽的输入。
+			continue
+		}
+		fmt.Println("left:", value)
+	case value, ok := <-right:
+		if !ok {
+			right = nil
+			continue
+		}
+		fmt.Println("right:", value)
+	}
+}
+```
+
+注意：`select {}` 是一个没有 case、没有 default 的 select，会永久阻塞。它偶尔用于刻意让 goroutine 永不返回，但不是常规的等待工具。
+
+## 一个完整示例：可取消且有上限的 worker pool
+
+这个示例模拟并发检查一批 URL。它展示四种不同事件如何在一个循环中协作：任务到达、结果可交付、上游关闭、服务取消。`jobs` 的唯一发送者关闭 jobs；协调 goroutine 等待所有 worker 后关闭 `results`；消费者从不关闭自己只接收的 channel。
 
 ```go
 package main
@@ -57,164 +175,137 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
+	"sync"
 	"time"
 )
 
-// Source 模拟一个可被 context 取消的下游服务。
-type Source struct {
-	name  string
-	price int
-	delay time.Duration
+type checkResult struct {
+	url string
+	ok  bool
 }
 
-type result struct {
-	source string
-	price  int
-	err    error
-}
-
-func (s Source) quote(ctx context.Context) (int, error) {
+// check 模拟可被取消的网络操作。
+func check(ctx context.Context, url string) (checkResult, error) {
 	select {
-	case <-time.After(s.delay):
-		return s.price, nil
+	case <-time.After(100 * time.Millisecond):
+		return checkResult{url: url, ok: strings.HasPrefix(url, "https://")}, nil
 	case <-ctx.Done():
-		// 真正的 HTTP 或数据库调用也应使用带 Context 的接口。
-		return 0, ctx.Err()
+		return checkResult{}, ctx.Err()
 	}
 }
 
-func collectQuotes(parent context.Context, sources []Source) ([]result, error) {
-	ctx, cancel := context.WithTimeout(parent, 250*time.Millisecond)
-	defer cancel() // 提前返回时也通知仍在运行的查询，释放 deadline 相关资源。
-
-	// 每个来源最多发送一个结果。容量足够时，即使接收者先返回，发送者也不会卡住。
-	results := make(chan result, len(sources))
-	for _, source := range sources {
-		go func(source Source) {
-			price, err := source.quote(ctx)
-			select {
-			case results <- result{source: source.name, price: price, err: err}:
-				// 正常交付一个结果。
-			case <-ctx.Done():
-				// 接收者已不再需要结果时，放弃发送而退出。
-			}
-		}(source) // 把本轮 source 固定给这个 goroutine。
-	}
-
-	quotes := make([]result, 0, len(sources))
-	for received := 0; received < len(sources); {
+func worker(ctx context.Context, jobs <-chan string, results chan<- checkResult, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for {
 		select {
-		case item := <-results:
-			received++
-			if item.err != nil {
-				return nil, fmt.Errorf("%s 查询失败: %w", item.source, item.err)
+		case url, ok := <-jobs:
+			if !ok {
+				return // 上游完成，当前 worker 已没有工作可取。
 			}
-			quotes = append(quotes, item)
+			result, err := check(ctx, url)
+			if err != nil {
+				return // ctx 取消后 check 已经返回，不再尝试发送结果。
+			}
+			select {
+			case results <- result:
+				// 消费者还在接收，交付结果。
+			case <-ctx.Done():
+				return // 消费者可能已离开，不能卡在 results <- result。
+			}
 		case <-ctx.Done():
-			// 不再等尚未返回的来源；defer cancel 会把信号传给它们。
-			return nil, ctx.Err()
+			return
 		}
 	}
-	return quotes, nil
 }
 
 func main() {
-	sources := []Source{
-		{name: "供应商 A", price: 99, delay: 60 * time.Millisecond},
-		{name: "供应商 B", price: 102, delay: 140 * time.Millisecond},
-		{name: "供应商 C", price: 95, delay: 400 * time.Millisecond},
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
 
-	quotes, err := collectQuotes(context.Background(), sources)
-	if err != nil {
-		fmt.Println("询价结束：", err)
-		return
-	}
-	fmt.Println("全部报价：", quotes)
-}
-```
+	jobs := make(chan string)
+	results := make(chan checkResult)
+	urls := []string{"https://go.dev", "http://example.com", "https://gorm.io"}
 
-结果 channel 没有在这里关闭，因为它只是这个函数内部、每个发送者至多发送一次的汇合点；接收循环有明确的计数退出条件。关闭 channel 的价值是广播“不会再有值”，而这里函数一旦返回，接收动作也结束了。若要用 `range results` 接收，就必须安排一个明确的唯一关闭者。
-
-示例的收尾路径有两条。所有来源及时返回时，循环精确接收 `len(sources)` 个结果并正常返回；截止时间先到时，接收循环从 `ctx.Done()` 返回，`defer cancel()` 让尚未结束的 `quote` 看到取消。发送端也监听同一个信号，所以不会在函数已经离开后无限等待接收者。
-
-容量为来源数是这个“一人一条结果”协议的上界，而不是通用配方。若来源可以不断产生流式结果，应重新定义消费者何时停止、谁关闭结果流以及可接受的积压量，不能沿用这里的计数退出条件。
-
-读代码时可以沿着两种结果推演：A、B 先返回时，它们的结果依次被附加到 `quotes`，顺序由完成时间决定而非 `sources` 的原始顺序；250ms 到达时，聚合者选择取消分支并返回。C 随后从自己的 `quote` 或发送处看到 `ctx.Done()`，不再依赖聚合者继续接收才有机会退出。
-
-## `nil`、关闭和 `default`：三个容易误解的 case
-
-`nil` channel 的收发永远不能进行，因此在 `select` 中等同于临时禁用该 case。关闭且取空的 channel 接收永远可以进行；若留在循环中，它会不断被选中。常见做法是在收到关闭后赋 `nil`：
-
-```go
-for updates != nil {
-	select {
-	case value, ok := <-updates:
-		if !ok {
-			updates = nil // 禁用该分支，避免关闭 channel 一直就绪。
-			continue
+	go func() {
+		defer close(jobs) // 唯一生产者完成后关闭任务流。
+		for _, url := range urls {
+			select {
+			case jobs <- url:
+			case <-ctx.Done():
+				return
+			}
 		}
-		fmt.Println(value)
+	}()
+
+	var wg sync.WaitGroup
+	const workerCount = 2
+	wg.Add(workerCount)
+	for i := 0; i < workerCount; i++ {
+		go worker(ctx, jobs, results, &wg)
+	}
+	go func() {
+		wg.Wait()      // 所有 results 发送者都已经结束。
+		close(results) // 所以现在关闭结果流不会与发送并发。
+	}()
+
+	for {
+		select {
+		case result, ok := <-results:
+			if !ok {
+				return // 正常完成：已消费所有 worker 产生的结果。
+			}
+			fmt.Printf("%s secure=%t\n", result.url, result.ok)
+		case <-ctx.Done():
+			fmt.Println("停止：", ctx.Err())
+			return // defer cancel 通知生产者与 worker 尽快退出。
+		}
 	}
 }
 ```
 
-`default` 表示“不等待，立刻执行”。它适合尝试性操作，例如非阻塞地检查是否已取消；放在持续循环里却不做等待，会造成忙等并占满 CPU。
+工作池限制的是同时调用 `check` 的数量，而不是入口处可接受的任务总数。高负载服务还需要为队列长度、拒绝策略、重试和下游限流设置明确规则；`select` 只是把这些事件的等待和退出写得可组合。
+
+## 源码视角：从语言规则到 `runtime.selectgo`
+
+编译器会将多个 case 的通用 select 编译为调用 `runtime.selectgo`。Go 1.26.5 的实现首先收集非 nil channel，生成一个随机化的 `pollorder`；这与规范的“多个可通信 case 均匀伪随机选择”相对应。它又按 channel 地址生成 `lockorder`，以固定顺序持有多把 channel 锁，避免两个 goroutine 以相反顺序锁住两个 channel 而死锁。
 
 ```go
-select {
-case message := <-in:
-	handle(message)
-default:
-	// 当前没有消息；不要在这里无限空转。
+// Go 1.26.5：runtime/select.go 的关键流程，删去 synctest 与调试代码。
+for i := range scases {
+	cas := &scases[i]
+	if cas.c == nil {
+		continue // nil channel 根本不进入候选集合。
+	}
+	j := cheaprandn(uint32(norder + 1))
+	pollorder[norder] = pollorder[j]
+	pollorder[j] = uint16(i) // 打乱轮询次序，避免总偏向前面的 case。
+	norder++
 }
 ```
 
-没有任何 case 的 `select {}` 会永久阻塞，通常不该出现在业务代码中。更实用的判断是：每一个 case 都应对应一个明确事件，以及事件发生后这段 goroutine 的去向；`default` 也应有同样明确的用途。
+紧接着的真实源码会对候选 channel 按地址做原地堆排序，得到 `lockorder`，再按这个顺序加锁。第一轮按已打乱的 `pollorder` 检查：接收 case 查看等待发送者、缓冲数据和关闭状态；发送 case 查看关闭状态、等待接收者和缓冲容量。若第一轮没有就绪 case 且没有 `default`，runtime 会把当前 goroutine 同时登记到每个候选 channel 的等待队列，然后停放它。任何一个通信唤醒该 goroutine 后，runtime 会撤销它在其余 channel 上的登记，只执行真正获胜的一个 case。于是一个 goroutine 可以安全地“等多个地方”，但一次 select 仍只完成一项通信。
 
-## 从运行时看：选择的是就绪通信，不是时间顺序
-
-编译器把多路通信组织后交给运行时的 `selectgo`（Go 1.22.10 的 `runtime/select.go`）。运行时先为 case 建立随机的轮询次序，检查可立即完成的收发；当多个 case 就绪时，这种随机化对应规范所说的伪随机选择，而不是“第一个 case 赢”。
-
-若没有就绪 case 且没有 `default`，运行时会把当前 goroutine 挂到相关 channel 的等候队列上。任一 channel 发生匹配收发或关闭后，它才被唤醒，再确定被选中的 case。`nil` channel 不会加入等候队列，所以能用变量设为 `nil` 来关闭一个分支。
-
-```mermaid
-sequenceDiagram
-    participant M as 聚合者
-    participant A as 来源 A
-    participant B as 来源 B
-    participant C as 来源 C
-    M->>A: go quote(ctx)
-    M->>B: go quote(ctx)
-    M->>C: go quote(ctx)
-    A-->>M: result
-    B-->>M: result
-    M->>C: ctx.Done()（超时）
-    C-->>C: 放弃等待或发送并退出
-    M-->>M: 返回 context deadline exceeded
-```
-
-这里的随机性只适用于多个 case 已就绪时的选择。业务若确实需要优先处理取消，不能靠把 `ctx.Done()` 写在前面；应先以非阻塞方式单独检查取消，再进行主 `select`，并说明这种优先级策略。
-
-因此，`select` 最适合表达“任一事件先发生即可推进”的场景。若业务需要严格按事件时间排序，或必须按固定优先级处理，应该先明确排序或仲裁规则，再选择合适的数据结构和同步协议。
-
-把这种选择规则写清楚，比试图从一次运行结果猜测调度行为可靠得多。
+规范中“case 操作数进入 select 时都求值一次”也很重要：即使某个 case 最终未被选中，它的 channel 表达式和发送右值的副作用也已经发生。不要把有副作用的函数调用藏在 case 中；先计算清楚的局部变量，代码更容易推理和测试。
 
 ## 容易出错的边界
 
-- 不要依赖 case 的书写顺序。当多个 case 都就绪时，任意一个都可能被选择。
-- 超时只让当前等待点离开；要让下游调用停下，必须把同一个 `ctx` 传给支持取消的操作。
-- 提前返回时，确保每个发送者都有退出路径：示例用 `ctx.Done()` 和有界结果缓冲共同避免阻塞发送。
-- 关闭的 channel 会持续就绪。需要在循环中停止监听它时，将 channel 变量设为 `nil`。
-- 带 `default` 的循环很容易忙等；若只是周期性检查，应使用合适的阻塞或调度策略，而不是空转。
+- 不要依赖多个就绪 case 的固定优先级；需要优先级时设计明确的两阶段检查或队列策略。
+- 不要在无限循环里加无条件 `default`，它会忙等。
+- 不要只给调用者加超时却不通知生产者或 worker；可能遗留阻塞 goroutine。
+- 不要把已关闭 channel 留在合并循环中；设为 nil 后才会真正移除该 case。
+- 不要把 `select` 当数据竞争的解决方案；共享状态仍需要 channel 的所有权约定或锁。
+- 不要让超时成为常态控制流；频繁 timeout 往往意味着下游容量、队列或 deadline 设计有问题。
 
 ## 总结
 
-`select` 解决的是“等待哪一个并发事件”：结果、取消和超时可以在同一个等待点竞争。用 context 把放弃信号传给下游，并为每个发送者设计退出路径，聚合代码才既能等到结果，也能在不再需要结果时干净收尾。
+`select` 让 goroutine 在多个发送、接收、取消和定时事件之间等待一次可推进的操作。没有 `default` 时它是阻塞等待；有 `default` 时它是非阻塞尝试；nil channel 可以动态禁用 case；关闭 channel 则是可立即观察到的结束事件。
+
+把它与有边界的 channel、`context` 和明确的关闭所有权组合起来，才能写出既能完成任务、又能在超时和停止时干净退出的并发程序。
 
 ## 参考资料
 
-- [Go 语言规范：select 语句](https://go.dev/ref/spec#Select_statements)
-- [context 包](https://pkg.go.dev/context)
-- [Effective Go：Channels](https://go.dev/doc/effective_go#channels)
-- [Go 1.22.10 `runtime/select.go`](https://cs.opensource.google/go/go/+/go1.22.10:src/runtime/select.go)
+- [Go 语言规范：Select statements](https://go.dev/ref/spec#Select_statements)
+- [Go 并发模式：Pipelines and cancellation](https://go.dev/blog/pipelines)
+- [Go 并发模式：Context](https://go.dev/blog/context)
+- [Go 1.26.5 `runtime/select.go` 源码](https://cs.opensource.google/go/go/+/go1.26.5:src/runtime/select.go)
