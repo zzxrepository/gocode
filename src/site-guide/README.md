@@ -316,7 +316,7 @@ export default sidebar({
 
 对于 Go 这类层级更深的栏目，可以在 `sidebar.ts` 中固定上层分组，再让子目录自动生成。例如 `backend/go/basic/`、`backend/go/advanced/` 和 `backend/go/frameworks-and-ecosystem/` 可以分别作为结构化侧边栏范围。
 
-资源导航这类“所有内容都在一页”的页面，可以在 `sidebar.ts` 中手写锚点链接，例如 `/resources/#官方文档`。这样左侧栏看起来像一级目录，点击时仍然停留在同一个页面内跳转。此类页面可以在 frontmatter 中设置 `toc: false`，避免右侧再出现一份重复的“此页内容”。
+资源导航这类“所有内容都在一页”的页面，可以在 `sidebar.ts` 中手写锚点链接，例如 `/resources/#官方文档`。这样左侧栏看起来像一级目录，点击时仍然停留在同一个页面内跳转。`src/resources/README.md` 新增、删除或改名一级 `##` 分类时，必须同步更新 `/resources/` 的侧边栏锚点；此类页面可以在 frontmatter 中设置 `toc: false`，避免右侧再出现一份重复的“此页内容”。
 
 ### 准备首页
 

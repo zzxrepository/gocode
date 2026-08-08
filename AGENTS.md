@@ -31,6 +31,7 @@
 - 叶子文章不设置 `dir` 或 `icon`；图标只用于栏目和专题分组。迁移已有叶子文章时，用 `permalink` 保持原网页地址，并为无法保留的旧地址配置重定向。
 - 新增或调整目录后，检查侧边栏：同名文章不得重复出现，叶子文章不得显示为可展开分组。
 - 新增资源链接时，检查整个分类的质量、语言、重复情况和使用价值；有官方中文资料时优先使用。
+- `src/resources/README.md` 的一级分类使用手工锚点侧边栏；新增、删除或改名一级分类时，必须同步更新 `src/.vuepress/sidebar.ts` 中的 `/resources/` 配置。
 - 仅在新增真正的顶级栏目时修改 `src/.vuepress/navbar.ts` 和 `src/.vuepress/sidebar.ts`。
 - 保留 `src/.vuepress/public/CNAME` 和 `src/.vuepress/public/.nojekyll`。搜索引擎验证文件应保留在 `src/.vuepress/public/`，确保它们进入部署产物。
 - 修改会影响后续维护方式的站点配置时，同步更新 `src/site-guide/README.md`。

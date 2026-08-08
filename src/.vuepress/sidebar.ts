@@ -106,6 +106,7 @@ export default sidebar({
     { text: "编程学习", icon: "graduation-cap", link: "/resources/#编程学习" },
     { text: "代码托管", icon: "code-branch", link: "/resources/#代码托管" },
     { text: "官方文档", icon: "book-open", link: "/resources/#官方文档" },
+    { text: "深度学习", icon: "brain", link: "/resources/#深度学习" },
     { text: "AI 工具", icon: "robot", link: "/resources/#ai-工具" },
     { text: "模型 API 与订阅", icon: "brain", link: "/resources/#模型-api-与订阅" },
     { text: "云服务", icon: "cloud", link: "/resources/#云服务" },
