@@ -17,10 +17,10 @@ tag:
   - context
   - reflect
   - encoding
-  - net/http
+  - database/sql
   - sync
 ---
 
 # 01. 标准库
 
-这里会整理 Go 常用标准库，包括 `context`、`reflect`、`encoding/json`、`encoding/xml`、`time`、`sync`、`net/http`、`io` 和 `os` 等。
+这里整理 Go 常用标准库，包括 `context`、`reflect`、编码、`database/sql`、`time`、`sync`、`io` 和 `os` 等。HTTP 服务相关内容放在“Web 编程基础”，以便按实际开发问题学习。

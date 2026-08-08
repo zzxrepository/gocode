@@ -125,7 +125,7 @@ src/
     └── styles/
 ```
 
-`src/README.md` 是网站首页。每个顶级栏目通常也需要一个 `README.md`，它既是栏目首页，也负责用 frontmatter 声明栏目标题、图标、排序和目录行为。
+`src/README.md` 是网站首页。需要独立访问、承载栏目说明或作为结构化侧边栏分组链接的目录，可以使用 `README.md` 作为目录首页；纯粹由侧边栏固定分组的中间目录不必为了占位额外创建页面。
 
 ### 配置站点入口
 
@@ -656,7 +656,7 @@ gocode.mmzhang.cn -> zzxrepository.github.io
 
 | 本地文件 | 网页地址 |
 | --- | --- |
-| `src/backend/go/basic/README.md` | `/backend/go/basic/` |
+| `src/backend/go/basic/01-project-structure/README.md` | `/backend/go/basic/01-project-structure/` |
 | `src/backend/go/basic/09-methods/README.md` | `/backend/go/basic/09-methods/` |
 | `src/algorithm/leetcode/hot-100/two-sum.md` | `/algorithm/leetcode/hot-100/two-sum.html` |
 
@@ -765,7 +765,7 @@ src/backend/go/basic/13-generics/README.md
 
 ## 新增目录
 
-每个希望出现在侧边栏中的目录，都建议放一个 `README.md` 作为目录首页。
+需要作为可点击分组展示在侧边栏中的目录，建议放一个 `README.md` 作为目录首页；如果目录只作为固定侧边栏分组、无需独立页面，可以不创建它，并为旧地址配置重定向。
 
 ```md
 ---

@@ -22,4 +22,4 @@ tag:
 
 # 02. 并发编程
 
-这里会整理 goroutine、channel、select、sync 包和并发模式。
+这里按 `goroutine → channel → select` 的顺序整理并发基础，再逐步补充同步原语、取消、限流和常用并发模式。
