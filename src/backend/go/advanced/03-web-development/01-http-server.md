@@ -1,6 +1,6 @@
 ---
 permalink: /backend/go/advanced/03-web-development/01-http-server/
-title: 01. net/http：构建 HTTP 服务
+title: 01. net/http：从第一个 Handler 到可停止的 HTTP 服务
 shortTitle: 01. net/http
 order: 1
 category:
@@ -11,60 +11,88 @@ tag:
   - Go
   - net/http
   - HTTP
-  - Web 编程
   - HTTP 服务
+  - Context
 ---
 
-# 01. net/http：构建 HTTP 服务
+# 01. net/http：从第一个 Handler 到可停止的 HTTP 服务
 
 ## 前言
 
-一个 HTTP 服务做的事可以浓缩成一句话：接收请求，交给合适的业务函数，再把响应写回去。`net/http` 的价值在于把这条路径中的网络、协议解析、连接复用和并发细节收在标准库里；应用只需要围绕 `Handler` 编写业务代码。
+`net/http` 是 Go 标准库的 HTTP 实现。它既能发起客户端请求，也能构建服务端；服务端最核心的接口只有 `http.Handler`。框架会提供更丰富的路由、中间件和参数绑定，但最终仍要把请求交给一个 `Handler`。
 
-下面围绕一个很小的任务 API 展开。它不会试图覆盖 Cookie、反向代理、静态文件或 HTTP 客户端，而是把服务端最容易出错的边界讲清楚：路由怎样选中 Handler、请求数据从哪里读、响应什么时候已经发出、取消如何传给下游，以及进程怎样安全停止。
+从历史上看，`net/http` 在 **Go 1.0** 正式发布时就已是标准库的一部分；Go 1 的发布说明还记录了当时对 `http` 与 `httputil` 的一次拆分重构。因此，它不是 Go 1.7 或 Go 1.22 才引入的包。
 
-文中的公开 API 以 [net/http 官方文档](https://pkg.go.dev/net/http@go1.22.10) 为准。源码片段核对自 Go 1.22.10；它们用来解释当前实现，**不是应用可以依赖的稳定契约**。
+本文以当前稳定版 **Go 1.26.5** 的公开文档与 `src/net/http/server.go` 源码为事实依据。为读懂今天的 API，还需要知道两个演进节点：Go 1.7 将 `context` 纳入标准库，并为 `http.Request` 增加了 `Context` 与 `WithContext`；Go 1.22 增强了 `ServeMux`，使路由模式可同时写请求方法和路径参数，例如 `GET /tasks/{id}`。本文示例使用后者，故要求 Go 1.22 或更高版本，并可直接用于 Go 1.26.5。
 
-## 请求怎样抵达 Handler
+目标不是记住所有 API，而是建立一条完整的请求链：**连接进来后，谁选择 Handler；Handler 怎样读取输入并写出响应；客户端离开和进程停止时，怎样让工作干净结束。**
 
-调用 `server.ListenAndServe()` 后，服务端在端口上等待 TCP 连接。对 HTTP/1.x 而言，连接可以被 keep-alive 复用：同一条连接可以连续携带多次请求。标准库读取请求行、请求头和请求体，构造 `*http.Request`，再把它交给配置好的 `Handler`。
+## 先运行一个最小服务
+
+一个 Handler 接收两个参数：`ResponseWriter` 负责响应，`*Request` 承载请求信息。
+
+```go
+package main
+
+import (
+	"fmt"
+	"log"
+	"net/http"
+)
+
+func hello(w http.ResponseWriter, r *http.Request) {
+	// Header 必须在开始写响应前设置；这里明确告诉客户端正文是 UTF-8 文本。
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+
+	// 第一次写入正文时，若尚未调用 WriteHeader，net/http 会自动提交 200 OK。
+	if _, err := fmt.Fprintln(w, "hello, net/http"); err != nil {
+		// 客户端可能已断开；服务端只记录写入失败，不能再尝试写另一份错误响应。
+		log.Printf("write response: %v", err)
+	}
+}
+
+func main() {
+	// HandleFunc 把普通函数适配为 http.Handler，并注册到默认路由器。
+	http.HandleFunc("GET /hello", hello)
+
+	// ListenAndServe 会一直阻塞，直到监听或服务发生错误。
+	log.Fatal(http.ListenAndServe(":8080", nil))
+}
+```
+
+运行 `go run main.go` 后，执行：
+
+```bash
+curl -i http://127.0.0.1:8080/hello
+```
+
+这里使用 `http.HandleFunc` 很方便，但它会修改全局的 `http.DefaultServeMux`。真实服务和测试更适合显式创建 `http.NewServeMux()`，把路由依赖放进一个独立对象。
+
+## 一次请求到底经历了什么
+
+HTTP 服务不需要为每个请求手写 TCP 读取和 HTTP 报文解析，这些都由 `http.Server` 完成。应用只在最后接到 `Handler` 调用。
 
 ```mermaid
 sequenceDiagram
     participant C as 客户端
-    participant L as net.Listener
     participant S as http.Server
     participant M as ServeMux
-    participant H as 业务 Handler
+    participant H as Handler
 
-    C->>L: 建立 TCP 连接并发送 HTTP 请求
-    L->>S: Accept() 返回连接
-    S->>S: 解析请求，创建 Request 与 ResponseWriter
+    C->>S: TCP 连接与 HTTP 请求
+    S->>S: 解析请求，创建 Request 和 ResponseWriter
     S->>M: ServeHTTP(w, r)
-    M->>H: 匹配方法和路径后调用 Handler
-    H->>H: 读取输入，调用业务逻辑
-    H-->>S: 通过 ResponseWriter 写响应
-    S-->>C: 状态行、响应头、响应体
+    M->>H: 根据方法和路径选择 Handler
+    H->>H: 校验输入并调用业务逻辑
+    H-->>S: 写入状态码、响应头和响应体
+    S-->>C: HTTP 响应
 ```
 
-`Server` 接受连接的核心循环大致如下：
+同一个 Handler 可能同时服务多个请求。因此 Handler 结构体适合保存数据库连接池、配置、日志器等长期依赖，却不应把“当前用户”“当前任务”存到普通字段中。请求独有的数据应留在局部变量或 `r.Context()` 里；共享可变状态必须自己同步。
 
-```go
-// Go 1.22.10 的 src/net/http/server.go，省略临时错误重试等细节。
-for {
-	// Accept 会阻塞，直到操作系统交给它一个新连接。
-	rw, err := l.Accept()
-	if err != nil {
-		return err
-	}
-	c := srv.newConn(rw)
-	go c.serve(connCtx) // 每个 HTTP/1.x 连接由服务端 goroutine 接管。
-}
-```
+## Handler 与 ServeMux：让路由表表达接口
 
-这段实现说明两件实际的事：不同连接上的 Handler 可以同时运行，所以共享的可变数据必须同步；不要假定请求会按某个客户端连接串行执行。HTTP/2 还允许同一连接的多个流并发，后一个假定更不成立。源码位置可见 [Server.Serve](https://cs.opensource.google/go/go/+/go1.22.10:src/net/http/server.go)。
-
-应用层的入口只有这个接口：
+`http.Handler` 的定义非常小：
 
 ```go
 type Handler interface {
@@ -72,57 +100,68 @@ type Handler interface {
 }
 ```
 
-结构体 Handler 适合持有数据库连接池、配置等长期依赖；一次请求的数据则应放在局部变量或 `r.Context()` 中。普通函数也能成为 Handler，因为 `HandlerFunc` 只是一个函数适配器：
+普通函数之所以能直接注册，是因为标准库定义了函数适配器：
 
 ```go
-// Go 1.22.10 的 src/net/http/server.go。
-// 这是当前标准库实现的说明，不是额外的框架机制。
+// Go 1.26.5：src/net/http/server.go。
+// 这是解释实现的源码片段，不是业务代码应依赖的内部约定。
 type HandlerFunc func(ResponseWriter, *Request)
 
 func (f HandlerFunc) ServeHTTP(w ResponseWriter, r *Request) {
-	f(w, r) // 调用函数本身。
+	f(w, r) // 适配器没有额外魔法，只是调用这个函数。
 }
 ```
 
-因此 `mux.Handle(handler)` 与 `mux.HandleFunc(function)` 最终都走 `ServeHTTP`。源码可见 [HandlerFunc](https://cs.opensource.google/go/go/+/go1.22.10:src/net/http/server.go;l=2167)。
-
-## 用 ServeMux 把请求路由到业务代码
-
-`http.NewServeMux()` 创建一个独立路由器。相比 `http.HandleFunc` 使用的全局 `http.DefaultServeMux`，独立实例不会让测试或同一进程里的其他服务共享路由状态。
-
-Go 1.22 的模式格式是：
+Go 1.22 的 `ServeMux` 模式可以写为：
 
 ```text
 [METHOD ][HOST]/PATH
 ```
 
-例如 `GET /tasks/{id}` 同时约束方法和路径，`{id}` 表示一个路径段。在处理函数中使用 `r.PathValue("id")` 读取它。路径参数始终是外部输入，仍然要转换和校验，绝不能因为路由匹配成功就当作可信数据。
-
 ```go
 mux := http.NewServeMux()
 
-// GET 模式也匹配 HEAD；无需在 Handler 内重复判断 r.Method。
+// GET 同时匹配 HEAD；方法判断由路由完成，Handler 无须重复书写。
 mux.HandleFunc("GET /tasks", listTasks)
 
-// {id} 只覆盖一个非空路径段，例如 /tasks/42。
+// {id} 匹配一个非空路径段；取到后仍然必须转换和校验。
 mux.HandleFunc("GET /tasks/{id}", getTask)
 ```
 
-`ServeMux` 按“更具体的模式优先”选择路由，而不是简单按注册先后。例如 `GET /tasks/latest` 比 `GET /tasks/{id}` 更具体，所以访问 `/tasks/latest` 时会选前者。若路径存在而方法不匹配，Go 1.22 的 `ServeMux` 会生成带 `Allow` 头的 `405 Method Not Allowed`；没有任何路径匹配时才是 `404 Not Found`。
+访问 `GET /tasks/42` 时，可用 `r.PathValue("id")` 取到字符串 `"42"`。`ServeMux` 会按“更具体的模式优先”匹配：`GET /tasks/latest` 比 `GET /tasks/{id}` 更具体。路径存在但方法不匹配时，标准库会返回 `405 Method Not Allowed` 并设置 `Allow`；没有匹配路径时才是 `404 Not Found`。
 
-注册阶段会拒绝无法判定优先级的冲突模式。把方法直接写在模式中，路由表本身就是接口的声明，也避免在每个 Handler 中手工写一串 `if r.Method != ...`。方法模式、通配符与 `PathValue` 是 Go 1.22 引入的 API；旧版本应升级或使用相应版本支持的路由方式。详细规则见 [ServeMux 文档](https://pkg.go.dev/net/http@go1.22.10#ServeMux)。
+这层路由负责“请求交给谁”，不负责“输入是否符合业务规则”。`{id}` 匹配成功并不代表它一定是数字，更不代表调用者有权限访问该任务。
 
-## Request：先限制和校验输入，再进入业务逻辑
+## ResponseWriter：响应写出后就不能反悔
 
-`*http.Request` 既是 HTTP 输入的容器，也是请求生命周期的信号：
+`ResponseWriter` 的三个常用方法有严格顺序：
 
-- `r.Method`、`r.URL`、`r.Header` 分别是方法、目标地址和请求头；它们都是不可信输入。
-- `r.Body` 是流，不是预先读入内存的字节数组。JSON API 应限制大小，随后解码和校验。
-- `r.Context()` 会在客户端断开、请求被取消或 Handler 返回时被取消。数据库、RPC 等下游调用应接收它，而不是自行换成 `context.Background()`。
+1. `Header()` 修改响应头；
+2. `WriteHeader(status)` 提交状态码和响应头；
+3. `Write(body)` 写响应体；若尚未提交，会隐式提交 `200 OK`。
 
-处理普通 JSON 请求时，先完整读取和验证所需输入，再开始写响应。这一点很重要：HTTP/1.x 中响应开始后再读请求体可能无法正常工作；更普遍地说，响应一旦提交，错误就很难转换为一致的 JSON 响应。
+```go
+func writeJSON(w http.ResponseWriter, status int, value any) {
+	// 先设置头；Encode 会调用 Write，因此放在后面才有效。
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
 
-下面是一个小型、可运行的任务服务。将它保存为 `main.go`，执行 `go run .`，然后用 `curl` 调用即可。内存存储只是为了把注意力放在 HTTP 边界；生产中可把 `taskStore` 的方法换成数据库仓储，并继续把 `ctx` 传下去。
+	// 一旦 Encode 已写出部分字节，不能再把响应改成另一份 500 JSON。
+	if err := json.NewEncoder(w).Encode(value); err != nil {
+		log.Printf("encode JSON response: %v", err)
+	}
+}
+```
+
+标准库的 `response.WriteHeader` 会记录第一次最终状态码；第二次调用不会覆盖它，而是记一条“superfluous WriteHeader”日志。`Write` 在尚未提交时会先调用 `WriteHeader(StatusOK)`。这就是下面两种错误写法不可靠的原因：先 `Encode` 再写 `400`，或业务函数和外层错误处理器都各写一次响应。
+
+服务端通常应先读取并校验所需的 `r.Body`，再开始响应。Go 1.7 的 `net/http` 文档特别说明：开始写响应后，后续读取请求体未必还能正常工作。
+
+## 一个完整示例：任务 JSON API
+
+下面的程序把路由、JSON 输入、响应、请求 Context、超时和优雅关闭放在同一条请求链里。保存为 `main.go` 后执行 `go run main.go`。
+
+内存存储只是为了聚焦 HTTP 边界；替换成数据库仓储时，仍应让仓储方法接收同一个 `ctx`。
 
 ```go
 package main
@@ -134,6 +173,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"os/signal"
 	"strconv"
 	"strings"
@@ -142,21 +182,22 @@ import (
 	"time"
 )
 
-// task 是 API 的输出模型。json tag 明确固定对外字段名，
-// 不让 Go 的字段命名规则意外变成接口协议。
+// task 是 API 返回的资源。json tag 将对外字段名固定为小写，
+// 避免 Go 字段名意外成为接口协议。
 type task struct {
 	ID        int64  `json:"id"`
 	Title     string `json:"title"`
 	Completed bool   `json:"completed"`
 }
 
-// createTaskInput 只包含创建接口接受的字段；不要把内部模型直接拿来解码。
+// createTaskInput 只包含此接口允许客户端提交的字段。
+// 不直接把内部数据模型用于解码，能避免客户端修改不该修改的字段。
 type createTaskInput struct {
 	Title string `json:"title"`
 }
 
-// taskStore 是跨请求共享的内存状态，故必须用互斥锁保护。
-// 真实服务中，它通常会被数据库仓储替代。
+// taskStore 是跨请求共享的状态，所以用 mutex 保护 map 和自增 ID。
+// 生产环境中可以把它替换为数据库仓储，Handler 的调用方式无需变化。
 type taskStore struct {
 	mu     sync.RWMutex
 	nextID int64
@@ -168,7 +209,7 @@ func newTaskStore() *taskStore {
 }
 
 func (s *taskStore) create(ctx context.Context, title string) (task, error) {
-	// 此处没有阻塞 I/O，仍先检查 ctx，保持与数据库调用一致的约定。
+	// 内存操作不会阻塞，但先检查 ctx 能让接口与真实 SQL/RPC 仓储保持一致。
 	if err := ctx.Err(); err != nil {
 		return task{}, err
 	}
@@ -193,7 +234,7 @@ func (s *taskStore) get(ctx context.Context, id int64) (task, bool, error) {
 	return t, ok, nil
 }
 
-// api 只持有长期依赖。每个请求自己的输入应留在方法局部变量中。
+// api 只保存进程级依赖。不要把某次请求的输入或身份保存到这里。
 type api struct {
 	store *taskStore
 }
@@ -202,10 +243,11 @@ func newHandler(store *taskStore) http.Handler {
 	a := &api{store: store}
 	mux := http.NewServeMux()
 
-	// 方法属于路由模式，让 ServeMux 统一处理 404、405 和 Allow 响应头。
+	// 把方法写进模式：ServeMux 能正确区分 404 和 405，并生成 Allow 响应头。
 	mux.HandleFunc("GET /healthz", a.healthz)
 	mux.HandleFunc("POST /tasks", a.createTask)
 	mux.HandleFunc("GET /tasks/{id}", a.getTask)
+
 	return mux
 }
 
@@ -214,12 +256,12 @@ func (a *api) healthz(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *api) createTask(w http.ResponseWriter, r *http.Request) {
-	input, err := decodeCreateTask(w, r)
-	if err != nil {
-		return // decodeCreateTask 已输出可公开的 400 或 413 错误。
+	input, ok := decodeCreateTask(w, r)
+	if !ok {
+		return // 解码函数已经写入对调用方可公开的 400 或 413 响应。
 	}
 
-	// 继续传递 Request Context：客户端取消时，未来的数据库调用也能尽快停止。
+	// r.Context 代表这一次 HTTP 请求；绝不能在这里替换成 context.Background()。
 	t, err := a.store.create(r.Context(), input.Title)
 	if err != nil {
 		writeContextError(w, err)
@@ -229,7 +271,7 @@ func (a *api) createTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *api) getTask(w http.ResponseWriter, r *http.Request) {
-	// PathValue 返回字符串；路由匹配不等于它是有效的业务 ID。
+	// 路径参数只是字符串，必须验证为正整数后才能进入业务层。
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil || id <= 0 {
 		writeError(w, http.StatusBadRequest, "task id must be a positive integer")
@@ -248,13 +290,12 @@ func (a *api) getTask(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, t)
 }
 
-func decodeCreateTask(w http.ResponseWriter, r *http.Request) (createTaskInput, error) {
-	// MaxBytesReader 在读取过程中实施上限，避免 Decoder 无限制占用内存。
-	// 服务端会在请求结束时关闭 r.Body；这里不应把它交给后台 goroutine 继续使用。
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MiB，根据接口合同调整。
+func decodeCreateTask(w http.ResponseWriter, r *http.Request) (createTaskInput, bool) {
+	// MaxBytesReader 在读取过程中限制 body，不能只相信客户端声明的 Content-Length。
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 最大 1 MiB；按接口合同调整。
 
 	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields() // 把 "titel" 之类的拼写错误明确暴露给调用方。
+	decoder.DisallowUnknownFields() // 将 {"titel":"..."} 这类拼写错误明确返回给调用方。
 
 	var input createTaskInput
 	if err := decoder.Decode(&input); err != nil {
@@ -262,66 +303,60 @@ func decodeCreateTask(w http.ResponseWriter, r *http.Request) (createTaskInput, 
 		if errors.As(err, &tooLarge) {
 			writeError(w, http.StatusRequestEntityTooLarge, "request body is too large")
 		} else {
-			writeError(w, http.StatusBadRequest, "request body must be valid JSON")
+			writeError(w, http.StatusBadRequest, "invalid JSON body")
 		}
-		return createTaskInput{}, err
+		return createTaskInput{}, false
 	}
 
-	// 第一次 Decode 成功不代表 body 只有一个 JSON 值；拒绝拼接的第二个对象。
+	// Decode 一次成功不等于 body 里只有一个 JSON 值；拒绝尾随的第二段 JSON。
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
 		writeError(w, http.StatusBadRequest, "request body must contain one JSON value")
-		return createTaskInput{}, err
+		return createTaskInput{}, false
 	}
 
 	input.Title = strings.TrimSpace(input.Title)
-	if input.Title == "" || len(input.Title) > 200 {
-		writeError(w, http.StatusBadRequest, "title must contain 1 to 200 characters")
-		return createTaskInput{}, errors.New("invalid task title")
+	if input.Title == "" {
+		writeError(w, http.StatusBadRequest, "title is required")
+		return createTaskInput{}, false
 	}
-	return input, nil
+	return input, true
 }
 
-// writeJSON 固定所有 JSON 响应的输出顺序，避免不同 Handler 各自处理响应头和错误。
 func writeJSON(w http.ResponseWriter, status int, value any) {
-	// Header 必须在 WriteHeader 或 Encoder.Encode 之前设置。
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-
-	// Encode 会向 w 写 body；此时状态码已提交，编码失败只能记录，不能改写为新的 500。
+	w.WriteHeader(status) // 一定在 Encoder 写 body 之前提交状态码。
 	if err := json.NewEncoder(w).Encode(value); err != nil {
-		log.Printf("encode JSON response: %v", err)
+		log.Printf("encode response: %v", err)
 	}
 }
 
 func writeError(w http.ResponseWriter, status int, message string) {
-	// 只返回稳定、可公开的错误文本；内部异常写日志，不泄露给客户端。
+	// 对外只返回稳定、可理解的错误；底层错误细节应写到服务端日志。
 	writeJSON(w, status, map[string]string{"error": message})
 }
 
 func writeContextError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, context.Canceled):
-		// 客户端通常已离开。停止下游工作即可，没必要强行再写一份响应。
+		// 客户端通常已经离开，不需要再尝试写响应。
 		return
 	case errors.Is(err, context.DeadlineExceeded):
 		writeError(w, http.StatusGatewayTimeout, "request timed out")
 	default:
-		log.Printf("unexpected request error: %v", err)
+		log.Printf("request failed: %v", err)
 		writeError(w, http.StatusInternalServerError, "internal server error")
 	}
 }
 
 func main() {
 	server := &http.Server{
-		Addr:    ":8080",
-		Handler: newHandler(newTaskStore()),
-
-		// 这些超时保护的是网络读写，不替代数据库/RPC 自己的 Context 超时。
+		Addr:              ":8080",
+		Handler:           newHandler(newTaskStore()),
 		ReadHeaderTimeout: 5 * time.Second,  // 防止慢速请求头长期占用连接。
-		ReadTimeout:       15 * time.Second, // 限制读取整个普通请求的时间。
+		ReadTimeout:       15 * time.Second, // 限制读取完整请求的时间；上传接口应单独设计。
 		WriteTimeout:      15 * time.Second, // 限制向慢客户端写普通响应的时间。
 		IdleTimeout:       60 * time.Second, // keep-alive 连接等待下一请求的最长时间。
-		MaxHeaderBytes:    1 << 20,          // 1 MiB；须与网关和业务限制共同评估。
+		MaxHeaderBytes:    1 << 20,          // 限制请求头，防止异常大头部占用内存。
 	}
 
 	serverErr := make(chan error, 1)
@@ -330,140 +365,157 @@ func main() {
 		serverErr <- server.ListenAndServe()
 	}()
 
-	// Ctrl+C 与容器发送的 SIGTERM 都进入同一条关闭路径。
-	stopContext, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	// NotifyContext 将 Ctrl+C 和容器常见的 SIGTERM 转换为可等待的 Context。
+	stopContext, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	select {
-	case <-stopContext.Done():
-		log.Println("shutdown signal received")
-
-		// Shutdown 先停止接收新连接，再等待正在执行的 Handler 返回。
-		// 给等待过程独立上限，避免部署流程无限卡住。
-		shutdownContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if err := server.Shutdown(shutdownContext); err != nil {
-			log.Printf("graceful shutdown: %v", err)
-		}
 	case err := <-serverErr:
+		// 监听意外失败时直接报告；正常 Shutdown 会返回 ErrServerClosed。
 		if !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("HTTP server failed: %v", err)
 		}
+		return
+	case <-stopContext.Done():
+		log.Println("shutdown signal received")
+	}
+
+	// Shutdown 停止接收新连接，并等待正在处理的请求到达这里给出的上限。
+	shutdownContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := server.Shutdown(shutdownContext); err != nil {
+		log.Printf("graceful shutdown: %v", err)
+	}
+
+	// ListenAndServe 因 Shutdown 返回 ErrServerClosed 是预期结果。
+	if err := <-serverErr; !errors.Is(err, http.ErrServerClosed) {
+		log.Printf("HTTP server stopped: %v", err)
 	}
 }
 ```
 
-可以这样验证接口：
+可以这样验证：
 
 ```bash
-# 创建任务；-i 便于观察 201 和 Content-Type。
+curl -i http://127.0.0.1:8080/healthz
+
 curl -i -X POST http://127.0.0.1:8080/tasks \
   -H 'Content-Type: application/json' \
-  -d '{"title":"阅读 net/http 文档"}'
+  -d '{"title":"阅读 net/http 源码"}'
 
-# 使用返回的 id 查询任务。
 curl -i http://127.0.0.1:8080/tasks/1
-
-# 同一路径用错方法，ServeMux 返回 405，并给出 Allow。
-curl -i -X POST http://127.0.0.1:8080/tasks/1
+curl -i -X DELETE http://127.0.0.1:8080/tasks/1
 ```
 
-## ResponseWriter：响应只能按一个方向写
+最后一条请求会得到 `405`，因为路径匹配但没有注册 `DELETE` 方法。这正是把方法放进 `ServeMux` 模式的好处。
 
-`http.ResponseWriter` 是正在构造的响应，而不是可随时修改的结果对象。常用方法的顺序是：
+## Context、超时与 Shutdown 各解决什么
 
-1. `w.Header().Set(...)` 设置响应头；
-2. `w.WriteHeader(status)` 提交状态码和响应头；
-3. `w.Write(...)` 或 `json.Encoder.Encode(...)` 写入响应体。
+三者都与“停止”有关，却不是同一件事：
 
-如果直接调用 `Write`，标准库会隐式提交 `200 OK`。以后再调用 `WriteHeader(400)` 或试图修改普通响应头，客户端也不会看到改变。因此 `writeJSON` 先设置 `Content-Type`、再写状态码、最后编码 body。成功和错误响应都走它，输出行为才一致。
+| 机制 | 解决的问题 | 典型位置 |
+| --- | --- | --- |
+| `r.Context()` | 这次请求是否已取消 | Handler 到数据库、RPC 的调用链 |
+| `ReadHeaderTimeout` / `ReadTimeout` / `WriteTimeout` | 连接读写不能无限占用资源 | `http.Server` 配置 |
+| `Server.Shutdown(ctx)` | 进程停止时不再接新请求，并等待存量请求 | `main` 的信号处理 |
 
-当前 Go 1.22.10 的 `response` 实现用 `wroteHeader` 保护第一次状态码：
+服务端 Request Context 会在客户端连接关闭、HTTP/2 请求取消或 `ServeHTTP` 返回时被取消。业务函数应把它作为第一个参数继续传递：
 
 ```go
-// Go 1.22.10 的 src/net/http/server.go，省略日志与协议细节。
-func (w *response) WriteHeader(code int) {
-	if w.wroteHeader {
-		return // 第二次 WriteHeader 不会覆盖已经提交的状态码。
-	}
-	w.wroteHeader = true
-	w.status = code
-}
+// 正确：客户端放弃时，数据库驱动或 RPC 客户端有机会停止工作。
+task, err := repository.FindTask(r.Context(), id)
 
-func (w *response) write(...) (n int, err error) {
-	if !w.wroteHeader {
-		w.WriteHeader(StatusOK) // 第一次写 body 隐式提交 200。
-	}
-	// 把 body 写入连接缓冲区。
-}
+// 错误：丢掉请求的取消信号，服务已不需要结果时下游仍可能继续工作。
+task, err := repository.FindTask(context.Background(), id)
 ```
 
-这是对 Go 1.22.10 源码的解释，并非比 [ResponseWriter 文档](https://pkg.go.dev/net/http@go1.22.10#ResponseWriter) 更强的 API 承诺。对应用而言，可靠规则就是“所有 header 和状态码都在首次写 body 前决定”。
-
-## Server 超时与优雅关闭
-
-`http.ListenAndServe` 很适合十行示例；实际服务通常显式创建 `http.Server`，因为超时和关闭策略属于服务行为的一部分。
-
-示例里的几个超时回答的是不同问题：
-
-- `ReadHeaderTimeout`：客户端迟迟不发完请求头时，连接最多占用多久；
-- `ReadTimeout`：读取整个请求最多多久，上传或流式接口需要单独评估；
-- `WriteTimeout`：向慢客户端写普通响应最多多久；
-- `IdleTimeout`：空闲 keep-alive 连接等待下一个请求多久。
-
-它们不能代替业务超时。一个 Handler 调用数据库或远程服务时，仍应把 `r.Context()` 传给 `QueryContext`、HTTP 客户端请求或 RPC 调用；这样客户端取消和服务关闭信号才可能停止正在等待的下游工作。
-
-`Shutdown(ctx)` 会先关闭监听器，拒绝新连接，然后等待空闲连接与活动请求结束，直到传入的 context 到期。它返回后不应再继续使用原来的 Server。关闭前监听循环通常返回 `http.ErrServerClosed`，这是正常结果，不应当作服务故障。
-
-## 源码视角：Server、Handler 与 ServeMux 如何衔接
-
-公开边界是 `Server.Handler`。没有设置时，服务端使用 `DefaultServeMux`；设置后会把请求交给这个 Handler。Go 1.22.10 的内部适配大意如下：
+某项业务需要更短预算时，可从请求 Context 派生，而不是重建根 Context：
 
 ```go
-// Go 1.22.10 的 src/net/http/server.go，简化后的逻辑。
-func (sh serverHandler) ServeHTTP(rw ResponseWriter, req *Request) {
-	handler := sh.srv.Handler
-	if handler == nil {
-		handler = DefaultServeMux // 未显式设置时的全局默认路由器。
-	}
-	handler.ServeHTTP(rw, req)
-}
+ctx, cancel := context.WithTimeout(r.Context(), 800*time.Millisecond)
+defer cancel() // 释放派生 Context 关联的定时器资源。
+
+stock, err := inventory.Get(ctx, productID)
 ```
 
-这不是稳定契约；其作用是解释为什么显式 `NewServeMux` 并赋给 `Server.Handler` 能避免全局路由。完整实现见 [serverHandler](https://cs.opensource.google/go/go/+/go1.22.10:src/net/http/server.go)。
+`Shutdown` 不会替应用强行终止正在运行的 Handler；它先关闭监听器，再等待活跃连接转为可关闭状态，直到传入的 shutdown context 到期。正在执行的数据库、RPC 或自建 goroutine 仍要靠各自收到并尊重的 Context 离开。
 
-作为 Handler 的 `ServeMux` 接到请求后，会找出模式与路径参数，再调用目标 Handler：
+## 源码视角：连接、响应与关闭如何收尾
+
+以下片段根据 Go 1.26.5 标签的 `src/net/http/server.go` 摘取并省略无关分支，用于建立实现直觉，不是稳定 API。
+
+`Server.Serve` 在接受连接后创建 `conn`，再让 goroutine 处理这条 HTTP/1.x 连接：
 
 ```go
-// Go 1.22.10 的 src/net/http/server.go，省略连接和错误记录细节。
-func (mux *ServeMux) ServeHTTP(w ResponseWriter, r *Request) {
-	if r.RequestURI == "*" {
-		w.Header().Set("Connection", "close")
-		Error(w, "Bad Request", StatusBadRequest)
-		return
+// Go 1.26.5：省略临时 Accept 错误的退避逻辑。
+for {
+	rw, err := l.Accept() // 阻塞等待操作系统交付连接。
+	if err != nil {
+		return err
 	}
-	h, _, _, _ := mux.findHandler(r)
-	h.ServeHTTP(w, r)
+
+	connCtx := ctx // 这里会成为此连接上请求 Context 的父级之一。
+	c := srv.newConn(rw)
+	c.setState(c.rwc, StateNew, runHooks)
+	go c.serve(connCtx) // 不同连接可并发处理，所以共享依赖必须并发安全。
 }
 ```
 
-`findHandler` 负责 404、405、重定向和模式匹配；业务 Handler 不需要理解路由树的内部结构。此段只描述 Go 1.22.10，未来实现可以变化；日常代码依赖的是 [ServeMux 的公开方法与匹配规则](https://pkg.go.dev/net/http@go1.22.10#ServeMux)。
+请求处理完成后，标准库调用 Handler、取消请求 Context，并完成响应收尾：
 
-## 常见边界
+```go
+// Go 1.26.5：conn.serve 中处理一条请求的关键顺序。
+serverHandler{c.server}.ServeHTTP(w, w.req) // 调用业务 Handler。
+w.cancelCtx()                               // Handler 返回后，此请求 Context 被取消。
+w.finishRequest()                           // 刷新响应、处理连接后续状态。
+```
 
-- **不要把 `ResponseWriter` 或 `r.Body` 传给返回后的后台 goroutine。** 它们只在当前 `ServeHTTP` 调用期间有效。后台任务应接收已经复制、验证过的数据，并有独立的生命周期。
-- **不要把共享请求状态塞进 Handler 字段。** Handler 会并发调用；共享内存用锁、channel 或外部存储协调，请求数据留在局部变量和 context。
-- **`r.Context()` 不是任意参数包。** 它适合取消、截止时间和跨 API 边界的请求元数据；明确的业务输入仍应写成函数参数。
-- **限制不仅要有读取超时。** `MaxHeaderBytes` 限制头，`MaxBytesReader` 限制 body；业务字段还要限制长度、格式和取值范围。
-- **不要在写出 body 后试图“补救”错误。** 先校验、后调用业务、最后集中输出；对已经写出的流式响应，日志和协议设计比二次 `WriteHeader` 更有意义。
-- **只对可信代理设置真实客户端地址。** 直接读 `X-Forwarded-For` 不能证明来源；这类头需要由反向代理边界统一处理。
+这解释了两条规则：Handler 返回后不能再使用 `ResponseWriter` 或并发读取 `Request.Body`；需要异步处理时，应只复制必要数据，并另行定义它的取消、错误和持久化边界。
+
+`Shutdown` 的关键动作也很克制：标记服务关闭、关闭监听器、循环关闭空闲连接并等待活跃连接结束：
+
+```go
+// Go 1.26.5：省略回调和轮询间隔的细节。
+func (srv *Server) Shutdown(ctx context.Context) error {
+	srv.inShutdown.Store(true)       // 新服务流程开始拒绝请求。
+	srv.closeListenersLocked()       // 让 Accept 返回，停止接收新连接。
+
+	for {
+		if srv.closeIdleConns() { // 没有活跃连接时完成。
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err() // 超过进程愿意等待的时间。
+		case <-timer.C:
+		}
+	}
+}
+```
+
+源码路径能说明“谁做了什么”，但不能替代接口文档。应用应依赖 `Handler`、`Request.Context`、`Server` 和 `Shutdown` 的公开承诺，而不是依赖 `conn`、轮询间隔或内部字段。
+
+## 最容易踩的边界
+
+- 不要在每个 Handler 里创建或关闭数据库连接池；进程启动时初始化一次，并作为长期依赖注入。
+- 不要把 `ResponseWriter` 交给后台 goroutine。`ServeHTTP` 返回后，它已不再有效。
+- 不要在写出响应后再试图改变状态码或返回统一错误；先读完并校验输入，再开始响应。
+- 不要把 `r.Context()` 换成 `context.Background()`；这样会切断客户端取消和请求截止时间。
+- `WriteTimeout` 不适合直接套到 SSE、WebSocket、大文件下载等长连接场景；这些协议要单独设计心跳、写期限和资源上限。
+- `Shutdown` 只能停止新流量并等待，不能自动让任意阻塞操作停止；下游调用需要支持 Context。
 
 ## 总结
 
-`net/http` 的主线很短：`Server` 接受并解析请求，`ServeMux` 选中 `Handler`，Handler 从 `Request` 读取并校验输入，再通过 `ResponseWriter` 按“头、状态、体”的顺序输出。把路由、输入限制、响应写入、Context 传递和关闭策略作为同一条请求路径来设计，服务就有了清晰而可靠的边界。
+`net/http` 的服务端核心可以记成四个对象：`Server` 接收连接，`ServeMux` 选择路由，`Request` 携带输入和请求生命周期，`ResponseWriter` 按“头—状态码—响应体”的顺序提交结果。
+
+先用一个明确的 Handler 把请求跑通，再限制输入、传递 `r.Context()`、配置 Server 超时，最后用 `Shutdown` 收尾。理解这条链路后，无论使用标准库还是 Web 框架，都能知道请求实际在哪里进入、停止和返回。
 
 ## 参考资料
 
-- [net/http — Go 1.22.10 API 文档](https://pkg.go.dev/net/http@go1.22.10)
-- [net/http Server 源码（Go 1.22.10）](https://cs.opensource.google/go/go/+/go1.22.10:src/net/http/server.go)
+- [net/http 包文档（Go 1.26.5）](https://pkg.go.dev/net/http@go1.26.5)
+- [Go 1 Release Notes：`http` 与 `httputil` 的历史重构](https://go.dev/doc/go1)
+- [Go 1.7 Release Notes：context 与 Request.Context](https://go.dev/doc/go1.7)
+- [Go 1.22 Release Notes：ServeMux 路由增强](https://go.dev/doc/go1.22)
 - [Go Blog：Routing Enhancements for Go 1.22](https://go.dev/blog/routing-enhancements)
+- [Go Blog：Go Concurrency Patterns: Context](https://go.dev/blog/context)
+- [Go 1.26.5 `net/http/server.go`](https://cs.opensource.google/go/go/+/go1.26.5:src/net/http/server.go)
