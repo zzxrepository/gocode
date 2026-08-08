@@ -11,7 +11,6 @@ tag:
   - Go
   - Channel
   - Goroutine
-  - Worker Pool
   - CSP
   - 并发编程
 ---
@@ -20,84 +19,46 @@ tag:
 
 ## 前言
 
-goroutine 解决了“谁可以同时做事”，但任务仍需要交接数据、传递结果并通知结束。共享内存配合锁是可靠方案；channel 则把通信放到程序结构中：谁生产、谁消费、数据流在哪里结束，都能从类型和控制流中读出来。
+goroutine 解决了“谁可以同时做事”，但还需要一个清楚的数据交接点：谁生产、谁接收、谁宣布不会再有数据。channel 把这个协议写进类型和控制流，而不是让多个 goroutine 随意读写一块共享内存。
 
-channel 不是“自动异步”的同义词。无缓冲 channel 是发送者和接收者的一次会合；有缓冲 channel 才能保存有限数量的值。缓冲区能改变背压位置，不能消灭背压，更不能替代取消和资源上限。
+这里关注一个问题：**怎样让生产者把一串任务交给消费者，并让双方在取消或结束时都能离开？** 答案不在于把缓冲区调大，而在于明确 channel 的阻塞语义和关闭所有权。
 
-## 类型、创建与基本操作
+## 先建立三个语义
 
-channel 有固定元素类型。`chan T` 可以双向通信，`chan<- T` 只能发送，`<-chan T` 只能接收。零值 channel 是 `nil`，应使用 `make` 创建可用 channel。
+`make(chan T)` 创建无缓冲 channel。发送和接收必须同时到场，值才能交接，因此它也是一个同步点。`make(chan T, n)` 有容量为 `n` 的缓冲区：缓冲未满时发送可以继续，缓冲为空时接收仍会等待；缓冲满后，发送者仍然要等消费者。
 
-```go
-jobs := make(chan string)       // 等价于 make(chan string, 0)：无缓冲。
-results := make(chan int, 8)    // 最多缓存 8 个尚未接收的 int。
-
-jobs <- "order-1001" // 发送：箭头指向 channel。
-id := <-results       // 接收：箭头从 channel 指向变量。
-_ = id
-```
-
-每个通信操作都有明确阻塞语义：
-
-| channel 状态 | 发送 `ch <- v` | 接收 `<-ch` |
+| 状态 | 发送 `ch <- v` | 接收 `<-ch` |
 | --- | --- | --- |
-| 无缓冲，尚无配对方 | 阻塞 | 阻塞 |
-| 有缓冲且未满 | 立即写入缓冲区 | - |
-| 有缓冲且非空 | - | 立即取出队首值 |
-| 有缓冲且已满 / 已空 | 阻塞 / - | - / 阻塞 |
-| 已关闭且仍有缓冲值 | panic | 继续取出剩余值 |
-| 已关闭且缓冲已空 | panic | 立即得到零值，`ok == false` |
-| `nil` | 永远阻塞 | 永远阻塞 |
+| 无缓冲、未配对 | 阻塞 | 阻塞 |
+| 有缓冲且可放入 / 有值可取 | 立即放入 | 立即取出 |
+| 已关闭且缓冲已取空 | panic | 立即返回元素零值，`ok == false` |
+| `nil` channel | 永久阻塞 | 永久阻塞 |
 
-`len(ch)` 和 `cap(ch)` 可以观察当前缓冲数量与容量，但它们只是瞬时快照。读取 `len` 后，其他 goroutine 可能立刻发送或接收，因此不能把“先看长度、再决定动作”当作同步协议。
+关闭不是“清空”：关闭后，缓冲里的值仍会按先入先出被接收。只有发送方才知道“不会再发送”，因此通常也只有发送方关闭 channel；接收方关闭可能让仍在发送的生产者 panic。
 
-## 无缓冲 channel：把交接当作同步点
+无缓冲与有缓冲的选择并不是“哪个更快”。无缓冲适合必须当场交接的信号或值；有缓冲适合允许生产端短暂领先、且能说清最大积压量的队列。容量为 2 在这个例子里意味着“最多两个任务处于已生产但未开始处理的状态”，不是消费者能并行处理两个任务。
 
-无缓冲 channel 没有数据队列。一次发送与一次接收必须配对，值才会被交接，双方才能继续。这使它很适合表示“工作已经完成”的通知。
+从发送方视角，缓冲把等待从“每个值都等接收者”改为“队列满时才等接收者”。因此下游一直变慢时，等待仍然会发生；这是有用的背压，提醒程序不要无限积压内存和工作。
 
-```go
-package main
-
-import "fmt"
-
-func main() {
-	done := make(chan struct{})
-
-	go func() {
-		// 关闭一个只用于通知的 channel 会唤醒所有等待它的接收者。
-		// struct{} 不携带数据，也不需要为信号分配实际载荷。
-		defer close(done)
-		fmt.Println("生成日报")
-	}()
-
-	<-done // 等到 goroutine 调用 close(done) 后才继续。
-	fmt.Println("日报任务结束")
-}
-```
-
-下面的发送会死锁，因为当前 goroutine 在发送点等待接收者，而程序中没有其他可运行的接收者：
+接收关闭状态时的两个返回值尤其关键：
 
 ```go
-ch := make(chan int)
-ch <- 1 // 不会“先放进去”，而是等待另一个 goroutine 执行 <-ch。
+job, ok := <-jobs
+// ok 为 true：job 是发送方交付的值（可能来自关闭前的缓冲）。
+// ok 为 false：不会再有值，job 只是 Job 的零值，不能继续当任务处理。
 ```
 
-这不是 channel 的异常行为，而是协议不完整：每一次可能阻塞的发送，都必须有可达的接收路径或取消路径。
+对只传递结束信号的 channel，常见元素类型是 `struct{}`，因为接收方关心的是“已关闭”而不是一个有效载荷。但只要多个 goroutine 都可能关闭同一 channel，就仍需要先定义唯一关闭者。
 
-## 有缓冲 channel：有限排队与背压
+channel 的零值是 `nil`，不能直接使用；通常在创建数据流的地方调用 `make`。`chan T` 表示双向端点，可以隐式赋值给方向更窄的 `chan<- T` 或 `<-chan T`。把方向收窄后，调用者不会获得反向操作的编译权限。
 
-有缓冲 channel 允许生产者暂时领先消费者；缓冲满后，生产者仍会阻塞。容量应该表达可接受的排队量，例如“最多等待处理 100 个上传任务”，而不是凭感觉设置一个很大的数字。
+方向限制服务于接口设计，不会让原 channel 变成两份对象。生产者和消费者仍在同一个数据流上通信。
 
-```mermaid
-flowchart LR
-    P[生产者] -->|发送任务| Q[jobs 缓冲区：有限容量]
-    Q --> W1[worker 1]
-    Q --> W2[worker 2]
-    W1 --> R[结果消费者]
-    W2 --> R
-```
+例如，`produce` 收到 `chan<- Job` 后仍能关闭它，因为关闭属于发送端的职责；`consume` 收到 `<-chan Job` 后连 `close` 都不能调用。这比依赖团队成员“记得不要关”更容易在编译期发现错误。
 
-下面是一个可运行的 worker pool。worker 数限制正在执行的任务数；`jobs` 的容量限制等待队列；取消时，生产和消费两端都能离开，避免 goroutine 因无人接收结果而卡住。
+## 一个完整例子：生产、消费与有序收尾
+
+保存为 `main.go` 并运行 `go run main.go`。`jobs` 的容量是 2，表示最多允许两个尚未处理的任务排队；把它改成 `make(chan Job)`，程序仍然正确，只是生产者会在每次交接时等待消费者。
 
 ```go
 package main
@@ -105,416 +66,156 @@ package main
 import (
 	"context"
 	"fmt"
-	"sync"
+	"time"
 )
 
-type Result struct {
-	Job int
-	Sum int
+// Job 是生产者交给消费者的数据。只有 channel 传递它的所有权。
+type Job struct {
+	ID   int
+	Name string
 }
 
-// worker 只接收任务、发送结果；单向类型把数据流方向固定在函数签名中。
-func worker(ctx context.Context, jobs <-chan int, results chan<- Result, wg *sync.WaitGroup) {
-	defer wg.Done()
+// produce 是 jobs 的唯一发送方，因此由它在所有任务送出后关闭 jobs。
+func produce(ctx context.Context, jobs chan<- Job) {
+	defer close(jobs) // close 表示“以后不会再有 Job”，不是要求消费者立刻停止。
+
+	for _, job := range []Job{
+		{ID: 1, Name: "生成账单"},
+		{ID: 2, Name: "发送通知"},
+		{ID: 3, Name: "归档记录"},
+	} {
+		select {
+		case jobs <- job:
+			// 交接成功：无缓冲时已有接收者；有缓冲时已占用一个队列位置。
+		case <-ctx.Done():
+			// 消费者不再需要任务时，不能永远卡在发送点。
+			return
+		}
+	}
+}
+
+// consume 只接收，函数签名阻止它误发数据或关闭不属于它的 channel。
+func consume(ctx context.Context, jobs <-chan Job) error {
 	for {
 		select {
-		case <-ctx.Done():
-			return // 消费者不再需要结果时，worker 不会永远等在 channel 上。
 		case job, ok := <-jobs:
 			if !ok {
-				return // 发送方关闭 jobs 表示不再产生任务。
+				// 发送方已经 close，且此前缓冲的数据也已经取完。
+				return nil
 			}
 
-			result := Result{Job: job, Sum: job * job}
+			fmt.Printf("开始处理 %d：%s\n", job.ID, job.Name)
+			// 模拟实际处理。这里的等待也监听 ctx，才能及时结束。
 			select {
-			case results <- result:
-				// 结果成功交给下游。
+			case <-time.After(20 * time.Millisecond):
+				fmt.Printf("完成处理 %d\n", job.ID)
 			case <-ctx.Done():
-				return // 结果无人再消费时不能被发送操作永久困住。
+				return ctx.Err()
 			}
+
+		case <-ctx.Done():
+			// jobs 可能暂时为空；取消时不必继续等下一项。
+			return ctx.Err()
 		}
 	}
 }
 
-func squareAll(parent context.Context, inputs []int, workerCount int) ([]Result, error) {
-	if workerCount <= 0 {
-		return nil, fmt.Errorf("workerCount 必须大于 0")
-	}
-	ctx, cancel := context.WithCancel(parent)
-	defer cancel() // 函数任一路径返回时，通知仍在等待的内部 goroutine 收尾。
-
-	jobs := make(chan int, workerCount)
-	results := make(chan Result, workerCount)
-
-	var workers sync.WaitGroup
-	workers.Add(workerCount)
-	for i := 0; i < workerCount; i++ {
-		go worker(ctx, jobs, results, &workers)
-	}
-
-	go func() {
-		defer close(jobs) // 唯一生产者负责声明“不会再有新任务”。
-		for _, input := range inputs {
-			select {
-			case jobs <- input:
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-
-	go func() {
-		workers.Wait()  // 等到所有发送 results 的 worker 退出。
-		close(results)  // 此时关闭 results 才不会与发送并发，因而不会 panic。
-	}()
-
-	output := make([]Result, 0, len(inputs))
-	for result := range results { // results 关闭且排空后自然结束。
-		output = append(output, result)
-	}
-	return output, nil
-}
-
 func main() {
-	results, err := squareAll(context.Background(), []int{1, 2, 3, 4, 5}, 2)
-	if err != nil {
-		panic(err)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel() // 真实服务中通常由请求结束或关闭流程调用。
+
+	jobs := make(chan Job, 2) // 有界队列，而不是无限缓冲。
+	go produce(ctx, jobs)
+
+	if err := consume(ctx, jobs); err != nil {
+		fmt.Println("任务未完成：", err)
+		return
 	}
-	fmt.Println(results) // 结果顺序取决于 worker 调度，不应作为业务顺序。
+	fmt.Println("所有任务均已接收并处理完成")
 }
 ```
 
-这里的关闭责任是协议的一部分：任务生产者关闭 `jobs`；协调者确认所有 worker 都不会再发送后关闭 `results`；接收者只消费。多个发送者共享一个 channel 时，任何单独发送者通常都没有资格关闭它。
+这个程序的正常收尾顺序是：生产者发送三项并关闭 `jobs`；消费者继续取走缓冲区剩余项；最后一次接收得到 `ok == false` 并返回；`main` 随后结束。若在处理第二项时调用 `cancel()`，消费者从 `ctx.Done()` 返回，生产者也能从发送 `select` 的取消分支离开，并由 `defer close(jobs)` 结束发送流。
 
-## `close`、逗号 `ok` 与 `range`
+这段代码的两条数据路径也应一起读：
 
-关闭表示“之后不会再发送新值”，不是释放内存。没有引用的 channel 会由垃圾回收器处理；不需要靠 `close` 帮 GC。对有限数据流，接收方需要知道结束，通常由发送方关闭 channel。
+1. 正常路径通过 `jobs <- job` 传递任务，`close(jobs)` 宣布输入结束。
+2. 取消路径通过 `ctx.Done()` 让发送和接收两端从各自可能阻塞的位置离开。
+3. `consume` 只在成功收到一个真实 `Job` 后处理它；`ok == false` 只表示流结束，不是一项空任务。
+
+把 `jobs` 改成无缓冲时，生产者最多走到某次发送便必须与消费者会合；改成更大的容量时，生产者可以更早完成，但消费者仍要逐项处理。两种版本的结束协议完全相同，这正是把容量当作性能与排队参数、而非正确性条件的原因。
+
+`chan<- Job` 与 `<-chan Job` 是方向受限的类型：前者只能发，后者只能收。它们不是额外的运行时对象，却把“谁拥有发送端”写到了函数边界，尤其适合让关闭责任一眼可见。
+
+可以把关闭权限看作所有权规则：创建 `jobs` 的一方把发送端交给 `produce`，并约定 `produce` 是唯一关闭者；`consume` 只拿到接收端，所以只能观察结束。这不是编译器自动推导出的完整所有权系统，而是用类型缩小误用范围的工程约定。
+
+这份约定还避免了一个常见误解：`close(jobs)` 不是“请消费者立即停止”。消费者应该选择是否处理已经缓冲的项目；本例选择全部处理完。若业务要求丢弃积压任务，应使用单独的取消信号并在消费者的 `select` 中优先定义那条策略，而不是希望 close 自动清空队列。
+
+相反，消费者不应为了“通知生产者别再发”而关闭 `jobs`。它只知道自己不想再收，却无法知道生产者是否正处于发送中。把取消放到 `ctx`，可以让两端各自观察同一份停止意图，而不会篡改数据流的结束所有权。
+
+若消费者无需在循环里同时监听取消，上面的接收逻辑可简写为：
 
 ```go
-value, ok := <-updates
-if !ok {
-	// 只有 channel 已关闭且缓冲区完全取空时，ok 才为 false。
-	return
-}
-fmt.Println(value)
-```
-
-`for range` 是反复使用逗号 `ok` 接收的简洁写法：
-
-```go
-for update := range updates {
-	// 一直处理正常发送的值；关闭并排空后循环结束。
-	apply(update)
+// range 会不断接收，直到 jobs 被关闭并且已取完缓冲区中的值。
+for job := range jobs {
+	process(job)
 }
 ```
 
-不要把“接收到了元素类型零值”误判为关闭。例如 `0`、`""`、`false` 都可能是正常数据；需要判断结束时必须使用 `ok` 或 `range`。
+这正是 `value, ok := <-jobs` 中 `ok == false` 时退出循环的常用写法。`range` 不会替发送方关闭 channel；若没人关闭它，循环会一直等待。
 
-## channel 也建立内存可见性
+`range` 与显式的 `ok` 接收并没有高低之分。只需要“读到结束”为止时，`range` 更直接；像示例一样还要同时等待 `ctx.Done()` 时，显式 `select` 更合适。不要在同一个 channel 上混用两套接收循环，除非每个值究竟该由谁处理已经定义清楚。
 
-channel 不仅运送值，也是同步原语。Go 内存模型规定：一次发送先于与之匹配的接收完成；关闭 channel 先于因该关闭而接收到零值的操作完成。因此可以用 channel 安全发布一个已经初始化的对象：发送前的写入，对接收后读取该对象的 goroutine 可见。
+## 从运行时看：缓冲改变的是等待位置
 
-这不代表“把指针放进 channel 后就永远线程安全”。如果发送完成后发送方和接收方继续无同步地修改同一个对象，仍会发生数据竞争。一个实用原则是：交接所有权，或者为后续共享明确加锁。
+Go 1.22.10 的 `runtime/chan.go` 用 `hchan` 保存 channel 状态，其中包括缓冲区容量、已存元素数，以及等候发送与接收的队列。发送进入 `chansend`：若已有等待的接收者，可以直接交接；否则缓冲未满时写入环形缓冲区；两者都不满足时，发送 goroutine 停放等待。
 
-## 从 runtime 源码理解阻塞与唤醒
-
-下面内容是 Go 1.22 的实现线索，不是稳定 API。runtime 的 `hchan` 结构保存了几个与语义直接对应的字段：环形缓冲区及其数量、发送和接收下标、发送/接收等待队列、关闭标记和保护这些状态的锁。
-
-```go
-// runtime/chan.go 的字段含义简化；不要在业务代码依赖或访问这些内部结构。
-type hchan struct {
-	qcount   uint   // 缓冲区内已有元素数量。
-	dataqsiz uint   // 缓冲区容量；0 就是无缓冲 channel。
-	sendx    uint   // 下一个写入缓冲区的位置。
-	recvx    uint   // 下一个读取缓冲区的位置。
-	recvq    waitq  // 因接收而阻塞的 goroutine 队列。
-	sendq    waitq  // 因发送而阻塞的 goroutine 队列。
-	closed   uint32
-	lock     mutex
-}
-```
-
-发送时，runtime 先检查 channel 是否关闭；若已有等待接收者，可以直接交接元素，绕过缓冲区；若缓冲未满则写入环形缓冲区；否则把当前 goroutine 放入发送等待队列并挂起。接收过程是对称的：优先取等待发送者或缓冲数据，必要时进入接收等待队列。`closechan` 会标记关闭并唤醒等待接收者和发送者；后者恢复执行时会发现关闭并触发“send on closed channel” panic。
-
-这也解释了两个设计事实：无缓冲 channel 是会合点，而不是容量为零的普通队列；“先用 `len` 判断是否会阻塞”天生不可靠，runtime 自己也必须在锁与等待队列保护下完成真正的通信。
-
-## 从类型出发设计数据流
-
-channel 是带元素类型的值。`chan T` 表示可收可发的双向 channel；`chan<- T` 只能发送；`<-chan T` 只能接收。箭头总是指向允许数据流动的方向，因此 `chan<- Event` 读作“只能把 Event 送进去”。
-
-```go
-package main
-
-import "fmt"
-
-// produce 只拥有发送能力，函数内部无法误接收输入。
-func produce(out chan<- int) {
-	defer close(out) // produce 是唯一发送者，也最清楚数据何时结束。
-	for i := 1; i <= 3; i++ {
-		out <- i
-	}
-}
-
-// consume 只拥有接收能力，函数内部无法误发数据或关闭非自己所有的流。
-func consume(in <-chan int) {
-	for value := range in {
-		fmt.Println("收到：", value)
-	}
-}
-
-func main() {
-	stream := make(chan int)
-	go produce(stream) // 双向 channel 可以安全地收窄为单向参数。
-	consume(stream)
-}
-```
-
-双向 channel 可以赋值给对应方向的单向 channel；反过来不行。这不是限制功能的装饰，而是把“谁生产、谁消费”交给编译器检查。只有能证明不再有发送的一方才应关闭 channel，因此接收函数通常不应接受双向类型。
-
-### 声明、零值与创建
-
-```go
-var pending chan string         // 零值为 nil；还不能通信。
-events := make(chan string)    // 无缓冲；等价于 make(chan string, 0)。
-queue := make(chan string, 16) // 有缓冲；最多暂存 16 个尚未接收的值。
-
-_ = pending
-_ = events
-_ = queue
-```
-
-channel 是可比较值，能与 `nil` 比较，也能作为 map 的键。但它不是“自动初始化”的容器：对 nil channel 收发会永远阻塞，关闭 nil channel 会 panic。实务中，nil 常用于 `select` 中临时禁用一个 case；普通业务路径则应尽早 `make`。
-
-## 完整状态表：先知道阻塞点在哪里
-
-表中的“阻塞”指当前 goroutine 等待；其他 goroutine 仍可能继续运行。对有缓冲 channel，`len` 是当前存量、`cap` 是固定容量，但两者都只是观察瞬间，不是协调许可。
-
-| channel 状态 | 发送 `ch <- v` | 接收 `v := <-ch` | 接收 `v, ok := <-ch` | `close(ch)` |
-| --- | --- | --- | --- | --- |
-| `nil` | 永久阻塞 | 永久阻塞 | 永久阻塞 | panic |
-| 无缓冲、已有等待接收者 | 立即与接收者配对 | - | - | 成功 |
-| 无缓冲、已有等待发送者 | - | 立即与发送者配对 | `ok == true` | 成功 |
-| 无缓冲、尚无配对者 | 阻塞 | 阻塞 | 阻塞 | 成功 |
-| 有缓冲、未满 | 写入队尾 | 若为空则阻塞 | 若为空则阻塞 | 成功 |
-| 有缓冲、非空 | 若未满则写入 | 取出队首 | 取出队首，`ok == true` | 成功 |
-| 有缓冲、已满 | 阻塞 | 取出队首 | 取出队首，`ok == true` | 成功 |
-| 已关闭、仍有缓冲值 | panic | 依次取出剩余值 | 剩余值均为 `ok == true` | panic |
-| 已关闭且排空 | panic | 立即得到零值 | 立即得到零值，`ok == false` | panic |
-
-`close` 不是资源释放函数，而是一条协议消息：以后不会再有新值。channel 本身没有引用后会被 GC；是否关闭只取决于接收者是否需要获知数据流结束。多发送者时，由单独发送者自行关闭通常会与其他发送竞速并 panic，应让协调者在所有发送者退出后统一关闭。
-
-## 无缓冲 channel：交接完成才继续
-
-无缓冲 channel 没有存储空间，一次发送和一次接收同时参与，值才交接完成。因而它同时是数据通道和同步点：发送前发生的写入，在匹配接收完成后对接收方可见。
+接收对应 `chanrecv`：先尝试取等待发送者或缓冲区里的数据；没有数据且未关闭时才等待。`closechan` 会标记关闭并唤醒等待接收者，因此“关闭且取空时接收立刻返回零值和 `false`”是语言语义，不是偶然行为。
 
 ```mermaid
 sequenceDiagram
-    participant P as 生产者 goroutine
-    participant C as 无缓冲 channel
-    participant W as worker goroutine
-    P->>C: job <- task（等待接收方）
-    W->>C: task := <-job（配对）
-    C-->>W: task
-    C-->>P: 发送完成
+    participant P as 生产者
+    participant C as jobs（容量 2）
+    participant S as 消费者
+    P->>C: 发送 Job 1、Job 2
+    P->>C: 发送 Job 3（缓冲满则等待）
+    S->>C: 接收 Job 1
+    C-->>P: 为 Job 3 腾出位置
+    P->>C: close(jobs)
+    S->>C: 继续接收剩余任务
+    C-->>S: ok=false（缓冲取空）
 ```
 
-```go
-package main
+运行时细节不改变设计原则：缓冲容量只定义能积压多少项目，不能消除慢消费者带来的背压。容量应当对应可接受的排队量，而不是用大数字掩盖处理速度问题。
 
-import (
-	"fmt"
-	"sync"
-)
+无缓冲 channel 也不是“没有队列所以没有成本”。发送者若先到，会进入等待队列；接收者到达时，运行时完成配对并唤醒对方。选择无缓冲的理由应是需要这个会合语义，而不是猜测它一定比缓冲版本快。
 
-func main() {
+在应用层最重要的是先写出协议：值的类型是什么、谁发送、谁接收、什么条件下关闭、取消后两端怎样离开。channel 只是把这份协议落实为阻塞操作，不能替程序补全遗漏的参与者。
 
-	jobs := make(chan string) // 无缓冲：这里不允许任务排队。
-	var wg sync.WaitGroup
-	wg.Add(1)
+还有一个很实际的检查方法：为每一个 `ch <- value` 问“接收者是否一定还会接收”，为每一个 `<-ch` 问“发送者何时保证结束”。若答案依赖“应该来得及”或某个 `Sleep`，协议通常还缺少关闭或取消路径。
 
-	go func() {
-		defer wg.Done()
-		job := <-jobs // worker 到达前，发送方无法越过 jobs <- ...。
-		fmt.Println("worker 开始：", job)
-	}()
+发送与接收成功完成时，channel 还提供同步关系：发送在相应接收完成之前发生。这个保证让交接值本身是安全的；但它不替被传递对象建立永久独占，尤其是传指针时，后续谁能修改对象仍需在协议中写明。
 
-	jobs <- "生成对账单" // 确认有 worker 接手后才返回。
-	fmt.Println("任务已交接")
-	wg.Wait()
-}
-```
+不要根据运行时队列的实现假设严格公平或固定唤醒顺序。应用若需要顺序，应把顺序编码在数据和接收逻辑中。
 
-如果把 `jobs <- "生成对账单"` 放在启动接收 goroutine 之前，且当前 goroutine 是唯一执行流，程序会死锁。这个失败不是需要用 `Sleep` 修补的偶发现象，而是缺少配对方的协议错误。
+这样协议的正确性就不依赖某次调度恰好发生的先后。
 
-## 有缓冲 channel：有限队列，不是无限吞吐
+## 容易出错的边界
 
-有缓冲 channel 允许生产者短暂领先消费者。缓冲未满时发送者继续；缓冲满时发送者在发送点等待，形成背压。容量应从资源预算推导，例如“允许积压 32 个待压缩文件”，而不是为了躲过阻塞随意设成百万。
-
-```go
-package main
-
-import "fmt"
-
-func main() {
-
-	queue := make(chan string, 2)
-	queue <- "A" // len 为 1，cap 为 2。
-	queue <- "B" // len 为 2；下一个发送会阻塞，直到有人接收。
-
-	fmt.Printf("暂存=%d，容量=%d\n", len(queue), cap(queue))
-	fmt.Println("先处理：", <-queue)
-
-	queue <- "C" // 取走 A 后重新有一个槽位。
-	close(queue)
-	for item := range queue {
-		fmt.Println("继续处理：", item)
-	}
-}
-```
-
-不要这样写并发协议：`if len(queue) < cap(queue) { queue <- item }`。长度检查到发送之间，其他 goroutine 可以填满缓冲区。若目标是“有空间就投递，否则放弃”，用带 `default` 的 `select`；若目标是“必须投递”，直接发送并让背压自然发生。
-
-## `close`、comma-ok 与 `range`：结束信号的三种读取方式
-
-从关闭且排空的 channel 接收永不 panic，但普通单值接收会产生元素零值，无法区分正常的 `0`、空字符串或 `false`。有限流优先使用 comma-ok 或 `range`。
-
-```go
-package main
-
-import "fmt"
-
-func main() {
-
-	updates := make(chan int, 2)
-	updates <- 0       // 0 是一条合法数据。
-	updates <- 7
-	close(updates)     // 发送方声明不再产生更新。
-
-	for {
-		value, ok := <-updates
-		if !ok {
-			fmt.Println("更新流已结束")
-			break
-		}
-		fmt.Println("处理更新：", value)
-	}
-}
-```
-
-上例可写得更直接：
-
-```go
-for value := range updates {
-	// range 连续做 comma-ok 接收；关闭且排空时停止，而不是交出一个零值。
-	apply(value)
-}
-```
-
-`range` 会一直等待直到 channel 被关闭。因此，对永不关闭的事件流使用 `range` 前，必须确认取消路径；对只知道要接收 N 次的场景，按 N 次读取而不关闭 channel 也是正确设计。
-
-## 两级流水线：让关闭责任沿数据方向传递
-
-下面例子将数字生产、平方计算、输出分为三个阶段。每个阶段只关闭自己的输出 channel：它既避免“接收方抢关”问题，也使结束信号随数据流向下游传播。
-
-```go
-package main
-
-import "fmt"
-
-func numbers(out chan<- int) {
-	defer close(out) // 此阶段是 numbers 的唯一发送者。
-	for i := 1; i <= 4; i++ {
-		out <- i
-	}
-}
-
-func squares(in <-chan int, out chan<- int) {
-	defer close(out) // 只有本函数发送 squares，因此它拥有关闭权。
-	for n := range in {
-		out <- n * n
-	}
-}
-
-func main() {
-
-	input := make(chan int)
-	output := make(chan int)
-	go numbers(input)
-	go squares(input, output)
-
-	for value := range output {
-		fmt.Println(value)
-	}
-}
-```
-
-```mermaid
-flowchart LR
-    A[numbers 发送并关闭 input] --> B[squares 接收 input]
-    B -->|发送并关闭 output| C[main range output]
-```
-
-此模式并不自动解决提前返回：若最终消费者处理到一半退出，`squares` 可能卡在 `out <- ...`，随后 `numbers` 卡在 `input <- ...`。可取消的流水线应让每一个可能阻塞的发送和接收同时监听 `ctx.Done()`。
-
-## channel 同步保证的准确边界
-
-Go 内存模型规定，channel 发送先于对应接收完成；关闭先于因关闭而接收到零值的操作完成。这支持“先初始化对象，再通过 channel 交接所有权”的常见写法。
-
-```go
-type Config struct{ Endpoint string }
-
-ready := make(chan *Config)
-go func() {
-	cfg := &Config{Endpoint: "https://api.example.test"}
-	// 发送前对 cfg 的初始化，接收方在 <-ready 后可见。
-	ready <- cfg
-}()
-
-cfg := <-ready
-_ = cfg.Endpoint
-```
-
-但发送指针不是永久互斥锁。若发送后两个 goroutine 仍无同步地修改 `cfg` 指向的对象，依旧是数据竞争。实际设计应明确：交接后仅接收方拥有写权，或后续所有共享访问使用 mutex / 更明确的消息协议。
-
-## 选择缓冲容量前的四个问题
-
-1. 谁是生产者，谁是消费者，是否存在多个发送者？这决定关闭权。
-2. 消费者变慢时，生产者应阻塞、丢弃、重试还是返回错误？这决定背压策略。
-3. 消费者提前离开时，正在发送的 goroutine 如何收到取消信号？这决定是否会泄漏。
-4. 缓冲中的每个元素占多少内存、持有什么外部资源？容量是内存和延迟预算，不只是整数。
-
-若答案是“生产不能阻塞，也绝不能丢失”，通常意味着需要持久化队列或可重试的外部系统，而不是把 channel 缓冲无限增大。channel 适合进程内、生命周期明确的并发协作。
-
-### 一个实用的容量估算起点
-
-可以先从可接受的短时突发量出发，而不是从 CPU 核数出发：若上游峰值每秒多出 20 个任务，允许吸收 2 秒突发，则候选容量约为 40。随后必须以压测验证内存、排队延迟和下游限流；若队列长期接近满，说明消费者能力或系统协议需要调整，而不是只把容量再翻倍。
-
-缓冲容量为 0 也并非“性能差”的默认选择。它在需要立即交接、限制生产者领先或减少排队延迟时很有价值。应由背压语义选容量，而非用微基准的偶然结果替代系统设计。
-
-容量调整后应重新观察：队列长度分位数、任务等待时间、取消时未完成任务数，以及下游错误率。只观察平均吞吐，往往会掩盖长尾排队问题。
-
-## 容易写错的地方
-
-### 向已关闭 channel 发送或重复关闭
-
-这两种情况都会 panic。若关闭操作会从多个路径发生，应重新梳理所有权；确有“一次性广播关闭”需求时，才考虑让单一协调者关闭，或使用 `sync.Once` 包装关闭动作。
-
-### 接收方关闭仍有发送者的 channel
-
-接收方通常不知道发送者是否全部结束。它抢先关闭会让某个发送者 panic。更准确的口号是：**由能证明不会再发送的一方关闭**，而不是机械地说“发送方总是关闭”。
-
-### 缓冲区掩盖了泄漏
-
-把结果 channel 设成很大，可能让测试通过，却只是推迟了“消费者已经返回、发送者继续发结果”的阻塞。要么保证接收方会排空结果，要么让发送操作同时监听取消信号。
+- 对已关闭的 channel 发送会 panic；用接收端“探测是否关闭”再发送也不可靠，因为状态可能立即变化。
+- 从关闭且为空的 channel 接收会得到零值。元素类型的零值本身有效时，必须使用 `value, ok := <-ch` 区分它和真实数据。
+- `close` 是发送端的责任。多个发送者时，应先由一个明确的协调者确认全部发送都结束，再关闭一次。
+- `nil` channel 的收发都会永久阻塞。它可在 `select` 中临时禁用分支，但未初始化的 channel 往往是 bug。
+- `len(ch)` 只是瞬时观测，不能据此判断“现在发送一定不会阻塞”或“接收一定有值”。
+- channel 传递的是值；如果传的是指针、map 或 slice，接收后仍可能共享其底层数据，是否允许并发修改要另行约定。
 
 ## 总结
 
-channel 用类型、阻塞和关闭语义表达 goroutine 之间的数据流。无缓冲 channel 强调发送与接收的同步交接；有缓冲 channel 提供有限队列并把背压留在系统中。关闭是“数据流结束”的声明，必须有明确所有者。设计前先画出生产、消费、取消和关闭四条路径，channel 才会成为简化并发的工具，而不是新的死锁来源。
+channel 的核心不是异步，而是交接和协议：无缓冲时双方会合，有缓冲时允许有限排队；发送方完成后关闭，接收方通过 `ok` 或 `range` 识别结束。取消路径要和正常数据路径一起设计，才不会留下卡住的 goroutine。
 
 ## 参考资料
 
 - [Go 语言规范：Channel 类型](https://go.dev/ref/spec#Channel_types)
-- [Go 语言规范：接收操作](https://go.dev/ref/spec#Receive_operator)
-- [Go 内存模型：Channel 通信](https://go.dev/ref/mem)
-- [Go 官方：Pipelines and cancellation](https://go.dev/blog/pipelines)
-- [Go 1.22 runtime：chan.go](https://cs.opensource.google/go/go/+/refs/tags/go1.22.10:src/runtime/chan.go)
+- [Go 语言规范：接收操作与 close](https://go.dev/ref/spec#Receive_operator)
+- [Effective Go：Channels](https://go.dev/doc/effective_go#channels)
+- [Go 1.22.10 `runtime/chan.go`](https://cs.opensource.google/go/go/+/go1.22.10:src/runtime/chan.go)
