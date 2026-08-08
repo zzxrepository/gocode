@@ -281,6 +281,11 @@ tag:
     <strong>NATAPP</strong>
     <p>内网穿透服务，适合本地开发调试、临时回调地址和项目演示。</p>
   </a>
+  <a class="resource-card" href="https://docs.techgrow.cn/v1/" target="_blank" rel="noopener noreferrer">
+    <span class="resource-card__mark resource-card__mark--techgrow">TG</span>
+    <strong>TechGrow 文档</strong>
+    <p>查询 TechGrow 自媒体引流、网站插件和公众号关注组件的接入说明。</p>
+  </a>
   <a class="resource-card" href="https://giscus.app/zh-CN" target="_blank" rel="noopener noreferrer">
     <span class="resource-card__mark resource-card__mark--giscus">Gi</span>
     <strong>Giscus</strong>
