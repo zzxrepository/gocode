@@ -83,6 +83,27 @@ Content-Type: application/json; charset=utf-8
 
 HTTP 是无状态协议：服务端不会仅因“这是同一个连接”就记住用户登录状态。Cookie、Session、Token 是在请求之间携带状态的额外机制，不是 HTTP 自动保存的状态。
 
+无状态也不意味着每次请求都要新建 TCP 连接。HTTP/1.1 通常通过 keep-alive 在一条连接上顺序处理多个请求；HTTP/2 可以在一条连接中并发传输多个流。连接复用是传输层面的性能优化，登录状态是应用层的业务设计，二者不能混为一谈。正因为连接和 Handler 都会并发使用，任何共享的可变内存都必须由锁、channel 或外部存储保护。
+
+### URL、方法、请求头和正文
+
+一个 URL 可以拆成 `scheme://host:port/path?query#fragment`。例如 `https://api.example.com:8443/articles/42?draft=false#comments` 中，`https` 决定是否使用 TLS，`api.example.com:8443` 决定连接目标，`/articles/42` 是服务端路由使用的路径，`draft=false` 是查询参数；`#comments` 是浏览器本地定位信息，**不会发送给服务端**。因此服务端只能从 `r.URL.Path` 和 `r.URL.Query()` 读取前两类信息。
+
+方法不是“不同名字的函数”。它表达调用者期望的操作语义，代理、缓存、重试机制会据此作出不同决定：
+
+| 方法 | 常见用途 | 是否应只读 | 是否通常幂等 |
+| --- | --- | --- | --- |
+| `GET` | 查询资源 | 是 | 是 |
+| `HEAD` | 只查询响应头 | 是 | 是 |
+| `POST` | 创建资源或执行动作 | 否 | 否 |
+| `PUT` | 用完整表示替换资源 | 否 | 是 |
+| `PATCH` | 局部更新资源 | 否 | 不保证 |
+| `DELETE` | 删除资源 | 否 | 通常是 |
+
+“幂等”表示相同请求重复执行后的资源状态相同，不等于响应内容必然相同。例如删除已不存在的资源可能返回 `404`，但资源仍是“已删除”状态。支付、扣库存这类不能随意重试的操作尤其不能仅凭 `POST` 就认为安全，需要额外的幂等键或业务去重。
+
+请求头描述元数据，而请求体承载数据。`Content-Type` 说明正文格式，例如 `application/json`、`application/x-www-form-urlencoded` 或 `multipart/form-data`；`Accept` 表示客户端希望接收的表示形式；`Authorization` 携带认证凭据。请求头和正文都来自外部，不能因为头名或 `Content-Type` 存在就跳过校验。
+
 ## 把协议映射到 `net/http`
 
 服务端最常用的类型并不多：
@@ -121,6 +142,8 @@ func (f HandlerFunc) ServeHTTP(w ResponseWriter, r *Request) {
 ```
 
 因此，处理器需要保存数据库、日志器等长期依赖时可使用结构体；只处理一件简单事情时可直接使用 `func(w, r)`。
+
+`ServeMux` 的职责只是“选择哪个 Handler”，不是验证业务参数。当前版本的模式可以写成 `METHOD /path/{name}`：`GET /articles/{id}` 会匹配一个非空路径段，随后通过 `r.PathValue("id")` 得到字符串。更具体的模式优先；路径能匹配而方法不匹配时，`ServeMux` 返回 `405` 并给出 `Allow`，没有任何路径匹配才是 `404`。这些规则让路由表成为接口的第一层边界，但 `id` 是否为正整数、调用者能否访问资源仍必须由业务代码判断。
 
 ## 先启动一个最小 HTTP 服务
 
@@ -169,6 +192,27 @@ func hello(w http.ResponseWriter, r *http.Request) {
 ## 请求输入：路径、查询参数、请求头和 JSON
 
 所有请求数据都来自网络，必须当作不可信输入。路由匹配成功不代表路径参数是数字；存在 `Content-Type` 也不代表请求体真的是合法 JSON。
+
+`Request` 是协议输入在 Go 中的表示：`r.Method` 是方法，`r.URL` 是已解析 URL，`r.Header` 是多值请求头，`r.Body` 是只能顺序读取的流，`r.RemoteAddr` 是直接连接到当前服务的地址，`r.Context()` 则代表这次请求的取消生命周期。不要把 `RemoteAddr` 直接当作真实用户 IP：部署在反向代理后，它通常是代理的地址；也不要无条件信任 `X-Forwarded-For`，普通客户端可以伪造该头。只有网络边界明确、且可信代理会清理并重建转发头时，应用才能使用它。
+
+查询参数适合表达筛选、分页、排序等非资源本体的数据。构造查询参数时不要手拼字符串，因为空格、中文、`&`、`=` 都需要转义：
+
+```go
+func articleSearchURL() (string, error) {
+	endpoint, err := url.Parse("https://api.example.com/articles")
+	if err != nil {
+		return "", err // URL 本身不合法时，不应发起请求。
+	}
+
+	query := endpoint.Query()
+	query.Set("tag", "Go HTTP") // Encode 会处理空格和非 ASCII 字符。
+	query.Set("page", "1")
+	endpoint.RawQuery = query.Encode()
+
+	// 返回形如：https://api.example.com/articles?page=1&tag=Go+HTTP
+	return endpoint.String(), nil
+}
+```
 
 ```go
 func search(w http.ResponseWriter, r *http.Request) {
@@ -231,6 +275,31 @@ func decodeCreateArticle(w http.ResponseWriter, r *http.Request) (createArticleI
 
 服务端会在请求处理结束后关闭 `r.Body`，无需在 Handler 中额外 `defer r.Body.Close()`；这是服务端请求体与客户端响应体的重要区别。
 
+### 表单与文件上传
+
+HTML 表单常用 `application/x-www-form-urlencoded`，文件上传使用 `multipart/form-data`。前者是键值对编码，后者将普通字段和文件分成多个分段。`ParseForm` 会解析 URL 查询参数和普通表单正文，并且会返回错误；`FormValue` 虽方便但会忽略解析错误，因此需要严格验证的接口优先显式调用 `ParseForm`。
+
+```go
+func submitProfile(w http.ResponseWriter, r *http.Request) {
+	// 表单同样需要先限制正文大小，避免无边界读取。
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form", http.StatusBadRequest)
+		return
+	}
+
+	// PostForm 只读取请求体中的表单字段，不混入 URL 查询参数。
+	name := strings.TrimSpace(r.PostForm.Get("name"))
+	if name == "" {
+		http.Error(w, "name is required", http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"name": name})
+}
+```
+
+文件上传不能仅靠 `ParseForm` 代替大小策略。要根据文件总大小、单文件大小、允许的 MIME 类型、落盘位置和病毒扫描要求单独设计；不要把上传临时目录直接交给静态文件服务。
+
 ## 响应输出：先定头和状态，再写正文
 
 `ResponseWriter` 不是可反复修改的结果对象，而是一条正在发送的字节流。正确顺序是：
@@ -255,6 +324,22 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 ```
 
 没有调用 `WriteHeader` 时，首次 `Write` 会隐式提交 `200 OK`。因此“先写成功 JSON，再发现错误并写 `400`”不会工作；输入校验必须发生在开始响应之前。
+
+`http.Error` 是写入纯文本错误响应的快捷方法，适合非常简单的服务；JSON API 更适合像 `writeJSON` 一样统一错误结构。无论哪种方式，写错误后都要 `return`，否则后续成功分支仍可能继续向同一响应写数据。对于 `204 No Content` 和 `304 Not Modified`，协议不允许普通响应正文；不要习惯性地再调用 JSON 编码器。
+
+### 静态资源不是“任意目录下载器”
+
+`http.FileServer` 能将受控目录中的 CSS、JavaScript、图片等作为 HTTP 资源提供。它适合开发工具或很简单的站点，但目录范围必须明确：
+
+```go
+// 只暴露项目内的 public 目录，而不是机器上的任意路径。
+files := http.FileServer(http.Dir("./public"))
+
+// 客户端请求 /assets/app.css 时，先去掉 /assets/，再读取 ./public/app.css。
+mux.Handle("GET /assets/", http.StripPrefix("/assets/", files))
+```
+
+不要使用 `http.FileServer(http.Dir("/"))`，也不要把配置、私钥、源码、用户上传临时目录放进公开静态目录。生产环境通常由 CDN 或反向代理承担静态文件与缓存，Go 服务更专注于动态接口。
 
 ## 完整服务端示例：文章 API
 
@@ -474,6 +559,8 @@ curl -i -X DELETE http://127.0.0.1:8080/articles/1
 
 客户端的规则同样重要：设置超时，始终关闭 `resp.Body`，并把 HTTP 非 2xx 状态和 Go 的 `error` 分开处理。`Client.Do` 的 `error` 表示连接、TLS、取消等通信失败；服务器返回 `404` 或 `500` 时，通常仍会得到一个非 nil 的 `resp` 和 nil 的 `error`。
 
+最简短的 `http.Get`、`http.Post` 适合临时脚本；一旦需要上下文取消、自定义头、非 GET/POST 方法、认证或精确的重定向策略，就应创建 `Request` 后调用 `Client.Do`。`Client.Timeout` 是整个请求的上限，覆盖连接、重定向、等待响应和读取正文；请求级 `context.WithTimeout` 则适合为某个调用设置更短的业务预算。两者可以同时存在，先到期者取消请求。
+
 ```go
 func createArticle(ctx context.Context, client *http.Client, endpoint, title string) (article, error) {
 	// 使用 Encoder 写入 bytes.Buffer，避免手拼 JSON 和转义错误。
@@ -541,6 +628,8 @@ client := &http.Client{Transport: transport, Timeout: 10 * time.Second}
 ```
 
 不要为每一次调用新建 `Client` 或 `Transport`。这样会失去连接池，重复 DNS 查询、TCP 握手和 TLS 握手。
+
+客户端还常遇到两类协议行为。第一，默认 Client 会跟随有限次重定向；安全边界严格时可通过 `CheckRedirect` 限制跳转目标和次数。第二，浏览器会自动管理 Cookie，而 Go 客户端只有配置 `cookiejar.Jar` 后才会跨请求保存并发送 Cookie。Cookie 与登录状态密切相关，不能把“服务端返回了 Set-Cookie”误解为所有客户端都会自动记住它。
 
 ## 服务端生命周期：超时、Context 与关闭
 
@@ -624,6 +713,23 @@ w.finishRequest() // 刷新响应并完成本次请求的服务端收尾。
 ```
 
 这解释了两个边界：`ServeHTTP` 返回后不能继续使用 `ResponseWriter` 或并发读取 `Request.Body`；想做异步任务时，应先复制并校验必要数据，再给任务独立的 Context、错误处理和持久化策略。
+
+响应只能“向前写”的规则也能在源码中看到。下面是 Go 1.26.5 `response.WriteHeader` 的关键判断，省略了协议检查、日志和 header clone：
+
+```go
+func (w *response) WriteHeader(code int) {
+	if w.wroteHeader {
+		// 第一个最终状态码已经交给连接；第二次调用不覆盖原来的结果。
+		return
+	}
+
+	checkWriteHeaderCode(code) // 非法状态码会触发明确的编程错误。
+	w.wroteHeader = true       // 记录“响应头已提交”的不可逆状态。
+	w.status = code            // 保存将写入状态行的状态码。
+}
+```
+
+`response.write` 在发现 `w.wroteHeader` 仍为 false 时会先写入 `StatusOK`，随后才写正文。这正是 `Write` 默认得到 `200`、以及响应头必须在首次写正文前设置的实现原因。业务代码不应依赖 `response` 这个内部类型；应依赖 `ResponseWriter` 文档承诺的写入顺序。
 
 客户端的连接复用也不是 `Client` 自己完成的，而是由底层 `Transport` 管理。它持有按目标地址分组的 `idleConn`，请求需要连接时先尝试取得空闲连接；请求完成且连接仍可复用时，再将其放回池中。
 
