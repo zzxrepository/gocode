@@ -111,6 +111,11 @@ tag:
     <strong>Eino 文档</strong>
     <p>学习用 Go 构建 LLM 应用、Agent、组件编排和扩展集成。</p>
   </a>
+  <a class="resource-card" href="https://doc.ruoyi.vip/" target="_blank" rel="noopener noreferrer">
+    <span class="resource-card__mark resource-card__mark--ruoyi">若</span>
+    <strong>若依文档</strong>
+    <p>查询 RuoYi 后台管理系统、权限、代码生成和前后端分离开发文档。</p>
+  </a>
   <a class="resource-card" href="https://docs.docker.com/" target="_blank" rel="noopener noreferrer">
     <span class="resource-card__mark resource-card__mark--docker">D</span>
     <strong>Docker Docs</strong>
@@ -135,6 +140,21 @@ tag:
     <span class="resource-card__mark resource-card__mark--hope">H</span>
     <strong>Theme Hope</strong>
     <p>查询当前站点主题的导航、侧边栏、组件和主题配置。</p>
+  </a>
+</div>
+
+## 深度学习
+
+<div class="resource-grid">
+  <a class="resource-card" href="https://zh-v2.d2l.ai/index.html" target="_blank" rel="noopener noreferrer">
+    <span class="resource-card__mark resource-card__mark--d2l">D2L</span>
+    <strong>动手学深度学习</strong>
+    <p>李沐等作者编写的深度学习中文教材，适合配合代码从基础到模型实践系统学习。</p>
+  </a>
+  <a class="resource-card" href="https://space.bilibili.com/1567748478/channel/seriesdetail?sid=358497" target="_blank" rel="noopener noreferrer">
+    <span class="resource-card__mark resource-card__mark--bilibili">B</span>
+    <strong>李沐 B 站课程</strong>
+    <p>配套“动手学深度学习”的视频课程入口，适合跟着讲解理解概念和代码实现。</p>
   </a>
 </div>
 
