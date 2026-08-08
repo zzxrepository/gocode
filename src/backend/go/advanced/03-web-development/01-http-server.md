@@ -106,6 +106,8 @@ HTTP 是无状态协议：服务端不会仅因“这是同一个连接”就记
 
 ## 把协议映射到 `net/http`
 
+报文中的“请求”和“响应”已经有了边界，接下来的问题是：Go 程序由谁读取报文、由谁决定处理函数、又由谁把结果写回网络。`net/http` 将这些职责拆成几个很小的类型，使业务代码只需要面对已经解析好的请求。
+
 服务端最常用的类型并不多：
 
 | 类型 | 对应职责 |
@@ -170,6 +172,8 @@ mux.Handle("GET /articles", &articleHandler{store: store, logger: logger})
 
 ## 先启动一个最小 HTTP 服务
 
+核心对象各自负责什么已经清楚了，先让它们协作一次。这个服务只返回一行文本，故意不引入数据库、认证或 JSON；这样可以把注意力放在“路由如何进入 Handler、响应如何写出”上。
+
 先只做一件事：访问 `/hello` 时返回文本。显式创建 `ServeMux`，不要让路由落在全局 `DefaultServeMux` 中。
 
 ```go
@@ -213,6 +217,8 @@ func hello(w http.ResponseWriter, r *http.Request) {
 运行后用 `curl -i http://127.0.0.1:8080/hello` 查看完整响应。`-i` 会显示状态行和响应头，能把代码中的 `Content-Type`、隐式 `200` 与真实报文对应起来。
 
 ## 请求输入：路径、查询参数、请求头和 JSON
+
+最小服务说明了请求能够抵达 Handler，但真实 Handler 的主要工作是把网络输入转换成可信的业务参数。输入形式不同，读取和校验方式也不同：路径参数通常定位资源，查询参数通常筛选资源，表单和 JSON 承载提交的数据。
 
 所有请求数据都来自网络，必须当作不可信输入。路由匹配成功不代表路径参数是数字；存在 `Content-Type` 也不代表请求体真的是合法 JSON。
 
@@ -331,6 +337,8 @@ func submitProfile(w http.ResponseWriter, r *http.Request) {
 
 ## 响应输出：先定头和状态，再写正文
 
+请求已经被校验并转化为业务数据，Handler 的另一半职责是把结果变成合法响应。与普通函数返回值不同，HTTP 响应会被逐步写入连接，一旦提交就无法回滚，因此输出顺序本身是协议的一部分。
+
 `ResponseWriter` 不是可反复修改的结果对象，而是一条正在发送的字节流。正确顺序是：
 
 1. `Header().Set` 设置响应头；
@@ -370,30 +378,9 @@ mux.Handle("GET /assets/", http.StripPrefix("/assets/", files))
 
 不要使用 `http.FileServer(http.Dir("/"))`，也不要把配置、私钥、源码、用户上传临时目录放进公开静态目录。生产环境通常由 CDN 或反向代理承担静态文件与缓存，Go 服务更专注于动态接口。
 
-### Cookie、重定向与浏览器同源限制
-
-Cookie 是服务端通过 `Set-Cookie` 响应头请客户端保存的一小段数据。后续请求是否带回 Cookie，取决于域名、路径、过期时间以及 `Secure`、`SameSite` 等属性。Cookie 本身不是认证；登录服务通常把难以猜测的会话标识写入 Cookie，再由服务端查询会话或验证签名。
-
-```go
-func signIn(w http.ResponseWriter, r *http.Request) {
-	// Value 只放不敏感的会话标识；密码、完整用户资料不应直接放入 Cookie。
-	http.SetCookie(w, &http.Cookie{
-		Name:     "session_id",
-		Value:    "opaque-session-id",
-		Path:     "/",          // 整个站点的请求都可携带它。
-		HttpOnly: true,         // 浏览器中的 JavaScript 无法读取，降低 XSS 泄露风险。
-		Secure:   true,         // 生产环境仅通过 HTTPS 发送；本地 HTTP 调试时需另行处理。
-		SameSite: http.SameSiteLaxMode, // 限制跨站请求自动携带的时机，缓解 CSRF 风险。
-	})
-	writeJSON(w, http.StatusOK, map[string]string{"status": "signed in"})
-}
-```
-
-重定向是服务端返回 `Location` 头和 3xx 状态码。`303 See Other` 常用于表单 POST 后跳到一个 GET 页面；`307 Temporary Redirect` 和 `308 Permanent Redirect` 要求客户端保留原方法与正文，不能把它们与 `302` 混为一谈。是否跟随重定向是客户端策略，不是服务端能强制保证的行为。
-
-浏览器还执行同源策略：一个网页不能任意读取其他源的响应。CORS 是服务端通过 `Access-Control-Allow-Origin` 等响应头对浏览器授权的机制；它不保护非浏览器客户端，也不能代替身份认证。只为明确的可信前端源设置 CORS，避免盲目返回 `*` 与凭据组合。
-
 ## 完整服务端示例：文章 API
+
+前面分别看到了路由、输入、响应和服务端配置。将它们拆开理解之后，再放进同一个小服务，才能看清每一层该在哪里结束：路由不做业务校验，解码不直接访问存储，存储不负责 HTTP 状态码。
 
 下面的程序把路由、路径参数、JSON、请求 Context、超时与优雅关闭放在一起。内存存储只用于聚焦 HTTP 边界；替换为数据库时，应继续把同一个 `ctx` 传给仓储方法。
 
@@ -609,6 +596,8 @@ curl -i -X DELETE http://127.0.0.1:8080/articles/1
 
 ## 编写 HTTP 客户端：错误、超时与关闭响应体
 
+HTTP 编程并不只是在端口上提供接口。一个服务经常也是客户端：调用支付、库存、用户中心或第三方 API。客户端与服务端遵循同一份 HTTP 协议，但它的资源边界在于请求超时、响应体关闭和连接复用。
+
 客户端的规则同样重要：设置超时，始终关闭 `resp.Body`，并把 HTTP 非 2xx 状态和 Go 的 `error` 分开处理。`Client.Do` 的 `error` 表示连接、TLS、取消等通信失败；服务器返回 `404` 或 `500` 时，通常仍会得到一个非 nil 的 `resp` 和 nil 的 `error`。
 
 最简短的 `http.Get`、`http.Post` 适合临时脚本；一旦需要上下文取消、自定义头、非 GET/POST 方法、认证或精确的重定向策略，就应创建 `Request` 后调用 `Client.Do`。`Client.Timeout` 是整个请求的上限，覆盖连接、重定向、等待响应和读取正文；请求级 `context.WithTimeout` 则适合为某个调用设置更短的业务预算。两者可以同时存在，先到期者取消请求。
@@ -710,6 +699,8 @@ func newAPIClient() (*http.Client, error) {
 
 ## 服务端生命周期：超时、Context 与关闭
 
+客户端的连接池解决“向外请求如何节制资源”；回到服务端，还需要解决“外部流量怎样不无限占用本机资源，以及进程退出时怎样不截断已有请求”。这些责任集中在 `http.Server`。
+
 `http.Server` 的超时不是同一个概念：
 
 | 配置 | 限制对象 | 常见目的 |
@@ -723,68 +714,9 @@ func newAPIClient() (*http.Client, error) {
 
 `Shutdown(ctx)` 停止接收新连接并等待活动请求结束，但不会替应用停止任意后台 goroutine，也不会关闭被 Hijack 的 WebSocket 连接。长连接需要应用自己注册关闭通知并定义退出协议。
 
-### 客户端 IP 与可信代理
-
-`r.RemoteAddr` 是**直接**连到当前 Go 服务的地址，通常形如 `IP:端口`。服务位于 Nginx、负载均衡器或网关之后时，它通常是代理 IP，而不是用户 IP。只有网络拓扑保证外部流量不能绕过可信代理，并且代理会删除外部传来的转发头、自己重新设置转发头时，才可使用 `X-Forwarded-For` 或 `X-Real-IP`。
-
-```go
-func clientIP(r *http.Request, trustProxy bool) string {
-	if trustProxy {
-		// X-Forwarded-For 可能是“客户端, 代理1, 代理2”。
-		// 只有可信代理已重建该头时，第一个值才有意义。
-		if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
-			first := strings.TrimSpace(strings.Split(forwarded, ",")[0])
-			if net.ParseIP(first) != nil {
-				return first
-			}
-		}
-	}
-
-	// 未信任代理时，只返回直接对端地址，避免相信客户端伪造的 header。
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
-}
-```
-
-### 反向代理的职责
-
-反向代理对客户端表现为服务端，对后端服务表现为客户端：接收请求、转发到上游、再将上游响应回传。`httputil.ReverseProxy` 适合理解这一模式或实现小型内部代理；生产网关仍要额外考虑鉴权、上游超时、限流、重试、流式响应和可观测性。
-
-```go
-func newDocsProxy() (*httputil.ReverseProxy, error) {
-	target, err := url.Parse("https://go.dev")
-	if err != nil {
-		return nil, fmt.Errorf("parse upstream URL: %w", err)
-	}
-
-	return &httputil.ReverseProxy{
-		Rewrite: func(pr *httputil.ProxyRequest) {
-			// SetURL 改写即将发往上游的 scheme、host 和基础路径。
-			pr.SetURL(target)
-			// 由代理统一生成 X-Forwarded-*，不要转发客户端伪造的同名值。
-			pr.SetXForwarded()
-		},
-		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
-			log.Printf("upstream request failed: %v", err) // 内部细节只记日志。
-			http.Error(w, "upstream unavailable", http.StatusBadGateway)
-		},
-	}, nil
-}
-
-func registerDocsProxy(mux *http.ServeMux) error {
-	proxy, err := newDocsProxy()
-	if err != nil {
-		return err
-	}
-	// /docs/guide 被去掉 /docs 前缀后，以 /guide 的形式转发到 https://go.dev。
-	mux.Handle("GET /docs/", http.StripPrefix("/docs", proxy))
-	return nil
-}
-
 ## 源码视角：标准库怎样把字节交给代码
+
+公开 API 的职责已经串成了一条完整链路。再回到实现内部，就能回答每个边界为什么存在：为什么 Handler 会并发执行、为什么返回后不能继续写响应、为什么关闭响应体才有连接复用、为什么 Shutdown 要等待。
 
 Go 1.26.5 的服务端实现在 `src/net/http/server.go`，路由实现位于 `routing_tree.go`，客户端传输实现位于 `transport.go`。请求从监听器进入、离开时回到连接池的关键路径如下。
 
