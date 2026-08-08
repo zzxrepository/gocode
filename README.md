@@ -117,7 +117,7 @@ gocode.mmzhang.cn -> CNAME -> zzxrepository.github.io
 
 ## 给后续 AI 助手的维护流程
 
-以后更新这个项目时，先读这个文件，再读 `src/site-guide/README.md`。
+以后更新这个项目时，先读 `AGENTS.md`，再读这个文件和 `src/site-guide/README.md`。
 
 只改文章或资源内容时：
 
@@ -145,6 +145,7 @@ gocode.mmzhang.cn -> CNAME -> zzxrepository.github.io
 - 不要删除 `src/.vuepress/public/.nojekyll`。
 - 不要同时混用多个评论系统，除非毛毛张明确要求。
 - 根目录 README 只写项目用途和维护操作；很长的网站搭建说明放到 `src/site-guide/README.md`。
+- 除非明确要求不发布，每次完成项目更新后都要构建、提交任务相关改动、推送 `master` 并部署 `gh-pages`。
 
 ## 更多说明
 
@@ -153,4 +154,3 @@ gocode.mmzhang.cn -> CNAME -> zzxrepository.github.io
 ```text
 src/site-guide/README.md
 ```
-
