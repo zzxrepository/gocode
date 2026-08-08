@@ -716,146 +716,446 @@ func newAPIClient() (*http.Client, error) {
 
 ## 源码视角：标准库怎样把字节交给代码
 
-公开 API 的职责已经串成了一条完整链路。再回到实现内部，就能回答每个边界为什么存在：为什么 Handler 会并发执行、为什么返回后不能继续写响应、为什么关闭响应体才有连接复用、为什么 Shutdown 要等待。
+前面已经用公开 API 写出了服务端和客户端。现在沿着同一条请求路径进入 Go 1.26.5 的实现：一个字节怎样从 TCP 连接变成 `Request`，怎样被路由到 Handler，又怎样成为响应并决定连接是否可以继续使用。这样才能把前面的规则和它们的原因对应起来。
 
-Go 1.26.5 的服务端实现在 `src/net/http/server.go`，路由实现位于 `routing_tree.go`，客户端传输实现位于 `transport.go`。请求从监听器进入、离开时回到连接池的关键路径如下。
-
-### 1. `ListenAndServe` 只负责建立监听器
-
-`http.ListenAndServe(":8080", h)` 是方便函数。它构造 `Server` 并调用 `Server.ListenAndServe`；后者用 `net.Listen("tcp", addr)` 建立监听器，最后进入 `Server.Serve`。因此端口、TLS、连接状态和优雅关闭等生产配置需要显式创建 `http.Server`，而不是期待 `HandleFunc` 本身管理它们。
-
-服务端的 `Server.Serve` 循环接收连接，并为连接启动 `conn.serve`。HTTP/1.x 的同一连接可依次处理多个请求；HTTP/2 的多路复用则由相应协议实现接管。
-
-```go
-// src/net/http/server.go：Server.Serve 的核心循环，已省略临时 Accept 错误的退避。
-for {
-	rw, err := l.Accept() // 阻塞，直到操作系统交付一个 TCP 连接。
-	if err != nil {
-		return err
-	}
-
-	c := s.newConn(rw)       // 包装原始连接，保存读写缓冲和服务端状态。
-	c.setState(c.rwc, StateNew, runHooks)
-	go c.serve(ctx)          // 不同连接可并发，因此 Handler 的共享状态必须自行同步。
-}
-```
-
-每一条连接一个 goroutine，不等于“每一个 Handler 总是一个 goroutine”。HTTP/2 在一条连接中可以并发处理多个请求流；无论协议版本如何，Handler 都必须按可并发调用来设计。`Server` 的 `ConnState` 回调可观察 `StateNew`、`StateActive`、`StateIdle`、`StateClosed` 等变化，适合连接指标，不适合承载业务状态。
-
-### 2. `conn.serve` 负责解析、调用与收尾
-
-`conn.serve` 在循环中读取请求行和头部，构造 `Request` 与内部 `response`，然后才调用 Handler。把它缩成步骤表更容易理解：
-
-| 顺序 | 标准库动作 | 应用层含义 |
-| --- | --- | --- |
-| 1 | 从连接读取并解析 HTTP 报文 | 不要自行按 TCP 包边界切请求 |
-| 2 | 为请求建立可取消 Context | 下游调用必须接收 `r.Context()` |
-| 3 | `ServeMux` 选择目标 Handler | 404/405 属于路由层语义 |
-| 4 | Handler 写 `ResponseWriter` | 头、状态码、正文只能顺序提交 |
-| 5 | 取消请求 Context、刷新响应 | 返回后不可继续使用请求对象的 I/O 部分 |
-| 6 | 判断连接能否复用 | 不可复用则关闭，否则等待下一请求 |
-
-完成报文解析后，关键的请求收尾顺序如下：
-
-```go
-// src/net/http/server.go：一条 HTTP/1.x 请求的核心收尾顺序。
-serverHandler{c.server}.ServeHTTP(w, w.req) // 调用配置的 Handler 或 DefaultServeMux。
-w.cancelCtx()                               // Handler 返回后，取消这次请求的 Context。
-
-if c.hijacked() {
-	return // 连接所有权已移交给应用，例如 WebSocket 升级场景。
-}
-w.finishRequest() // 刷新响应并完成本次请求的服务端收尾。
-```
-
-这解释了两个边界：`ServeHTTP` 返回后不能继续使用 `ResponseWriter` 或并发读取 `Request.Body`；想做异步任务时，应先复制并校验必要数据，再给任务独立的 Context、错误处理和持久化策略。
-
-### 3. `ServeMux` 不是按注册顺序的 `if` 链
-
-Go 1.26.5 的路由实现位于 `routing_tree.go`。路由树先按 host 分支，再按 method 分支，最后逐段匹配路径；字面路径段比 `{name}` 单段通配符更具体，`{name...}` 多段通配符最宽。这解释了为什么 `GET /articles/latest` 能优先于 `GET /articles/{id}`，也解释了为什么标准库能在“路径存在但方法不匹配”时给出 `405` 和 `Allow`，而不是把它误判为 `404`。
-
-路由树是实现细节，应用不应依赖其节点结构；可靠的使用方式是让模式表达资源和方法，让 Handler 专注输入校验、授权和业务逻辑。模式冲突会在注册阶段 panic，这比运行时随机选中一个 Handler 更早暴露接口设计问题。
-
-### 4. 响应为何只能向前写
-
-响应只能“向前写”的规则也能在源码中看到。下面是 Go 1.26.5 `response.WriteHeader` 的关键判断，省略了协议检查、日志和 header clone：
-
-```go
-func (w *response) WriteHeader(code int) {
-	if w.wroteHeader {
-		// 第一个最终状态码已经交给连接；第二次调用不覆盖原来的结果。
-		return
-	}
-
-	checkWriteHeaderCode(code) // 非法状态码会触发明确的编程错误。
-	w.wroteHeader = true       // 记录“响应头已提交”的不可逆状态。
-	w.status = code            // 保存将写入状态行的状态码。
-}
-```
-
-`response.write` 在发现 `w.wroteHeader` 仍为 false 时会先写入 `StatusOK`，随后才写正文。这正是 `Write` 默认得到 `200`、以及响应头必须在首次写正文前设置的实现原因。业务代码不应依赖 `response` 这个内部类型；应依赖 `ResponseWriter` 文档承诺的写入顺序。
-
-当没有明确 `Content-Length` 时，标准库会根据协议和响应大小决定如何界定正文；HTTP/1.1 可能使用 chunked 编码，HTTP/2 使用帧而非文本 chunk。业务 Handler 不应手动设置 `Transfer-Encoding` 或复制 `Content-Length`，除非确实理解代理、压缩、流式传输后的语义。
-
-### 5. `Shutdown` 如何等待连接离场
-
-`Server.Shutdown` 的源码首先将 `inShutdown` 置为 true，锁住服务端状态并关闭所有 listener，使正在 `Accept` 的循环返回；随后关闭空闲连接，并轮询等待活跃连接转为空闲或关闭。核心骨架如下：
-
-```go
-func (s *Server) Shutdown(ctx context.Context) error {
-	s.inShutdown.Store(true) // 后续 Serve/ListenAndServe 不再继续提供新服务。
-
-	s.mu.Lock()
-	lnerr := s.closeListenersLocked() // 让阻塞中的 Accept 尽快返回。
-	s.mu.Unlock()
-	// 真实源码使用递增轮询间隔；此处用固定间隔保留核心等待语义。
-	timer := time.NewTimer(time.Millisecond)
-	defer timer.Stop()
-
-	for {
-		if s.closeIdleConns() {
-			return lnerr // 没有活跃 HTTP 连接时才真正完成。
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err() // 调用方决定最长等待时间。
-		case <-timer.C:
-			timer.Reset(time.Millisecond) // 继续检查：活跃请求可能刚好结束。
-		}
-	}
-}
-```
-
-这也是完整示例必须等待 `ListenAndServe` 返回 `ErrServerClosed` 的原因：关闭监听器不等于所有 Handler 都已结束。`Shutdown` 不会替业务取消自建 goroutine，也不会自动等待 Hijack 连接；这些资源的生命周期只能由应用定义。
-
-### 6. `Transport` 怎样得到并归还连接
-
-客户端的连接复用也不是 `Client` 自己完成的，而是由底层 `Transport` 管理。它持有按目标地址分组的 `idleConn`，请求需要连接时先尝试取得空闲连接；请求完成且连接仍可复用时，再将其放回池中。
+本节涉及的主要文件是 [`server.go`](https://cs.opensource.google/go/go/+/go1.26.5:src/net/http/server.go)、[`routing_tree.go`](https://cs.opensource.google/go/go/+/go1.26.5:src/net/http/routing_tree.go) 和 [`transport.go`](https://cs.opensource.google/go/go/+/go1.26.5:src/net/http/transport.go)。下图先给出 HTTP/1.1 的主线；每一个编号都在后面展开。
 
 ```mermaid
 sequenceDiagram
-    participant C as http.Client
-    participant T as Transport
-    participant P as 空闲连接池
-    participant S as 目标服务
+    participant OS as 操作系统 TCP 栈
+    participant S as Server.Serve
+    participant C as conn.serve
+    participant M as ServeMux
+    participant H as Handler
+    participant W as response
 
-    C->>T: Do(req)
-    T->>P: 按 scheme、host、代理条件查找连接
-    alt 找到可复用连接
-        P-->>T: persistConn
-    else 没有空闲连接
-        T->>S: DNS、TCP 连接、必要时 TLS 握手
-        S-->>T: 新连接
+    OS->>S: Accept 返回一条 TCP 连接
+    S->>C: go c.serve(connCtx)
+    C->>C: 读取并解析请求行、请求头、正文边界
+    C->>M: ServeHTTP(w, req)
+    M->>H: 选择匹配的 Handler
+    H->>W: Header / WriteHeader / Write
+    H-->>C: Handler 返回
+    C->>W: finishRequest：刷新、结束正文、关闭请求体
+    alt 连接可复用
+        C->>C: StateIdle，等待下一请求
+    else 不可复用
+        C->>OS: 关闭 TCP 连接
     end
-    T->>S: 写请求并读响应
-    T-->>C: Response
-    C->>C: 读完或关闭 Response.Body
-    T->>P: 可复用时归还连接
 ```
 
-Go 1.26.5 的 `Transport` 中确实以 `idleConn map[connectMethodKey][]*persistConn` 保存空闲连接。`connectMethodKey` 区分 scheme、目标地址和代理条件，避免错误地把不同目的地的连接混用；`getConn` 先尝试交付空闲连接，不存在时才异步拨号，`persistConn.roundTrip` 协调写请求与读响应，符合条件的连接最终由 `tryPutIdleConn` 放回池中。这就是“长期复用 Client”的直接实现原因。
+### 1. 从 `ListenAndServe` 到每条连接的 `conn.serve`
 
-客户端若没有读到响应体结尾或关闭 `resp.Body`，`Transport` 无法安全判断连接是否已经到达下一条响应的边界，通常就不能归还这条连接。关闭响应体既是资源释放，也是连接池正确性的条件之一。
+`http.ListenAndServe(":8080", h)` 是一个方便入口：它构造 `Server` 后调用 `Server.ListenAndServe`。真正建立 TCP 监听器的代码很短，恰好说明了它的职责边界：选择地址、调用 `net.Listen`、进入 `Serve`。因此，超时、TLS、连接状态回调和优雅关闭等生产配置应放在显式创建的 `http.Server` 上。
+
+```go
+// Go 1.26.5：src/net/http/server.go，Server.ListenAndServe 的实际主干。
+func (s *Server) ListenAndServe() error {
+	if s.shuttingDown() {
+		// Shutdown 后 Server 不能重新开始服务，调用方会得到 ErrServerClosed。
+		return ErrServerClosed
+	}
+
+	addr := s.Addr
+	if addr == "" {
+		// 空地址并不是随机端口，而是服务名 "http" 对应的 :80。
+		addr = ":http"
+	}
+	ln, err := net.Listen("tcp", addr) // 把端口监听的细节交给 net 包和操作系统。
+	if err != nil {
+		return err // 例如端口已被占用、没有绑定该地址的权限。
+	}
+	return s.Serve(ln) // 监听器的拥有者从这里开始交给 Server。
+}
+```
+
+`Serve` 才是长期运行的接入循环。下列代码保留了影响行为的分支；真实源码对临时 `Accept` 错误还会做从 5ms 到 1s 的指数退避，避免异常时空转占满 CPU。
+
+```go
+// Go 1.26.5：Server.Serve 的连接接收主循环，省略 BaseContext/ConnContext 的空值检查。
+for {
+	rw, err := l.Accept() // 阻塞等待；返回时 rw 是一条已经建立的 net.Conn。
+	if err != nil {
+		if s.shuttingDown() {
+			// Shutdown 关闭 listener 会让阻塞的 Accept 立刻返回；这是正常退出。
+			return ErrServerClosed
+		}
+		// 临时错误退避后重试；不可恢复的错误才从 Serve 返回。
+		continue
+	}
+
+	connCtx := ctx
+	if hook := s.ConnContext; hook != nil {
+		// 应用可在这里为“这条连接上的所有请求”附加值，例如连接级追踪信息。
+		connCtx = hook(connCtx, rw)
+	}
+
+	c := s.newConn(rw)                 // 包装裸连接，后续保存缓冲区、读写截止时间与状态。
+	c.setState(c.rwc, StateNew, runHooks)
+	go c.serve(connCtx)                // 不同 TCP 连接分别进入 goroutine，可以并发服务。
+}
+```
+
+这里有三个容易混淆的点。
+
+第一，`BaseContext` 产生监听器的根 Context，`ConnContext` 产生连接级 Context；随后 `conn.serve` 再由它派生请求级 Context。因此，给单个请求传递 deadline 或用户身份，仍应使用 `r.Context()`，不要把它放到连接级 Context。
+
+第二，HTTP/1.1 的一条连接会顺序处理请求：同一条连接中的下一个请求要等当前响应处理完，原因在第 2 节可从源码直接看到。HTTP/2 的多路复用由协商后的 HTTP/2 实现接管，能在一条连接中并发处理流。结论仍然相同：同一个 Handler 可能同时被不同请求调用，共享 map、计数器和数据库事务都必须按并发场景设计。
+
+第三，`ConnState` 的 `StateNew`、`StateActive`、`StateIdle`、`StateClosed` 描述的是网络连接而不是业务请求。它适合做连接数指标，不应成为保存用户会话或业务状态的容器。
+
+### 2. `conn.serve`：解析、调用、清理与复用判断
+
+`conn.serve` 是服务端 HTTP/1.x 的核心。它先记录远端和本地地址，创建带缓冲的读写器；如果连接是 TLS，还会先握手并根据 ALPN 协商结果转交 HTTP/2。只有完成这些前置工作后，才进入 HTTP/1.x 的读请求循环。
+
+函数一开始就注册 `defer`，这是连接生命周期的最后保险：无论解析失败、Handler panic，还是连接主动关闭，它都要取消仍在运行的请求、关闭请求体和 TCP 连接，并更新状态。
+
+```go
+// Go 1.26.5：conn.serve 的收尾保护，省略 panic 日志的堆栈构造。
+var inFlightResponse *response
+defer func() {
+	if err := recover(); err != nil && err != ErrAbortHandler {
+		// 标准库记录 panic；它不会让这个 panic 穿透到整个服务进程。
+		c.server.logf("http: panic serving %v: %v", c.remoteAddr, err)
+	}
+	if inFlightResponse != nil {
+		// 若 Handler 尚未正常返回，必须通知其下游工作停止。
+		inFlightResponse.cancelCtx()
+		// 同时阻止再自动发送 100 Continue。
+		inFlightResponse.disableWriteContinue()
+	}
+	if !c.hijacked() {
+		if inFlightResponse != nil {
+			// 终止可能还在等待的读取，并释放请求体占用的资源。
+			inFlightResponse.conn.r.abortPendingRead()
+			inFlightResponse.reqBody.Close()
+		}
+		c.close()
+		c.setState(c.rwc, StateClosed, runHooks)
+	}
+}()
+```
+
+`recover` 不是替业务“吞掉异常”的建议；它保证单个连接中止时服务端仍有机会释放资源。业务 Handler 仍应尽量返回明确错误，而不是把普通校验失败变成 panic。
+
+完成 `readRequest` 后，标准库会处理 `Expect: 100-continue`，再决定何时开始背景读取。随后就是一次 HTTP/1.x 请求从调用 Handler 到决定 keep-alive 的完整闭环：
+
+```go
+// Go 1.26.5：conn.serve 中一次成功解析后的主干，注释说明每一步的目的。
+req := w.req
+if req.expectsContinue() && req.ProtoAtLeast(1, 1) && req.ContentLength != 0 {
+	// 此时还没有立即写 100 Continue。
+	// 当 Handler 第一次真正读取 req.Body 时，包装后的 reader 才会发送它。
+	req.Body = &expectContinueReader{readCloser: req.Body, resp: w}
+	w.canWriteContinue.Store(true)
+}
+
+if requestBodyRemains(req.Body) {
+	// Handler 把正文读到 EOF 后，才启动背景读取；这样可正确判断连接边界。
+	registerOnHitEOF(req.Body, w.conn.r.startBackgroundRead)
+} else {
+	// 没有正文时可立刻等待客户端的下一动作。
+	w.conn.r.startBackgroundRead()
+}
+
+// HTTP/1.x 同一连接需要保持响应顺序，所以当前连接 goroutine 直接运行 Handler。
+inFlightResponse = w
+serverHandler{c.server}.ServeHTTP(w, w.req)
+inFlightResponse = nil
+
+w.cancelCtx() // Handler 返回意味着该 Request 的 Context 生命周期结束。
+if c.hijacked() {
+	c.r.releaseConn() // 连接所有权已经交给应用，例如协议升级后的场景。
+	return
+}
+
+w.finishRequest() // 刷新响应、关闭请求体、清理 multipart 临时文件。
+if !w.shouldReuseConnection() {
+	// 未读完正文、达到限制或声明 Connection: close 等情况，不能安全复用。
+	return
+}
+c.setState(c.rwc, StateIdle, runHooks) // 此时才成为可等待下一请求的空闲连接。
+```
+
+这段代码把几个 API 规则串了起来：
+
+- 客户端带 `Expect: 100-continue` 时，服务端不会盲目允许上传大正文；Handler 开始读取正文才会触发 100。若 Handler 直接写错误响应，则不会再自动发 100。
+- HTTP/1.1 不实现请求流水线的并行处理：源码注释明确说，当前响应未完成前不会读取下一请求。故一条慢请求会占住它所在的连接，但不会阻塞其他连接的 goroutine。
+- `w.cancelCtx()` 发生在 Handler 返回后。这就是不能把 `r.Context()`、`r.Body` 或 `ResponseWriter` 交给返回后的 goroutine 的根源。异步任务应在返回前复制已验证的数据，并拥有自己的 Context 与资源管理策略。
+- 只有 `finishRequest` 完成后才检查连接能否复用。若请求体没有形成清晰结束边界，下一次读取就可能把旧正文误当成下一请求，最安全的选择只能是关闭连接。
+
+### 3. `ServeMux`：按照 host、方法和路径段查找
+
+模式注册回答“哪些请求可以处理”，路由查找回答“当前请求该交给谁”。Go 1.26.5 的 `ServeMux` 使用一棵决策树，而不是按注册先后逐一比较字符串。节点先区分 host，再区分 method，最后逐个路径段匹配；节点本身同时区分字面段、单段通配符和多段通配符。
+
+```go
+// Go 1.26.5：routing_tree.go 中的节点结构。
+type routingNode struct {
+	pattern  *pattern                    // 叶子节点保存已注册的模式；非叶子为 nil。
+	handler  Handler                     // 匹配成功后要调用的 Handler。
+	children mapping[string, *routingNode] // 字面段（如 "articles"）和 method 的分支。
+	multiChild *routingNode              // {name...}：匹配剩余多个路径段。
+	emptyChild *routingNode              // {name}：匹配一个路径段；空字符串作为内部键。
+}
+```
+
+请求进入时，方法的选择顺序是“精确方法 → `HEAD` 可回退到 `GET` → 没有方法限定的模式”：
+
+```go
+// Go 1.26.5：routingNode.matchMethodAndPath 的关键逻辑。
+if leaf, values := n.findChild(method).matchPath(path, nil); leaf != nil {
+	return leaf, values // 例如 GET /articles/{id} 的精确 GET 分支。
+}
+if method == "HEAD" {
+	if leaf, values := n.findChild("GET").matchPath(path, nil); leaf != nil {
+		return leaf, values // 没有 HEAD 模式时，GET Handler 也可处理 HEAD。
+	}
+}
+return n.emptyChild.matchPath(path, nil) // 最后尝试未限定 HTTP 方法的模式。
+```
+
+路径匹配的优先级也写得很直白：先字面段，再 `{name}`，最后 `{name...}`。例如同时注册 `GET /articles/latest` 与 `GET /articles/{id}`，访问 `/articles/latest` 时先命中字面段 `latest`；只有字面段没有完整匹配时才尝试 `{id}`。匹配 `{id}` 时收集到的值会成为 `r.PathValue("id")` 的来源。
+
+```go
+// Go 1.26.5：routingNode.matchPath 的核心优先级，省略空节点和结束条件检查。
+seg, rest := firstSegment(path) // 将 "/articles/42" 拆成 "articles" 和 "/42"。
+
+if leaf, values := n.findChild(seg).matchPath(rest, matches); leaf != nil {
+	return leaf, values // 1. 字面路径段优先。
+}
+if seg != "/" {
+	if leaf, values := n.emptyChild.matchPath(rest, append(matches, seg)); leaf != nil {
+		return leaf, values // 2. 单段通配符 {name}。
+	}
+}
+if child := n.multiChild; child != nil {
+	// 3. 多段通配符 {name...} 接收剩余路径；去掉最前面的 '/'.
+	return child, append(matches, pathUnescape(path[1:]))
+}
+return nil, nil
+```
+
+因此 `404` 与 `405` 不是同一个问题：树中完全找不到路径是 `404 Not Found`；路径可以匹配但没有当前方法时，`ServeMux` 会根据所有可匹配方法构造 `Allow` 并返回 `405 Method Not Allowed`。模式发生冲突时，`Handle` 在注册阶段 panic，而不是在运行时任意选一个 Handler。接口设计有冲突，应在启动时失败。
+
+### 4. `ResponseWriter`：何时真正提交响应
+
+`ResponseWriter` 看起来像连续调用的几个方法，内部却是一台有状态的写入器。它先处于“尚未提交响应头”状态；第一次最终 `WriteHeader` 或第一次 `Write` 会跨过这条边界，之后状态码和普通响应头就已经写向客户端，无法撤销。
+
+```go
+// Go 1.26.5：response.WriteHeader 的关键路径。
+func (w *response) WriteHeader(code int) {
+	if w.conn.hijacked() {
+		return // Hijack 后连接已不由 net/http 管理，不能继续按 HTTP 写响应。
+	}
+	if w.wroteHeader {
+		return // 第二次最终 WriteHeader 只记录 "superfluous" 日志，不会覆盖第一次。
+	}
+	checkWriteHeaderCode(code) // 在状态提交前验证 code 是否为合法三位状态码。
+
+	if code < 101 || code > 199 {
+		// 最终响应一旦开始，就不再允许 Body.Read 自动写 100 Continue。
+		w.disableWriteContinue()
+	}
+	if code >= 100 && code <= 199 && code != StatusSwitchingProtocols {
+		// 1xx（除 101）是信息性响应：写出后仍可继续写最终响应。
+		writeStatusLine(w.conn.bufw, w.req.ProtoAtLeast(1, 1), code, w.statusBuf[:])
+		w.handlerHeader.WriteSubset(w.conn.bufw, excludedHeadersNoBody)
+		w.conn.bufw.Flush()
+		return
+	}
+
+	w.wroteHeader = true // 从此进入“最终响应已提交”状态。
+	w.status = code
+	if w.calledHeader && w.cw.header == nil {
+		// 将当前 Header 克隆给底层 writer，之后再改 handlerHeader 已不会影响已提交的头。
+		w.cw.header = w.handlerHeader.Clone()
+	}
+}
+```
+
+`Write` 在最终响应尚未提交时，会主动调用 `WriteHeader(StatusOK)`；这就是直接 `fmt.Fprint(w, "ok")` 得到 `200 OK` 的原因。它还检查该状态码是否允许正文，并在设置了 `Content-Length` 时防止写出的字节数超过声明值：
+
+```go
+// Go 1.26.5：response.write 的决定性分支。
+if !w.wroteHeader {
+	w.WriteHeader(StatusOK) // 第一次写正文隐式提交 200 和当前 Header。
+}
+if !w.bodyAllowed() {
+	return 0, ErrBodyNotAllowed // 例如某些无正文响应不能再写 body。
+}
+w.written += int64(lenData)
+if w.contentLength != -1 && w.written > w.contentLength {
+	return 0, ErrContentLength // 保护“声明长度”和真实数据不一致的响应。
+}
+return w.w.Write(dataB) // 继续交给缓冲、分块或协议帧写入层。
+```
+
+Handler 返回不是“已经全部发到网络”的同义词。接下来的 `finishRequest` 才把层层缓冲刷出，结束响应正文的传输格式，关闭请求体，并删除 multipart 解析产生的临时文件：
+
+```go
+// Go 1.26.5：response.finishRequest 的收尾顺序。
+w.handlerDone.Store(true)
+if !w.wroteHeader {
+	w.WriteHeader(StatusOK) // Handler 什么也没写，也会形成一个空的 200 响应。
+}
+w.w.Flush()          // 刷新 Handler 写入的 bufio.Writer。
+w.cw.close()         // 完成 chunked 等响应正文封装。
+w.conn.bufw.Flush()  // 把连接级缓冲写给 net.Conn。
+w.conn.r.abortPendingRead()
+w.reqBody.Close()    // 释放请求体；连接的 reader 才能安全地被下一请求复用。
+if w.req.MultipartForm != nil {
+	w.req.MultipartForm.RemoveAll() // 删除 multipart 落在临时目录的文件。
+}
+```
+
+由此可以反推业务代码的写法：先验证输入，再设置所有响应头和状态码，最后写正文；不要在 `Write` 后补状态码；上传处理完成后不必自行保留 `MultipartForm` 的临时文件。没有明确 `Content-Length` 时，标准库会按协议决定正文边界：HTTP/1.1 可能采用 chunked 编码，HTTP/2 则使用帧。除非确实在实现协议代理或流式传输，Handler 不应手写 `Transfer-Encoding`。
+
+### 5. `Shutdown`：停止入口，等待连接自然离场
+
+优雅关闭不是立刻杀掉所有连接。`Shutdown` 的顺序是：标记停止服务，关闭 listener 让 `Accept` 退出，通知已注册的长连接关闭逻辑，关闭空闲连接，然后等待活跃连接结束。下面是 Go 1.26.5 的主干；定时器部分保留了实际的指数退避和随机抖动。
+
+```go
+// Go 1.26.5：Server.Shutdown 的核心实现。
+s.inShutdown.Store(true) // 新的 Serve / ListenAndServe 立刻以 ErrServerClosed 返回。
+
+s.mu.Lock()
+lnerr := s.closeListenersLocked() // 关闭 listener，解除 goroutine 中对 Accept 的阻塞。
+for _, f := range s.onShutdown {
+	go f() // 通知 Hijack、ALPN 升级等长连接；函数本身不在这里等待。
+}
+s.mu.Unlock()
+s.listenerGroup.Wait() // 避免关闭过程与新的 listener 登记发生竞态。
+
+pollIntervalBase := time.Millisecond
+nextPollInterval := func() time.Duration {
+	interval := pollIntervalBase + time.Duration(rand.Intn(int(pollIntervalBase/10)))
+	pollIntervalBase *= 2
+	if pollIntervalBase > shutdownPollIntervalMax {
+		pollIntervalBase = shutdownPollIntervalMax // 最大间隔为 500ms。
+	}
+	return interval
+}
+
+timer := time.NewTimer(nextPollInterval())
+defer timer.Stop()
+for {
+	if s.closeIdleConns() {
+		return lnerr // 所有连接都已关闭，或活跃连接都结束并转为空闲后被关闭。
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err() // 调用方的截止时间到了，Shutdown 不会强杀仍在运行的请求。
+	case <-timer.C:
+		timer.Reset(nextPollInterval())
+	}
+}
+```
+
+这解释了启动代码为什么要把 `ErrServerClosed` 当作正常结果并等待 `Shutdown` 返回：关闭监听器只保证不再接收新连接，并不代表正在执行的 Handler 已结束。如果 `Shutdown` 的 Context 超时，它返回超时错误；还在运行的请求不会因此自动被中断。应用可以按自己的退出策略记录该错误、再选择调用 `Close`，但这一步意味着强制断开连接。
+
+`RegisterOnShutdown` 适合向 WebSocket 等 Hijack 连接发送“准备关闭”的通知。它不是等待机制；连接的关闭确认、后台 goroutine 的停止和任务队列的排空，仍需要应用自己定义并等待。
+
+### 6. `Transport`：取连接、同时读写、归还空闲池
+
+服务端决定一条入站连接能否保留；客户端的 `Transport` 则管理出站连接池。`http.Client` 负责请求级语义（重定向、Cookie、总超时），实际拨号、TLS、代理和 keep-alive 都由 `Transport` 完成。其空闲池以 `idleConn map[connectMethodKey][]*persistConn` 保存连接；`connectMethodKey` 把 scheme、目标地址和代理条件一起纳入键，避免把连接错误地交给别的目标。
+
+```mermaid
+sequenceDiagram
+    participant C as Client.Do
+    participant T as Transport.roundTrip
+    participant P as Transport 空闲池
+    participant D as 拨号/TLS
+    participant S as 目标服务
+
+    C->>T: RoundTrip(req)
+    T->>T: 校验 URL、方法、Header；派生请求取消 Context
+    T->>P: queueForIdleConn(wantConn)
+    alt 有可用 persistConn
+        P-->>T: 交付已连接的 persistConn
+    else 没有空闲连接
+        T->>D: queueForDial，受 MaxConnsPerHost 约束
+        D->>S: TCP、必要时代理 CONNECT 与 TLS
+        D-->>T: 新 persistConn
+    end
+    T->>S: 并行写请求、等待响应头
+    S-->>T: Response
+    T-->>C: Response.Body
+    C->>C: 读到 EOF 或 Close Body
+    T->>P: 仅在协议边界完整且连接健康时归还
+```
+
+请求一开始，`roundTrip` 会验证 `URL`、请求头、方法和 host，然后从 `req.Context()` 派生一次内部可取消 Context。通过校验后，才调用 `getConn` 获得真正可写请求的连接：
+
+```go
+// Go 1.26.5：Transport.roundTrip 的关键分流。
+ctx, cancel := context.WithCancelCause(req.Context()) // 请求取消会传递给传输层。
+defer func() {
+	if err != nil {
+		cancel(err) // 出错时让同一请求相关的等待者尽快结束。
+	}
+}()
+
+treq := &transportRequest{Request: req, ctx: ctx, cancel: cancel}
+cm, err := t.connectMethodForRequest(treq) // 计算直连、HTTP 代理或 HTTPS CONNECT 等连接方式。
+if err != nil {
+	return nil, err
+}
+pconn, err := t.getConn(treq, cm) // 先要空闲连接；没有才排队拨号。
+if err != nil {
+	return nil, err
+}
+if pconn.alt != nil {
+	return pconn.alt.RoundTrip(req) // 协商为 HTTP/2 等替代协议时，交给该协议实现。
+}
+return pconn.roundTrip(treq) // HTTP/1.x 的 persistConn 路径。
+```
+
+`getConn` 有一个很值得理解的细节：它用 `context.WithoutCancel(ctx)` 创建拨号 Context，保留 Context 中的值，却暂时切断本次请求的取消信号。原因不是忽略取消，而是“这次请求取消后，正在进行的拨号仍可能为下一个请求产生可复用连接”。当前请求则同时等待 `wantConn.result` 和自己的 `treq.ctx.Done()`，谁先到就决定返回结果。
+
+```go
+// Go 1.26.5：Transport.getConn 的连接获取与等待部分。
+dialCtx, dialCancel := context.WithCancel(context.WithoutCancel(req.Context()))
+w := &wantConn{
+	cm: cm, key: cm.key(), ctx: dialCtx, cancelCtx: dialCancel,
+	result: make(chan connOrError, 1), // 拨号或空闲池交付结果从这里回来。
+}
+
+if delivered := t.queueForIdleConn(w); !delivered {
+	t.queueForDial(w) // 没有空闲连接才请求拨号配额并异步建立连接。
+}
+
+select {
+case r := <-w.result:
+	return r.pc, r.err // 可能是复用连接，也可能是刚建立的新连接。
+case <-treq.ctx.Done():
+	return nil, context.Cause(treq.ctx) // 当前请求先取消，不再等待连接。
+}
+```
+
+拿到 HTTP/1.x 的 `persistConn` 后，`roundTrip` 并不是“先把请求体全部写完，再读响应”。它把写请求交给 write loop，同时把本次请求交给 read loop，再等待写入错误、响应头超时、Context 取消或响应到达。这样即使服务端在尚未读完上传正文时就返回拒绝响应，客户端也不会形成双方互等的死锁。
+
+```go
+// Go 1.26.5：persistConn.roundTrip 的并发读写协调。
+requestedGzip := false
+if !pc.t.DisableCompression && req.Header.Get("Accept-Encoding") == "" &&
+	req.Header.Get("Range") == "" && req.Method != "HEAD" {
+	requestedGzip = true
+	req.extraHeaders().Set("Accept-Encoding", "gzip")
+	// 只有 Transport 自己加的 gzip，才知道可以在读取响应时安全地自动解压。
+}
+
+writeErrCh := make(chan error, 1)
+pc.writech <- writeRequest{req, writeErrCh, continueCh} // write loop 开始写请求。
+
+resc := make(chan responseAndError)
+pc.reqch <- requestAndChan{
+	treq: req, ch: resc, addedGzip: requestedGzip, continueCh: continueCh,
+} // read loop 知道应该把哪一份响应交回给当前请求。
+
+// 随后的 select 同时等待 writeErrCh、resc、ResponseHeaderTimeout、ctx.Done 与 closech。
+```
+
+这也是两条客户端规则的实现依据。第一，长期复用 `Client` 或共享 `Transport`，否则每次调用都绕开已有的空闲池并重复建连。第二，收到 `Response` 后必须在不再需要时关闭 `resp.Body`；若要尽可能复用 HTTP/1.x 连接，还应把正文读到 EOF。只有传输层确认正文边界完整、连接未出错且没有要求关闭时，`persistConn` 才能安全回到 `idleConn`，供下一次请求使用。
 
 ## 容易出错的边界
 
@@ -877,6 +1177,7 @@ HTTP 编程的基础是读懂请求和响应；`net/http` 则把它们落成清�
 
 - [Go 1.26.5 `net/http` 包文档](https://pkg.go.dev/net/http@go1.26.5)
 - [Go 1.26.5 `net/http/server.go` 源码](https://cs.opensource.google/go/go/+/go1.26.5:src/net/http/server.go)
+- [Go 1.26.5 `net/http/routing_tree.go` 源码](https://cs.opensource.google/go/go/+/go1.26.5:src/net/http/routing_tree.go)
 - [Go 1.26.5 `net/http/transport.go` 源码](https://cs.opensource.google/go/go/+/go1.26.5:src/net/http/transport.go)
 - [RFC 9110：HTTP Semantics](https://www.rfc-editor.org/rfc/rfc9110)
 - [Go 1 Release Notes](https://go.dev/doc/go1)
