@@ -50,6 +50,14 @@ export default sidebar({
           prefix: "go/advanced/",
           children: "structure",
         },
+        {
+          text: "Golang 框架与生态",
+          icon: "puzzle-piece",
+          collapsible: true,
+          collapsed: false,
+          prefix: "go/frameworks-and-ecosystem/",
+          children: "structure",
+        },
       ],
     },
     {

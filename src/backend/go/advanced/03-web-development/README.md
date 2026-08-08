@@ -1,6 +1,6 @@
 ---
-title: 03. Web 开发
-shortTitle: 03. Web 开发
+title: 03. Web 编程基础
+shortTitle: 03. Web 编程基础
 order: 3
 dir:
   link: true
@@ -10,17 +10,18 @@ icon: globe
 category:
   - Go
   - Golang 进阶知识
-  - Web 开发
+  - Web 编程
 tag:
   - Go
-  - Web 开发
+  - Web 编程
   - net/http
-  - Gin
+  - HTTP
+  - Cookie
+  - Session
+  - WebSocket
   - 路由
-  - 中间件
-  - 参数校验
 ---
 
-# 03. Web 开发
+# 03. Web 编程基础
 
-这里会整理 `net/http`、Gin、路由、中间件、参数校验和接口开发。
+这里整理不绑定特定框架的 Web 基础：HTTP、路由、Cookie、Session、WebSocket、REST API 设计和接口安全。框架的具体用法放在“Golang 框架与生态”中。

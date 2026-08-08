@@ -9,8 +9,9 @@ dir:
 icon: sliders
 category:
   - Go
-  - Golang 进阶知识
-  - 第三方库
+  - Golang 框架与生态
+  - 常用库
+  - 配置管理
 tag:
   - Go
   - Viper
