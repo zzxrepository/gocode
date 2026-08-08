@@ -372,7 +372,7 @@ tag:
 长教程适合使用目录型文章，例如：
 
 ```text
-src/backend/go/basic/09-methods/README.md
+src/backend/go/basic/09-methods.md
 ```
 
 短文章可以直接使用 Markdown 文件，例如：
@@ -656,8 +656,8 @@ gocode.mmzhang.cn -> zzxrepository.github.io
 
 | 本地文件 | 网页地址 |
 | --- | --- |
-| `src/backend/go/basic/01-project-structure/README.md` | `/backend/go/basic/01-project-structure/` |
-| `src/backend/go/basic/09-methods/README.md` | `/backend/go/basic/09-methods/` |
+| `src/backend/go/basic/01-project-structure.md` | `/backend/go/basic/01-project-structure/` |
+| `src/backend/go/basic/09-methods.md` | `/backend/go/basic/09-methods/` |
 | `src/algorithm/leetcode/hot-100/two-sum.md` | `/algorithm/leetcode/hot-100/two-sum.html` |
 
 在配置里写内部链接时，通常使用根路径，例如：
@@ -685,11 +685,12 @@ gocode.mmzhang.cn -> zzxrepository.github.io
 }
 ```
 
-主题会读取 `src/backend/go/basic/` 下的真实目录和 Markdown 文件：
+主题会读取 `src/backend/go/basic/` 下的真实目录和 Markdown 文件。目录结构应当表达真实的学习分组，而不是为单篇文章额外套一层目录：
 
-- 目录会变成侧边栏分组。
-- 目录里的 `README.md` 用来控制分组标题、图标、顺序和点击链接。
-- 普通 `.md` 文件会变成文章链接。
+- 有子内容的目录会变成侧边栏分组；目录里的 `README.md` 用来控制分组标题、图标、顺序和点击链接。
+- 叶子文章直接使用 `.md` 文件，不创建 `文章目录/README.md`。后者会让主题同时显示可展开分组和同名首页，造成重复。
+- 叶子文章不设置 `dir` 或 `icon`；图标只用于栏目和专题分组。
+- 从一个学习栏目开始，侧边栏最多展示“知识栏目 → 专题分组 → 文章”三级；课程根节点如 `GO` 只是外层容器。
 - 同级内容先按 `order` 排序，再按标题或文件名排序。
 - 不希望进入目录或索引的页面，写 `index: false`。
 
@@ -707,8 +708,8 @@ sidebarSorter: ["readme", "order", "title", "filename"]
 
 ```text
 1. 选栏目：先确认文章应该放在哪个已有栏目下
-2. 建文件：长教程优先建 13-generics/README.md，短文章可以建 generics.md
-3. 写元信息：补齐 title / shortTitle / icon / order / category / tag
+2. 建文件：叶子教程直接建 13-generics.md；只有它将来需要容纳多篇子文章时，才建立目录和 README.md
+3. 写元信息：补齐 title / shortTitle / order / category / tag；叶子文章不写 icon 或 dir
 4. 写正文：一级标题和 title 保持一致，重点文章在标题下方放封面图
 5. 查效果：执行 npm run docs:build，确认文章进入侧边栏且构建通过
 6. 发布：除非明确要求不发布，提交任务相关源码并推送 master，再执行 ./deploy.sh
@@ -730,7 +731,6 @@ sidebarSorter: ["readme", "order", "title", "filename"]
 ---
 title: 13. 泛型
 shortTitle: 泛型
-icon: code
 order: 13
 category:
   - Go
@@ -748,24 +748,24 @@ tag:
 | --- | --- |
 | `title` | 页面完整标题，也影响浏览器标题 |
 | `shortTitle` | 侧边栏、面包屑等位置使用的短标题；课程类文章如果要在侧边栏显示序号，要写成 `01. xxx` |
-| `icon` | 页面图标 |
+| `icon` | 栏目或专题分组图标；叶子文章不设置 |
 | `order` | 同级页面排序，数字越小越靠前；它只控制顺序，不会自动显示在侧边栏文字里 |
 | `category` | 文章分类 |
 | `tag` | 文章标签 |
 
-侧边栏层级较深的文章项可以不写 `icon`。例如 `Go -> Golang 进阶知识 -> 01. 标准库 -> 01. context` 这类四级文章，去掉图标后目录会更清爽。
+叶子文章不设置 `icon`，并且不作为可展开目录。Go 的目录应保持为 `Golang 进阶知识 -> 01. 标准库 -> 01. context` 这类三级结构，不再额外显示一层同名首页。
 
 例如新增 Go 基础教程第 13 篇：
 
 ```text
-src/backend/go/basic/13-generics/README.md
+src/backend/go/basic/13-generics.md
 ```
 
 写好 `order: 13` 后，它会自动出现在 Go 基础教程侧边栏里，不需要手动修改 `sidebar.ts`。
 
 ## 新增目录
 
-需要作为可点击分组展示在侧边栏中的目录，建议放一个 `README.md` 作为目录首页；如果目录只作为固定侧边栏分组、无需独立页面，可以不创建它，并为旧地址配置重定向。
+只有需要容纳多篇子文章、并作为可点击分组展示在侧边栏中的目录，才使用 `README.md` 作为目录首页。单篇教程不应使用目录 README；如果目录只作为固定侧边栏分组、无需独立页面，可以不创建它，并为旧地址配置重定向。
 
 ```md
 ---

@@ -1,11 +1,8 @@
 ---
+permalink: /backend/go/advanced/01-standard-library/01-context/
 title: 01. context：上下文
 shortTitle: 01. context：上下文
 order: 1
-dir:
-  link: true
-  collapsible: true
-  order: 1
 category:
   - Go
   - Golang 进阶知识

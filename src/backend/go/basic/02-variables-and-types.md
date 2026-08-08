@@ -1,12 +1,8 @@
 ---
+permalink: /backend/go/basic/02-variables-and-types/
 title: 02. 变量、常量与类型
 shortTitle: 02. 变量、常量与类型
 order: 2
-dir:
-  link: true
-  collapsible: true
-  order: 2
-icon: keyboard
 category:
   - Go
   - Golang 基础知识

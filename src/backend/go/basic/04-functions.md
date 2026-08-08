@@ -1,12 +1,8 @@
 ---
+permalink: /backend/go/basic/04-functions/
 title: 04. 函数
 shortTitle: 04. 函数
 order: 4
-dir:
-  link: true
-  collapsible: true
-  order: 4
-icon: diagram-project
 category:
   - Go
   - Golang 基础知识

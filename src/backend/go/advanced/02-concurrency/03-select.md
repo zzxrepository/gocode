@@ -1,8 +1,8 @@
 ---
+permalink: /backend/go/advanced/02-concurrency/03-select/
 title: 03. Select：等待多个事件
 shortTitle: 03. Select
 order: 3
-icon: arrows-split-up-and-left
 category:
   - Go
   - Golang 进阶知识

@@ -1,12 +1,8 @@
 ---
+permalink: /backend/go/basic/09-methods/
 title: 09. 方法
 shortTitle: 09. 方法
 order: 9
-dir:
-  link: true
-  collapsible: true
-  order: 9
-icon: shapes
 category:
   - Go
   - Golang 基础知识

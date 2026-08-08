@@ -1,12 +1,8 @@
 ---
+permalink: /backend/go/basic/05-arrays-and-slices/
 title: 05. 数组与切片
 shortTitle: 05. 数组与切片
 order: 5
-dir:
-  link: true
-  collapsible: true
-  order: 5
-icon: table-cells
 category:
   - Go
   - Golang 基础知识

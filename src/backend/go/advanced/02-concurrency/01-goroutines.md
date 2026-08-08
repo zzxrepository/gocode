@@ -1,8 +1,8 @@
 ---
+permalink: /backend/go/advanced/02-concurrency/01-goroutines/
 title: 01. Goroutine：并发任务的执行单元
 shortTitle: 01. Goroutine
 order: 1
-icon: arrows-split-up-and-left
 category:
   - Go
   - Golang 进阶知识

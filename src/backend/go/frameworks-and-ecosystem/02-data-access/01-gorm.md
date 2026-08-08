@@ -1,8 +1,8 @@
 ---
+permalink: /backend/go/frameworks-and-ecosystem/02-data-access/01-gorm/
 title: 01. GORM：模型、查询与事务
 shortTitle: 01. GORM
 order: 1
-icon: database
 category:
   - Go
   - Golang 框架与生态

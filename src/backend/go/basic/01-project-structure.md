@@ -1,12 +1,8 @@
 ---
+permalink: /backend/go/basic/01-project-structure/
 title: 01. 基础语法与项目结构
 shortTitle: 01. 基础语法与项目结构
 order: 1
-dir:
-  link: true
-  collapsible: true
-  order: 1
-icon: code
 category:
   - Go
   - Golang 基础知识

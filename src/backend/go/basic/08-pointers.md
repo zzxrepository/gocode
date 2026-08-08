@@ -1,12 +1,8 @@
 ---
+permalink: /backend/go/basic/08-pointers/
 title: 08. 指针
 shortTitle: 08. 指针
 order: 8
-dir:
-  link: true
-  collapsible: true
-  order: 8
-icon: location-arrow
 category:
   - Go
   - Golang 基础知识

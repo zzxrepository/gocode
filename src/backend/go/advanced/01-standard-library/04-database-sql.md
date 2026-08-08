@@ -1,8 +1,8 @@
 ---
+permalink: /backend/go/advanced/01-standard-library/04-database-sql/
 title: 04. database/sql：关系型数据库访问
 shortTitle: 04. database/sql
 order: 4
-icon: database
 category:
   - Go
   - Golang 进阶知识

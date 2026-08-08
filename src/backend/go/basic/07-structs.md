@@ -1,12 +1,8 @@
 ---
+permalink: /backend/go/basic/07-structs/
 title: 07. 结构体
 shortTitle: 07. 结构体
 order: 7
-dir:
-  link: true
-  collapsible: true
-  order: 7
-icon: cube
 category:
   - Go
   - Golang 基础知识

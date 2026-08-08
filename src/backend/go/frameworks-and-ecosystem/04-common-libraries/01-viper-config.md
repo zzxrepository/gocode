@@ -1,12 +1,8 @@
 ---
+permalink: /backend/go/frameworks-and-ecosystem/04-common-libraries/01-viper-config/
 title: 01. 使用 Viper 读取配置文件
 shortTitle: 01. Viper 配置读取
 order: 1
-dir:
-  link: true
-  collapsible: true
-  order: 1
-icon: sliders
 category:
   - Go
   - Golang 框架与生态

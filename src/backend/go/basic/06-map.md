@@ -1,12 +1,8 @@
 ---
+permalink: /backend/go/basic/06-map/
 title: 06. Map
 shortTitle: 06. Map
 order: 6
-dir:
-  link: true
-  collapsible: true
-  order: 6
-icon: table
 category:
   - Go
   - Golang 基础知识

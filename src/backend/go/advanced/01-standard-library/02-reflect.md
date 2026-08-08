@@ -1,11 +1,8 @@
 ---
+permalink: /backend/go/advanced/01-standard-library/02-reflect/
 title: 02. reflect：反射
 shortTitle: 02. reflect：反射
 order: 2
-dir:
-  link: true
-  collapsible: true
-  order: 2
 category:
   - Go
   - Golang 进阶知识

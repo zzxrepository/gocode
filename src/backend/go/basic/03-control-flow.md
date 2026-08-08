@@ -1,12 +1,8 @@
 ---
+permalink: /backend/go/basic/03-control-flow/
 title: 03. 流程控制
 shortTitle: 03. 流程控制
 order: 3
-dir:
-  link: true
-  collapsible: true
-  order: 3
-icon: code-fork
 category:
   - Go
   - Golang 基础知识

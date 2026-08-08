@@ -1,11 +1,8 @@
 ---
+permalink: /backend/go/advanced/01-standard-library/03-encoding/
 title: 03. encoding：JSON 与 XML
 shortTitle: 03. encoding：JSON 与 XML
 order: 3
-dir:
-  link: true
-  collapsible: true
-  order: 3
 category:
   - Go
   - Golang 进阶知识

@@ -1,12 +1,8 @@
 ---
+permalink: /backend/go/basic/11-error-handling/
 title: 11. 错误处理
 shortTitle: 11. 错误处理
 order: 11
-dir:
-  link: true
-  collapsible: true
-  order: 11
-icon: triangle-exclamation
 category:
   - Go
   - Golang 基础知识

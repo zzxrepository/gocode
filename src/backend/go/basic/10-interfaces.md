@@ -1,12 +1,8 @@
 ---
+permalink: /backend/go/basic/10-interfaces/
 title: 10. 接口
 shortTitle: 10. 接口
 order: 10
-dir:
-  link: true
-  collapsible: true
-  order: 10
-icon: plug
 category:
   - Go
   - Golang 基础知识

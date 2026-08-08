@@ -1,8 +1,8 @@
 ---
+permalink: /backend/go/advanced/02-concurrency/02-channels/
 title: 02. Channel：并发任务之间的数据流
 shortTitle: 02. Channel
 order: 2
-icon: arrows-split-up-and-left
 category:
   - Go
   - Golang 进阶知识

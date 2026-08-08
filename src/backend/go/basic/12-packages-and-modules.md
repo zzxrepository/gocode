@@ -1,12 +1,8 @@
 ---
+permalink: /backend/go/basic/12-packages-and-modules/
 title: 12. 包与 Go Modules
 shortTitle: 12. 包与 Go Modules
 order: 12
-dir:
-  link: true
-  collapsible: true
-  order: 12
-icon: boxes-stacked
 category:
   - Go
   - Golang 基础知识

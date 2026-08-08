@@ -1,12 +1,8 @@
 ---
+permalink: /backend/go/advanced/03-web-development/01-http-server/
 title: 01. HTTP 服务与 net/http
 shortTitle: 01. HTTP 服务
 order: 1
-icon: globe
-dir:
-  link: true
-  collapsible: true
-  order: 4
 category:
   - Go
   - Golang 进阶知识
