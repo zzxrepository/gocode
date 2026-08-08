@@ -188,6 +188,281 @@ flowchart LR
 
 goroutine 在 channel、锁、网络 I/O 等 runtime 能识别的等待点会让出执行机会；计算密集型代码也存在运行时抢占机制。不要把“某 goroutine 最多运行多少毫秒”当作业务假设，更不要用 `runtime.Gosched` 代替同步。goroutine 的栈会按需增长和收缩，但它仍有栈、调度元数据和业务对象成本，数量应由压测和下游容量决定。
 
+## 从参考模型到工程判断：并发、并行与线程
+
+并发首先是程序的组织方式：把彼此独立、可能阻塞的任务拆成独立执行流，使它们都能在一段时间内推进。并行则是实际执行状态：多个执行流在同一时刻占用不同的硬件执行资源。
+
+| 术语 | 解决的问题 | 是否要求多核 | 在 Go 中的含义 |
+| --- | --- | --- | --- |
+| 并发（concurrency） | 如何组织多个待处理任务 | 否 | 多个 goroutine 可以在一个 P 上交替运行 |
+| 并行（parallelism） | 如何同时使用多个 CPU | 通常是 | 多个持有 P 的 M 可同时执行 Go 代码 |
+| OS 线程 | 内核调度的执行实体 | 否 | runtime 的 M 通常关联一个 OS 线程 |
+| goroutine | runtime 调度的用户任务 | 否 | G 被调度到持有 P 的 M 上运行 |
+
+例如，两个下载任务在一核机器上可以在网络等待期间交替推进，这已经是并发；只有它们的 CPU 解码阶段同时运行在多个核上，才是并行。网络 I/O 为主的服务通常受连接、远端延迟和下游配额约束，盲目增大 `GOMAXPROCS` 并不会神奇地增加吞吐。
+
+## `go` 语句的规则：先求值，后并发调用
+
+`go` 后必须是一个函数调用，不能是一个函数值。调用的函数及其参数在启动新 goroutine **之前**按普通调用规则求值；函数的返回值会被忽略。因此，下面代码中的 `nextID()` 发生在当前 goroutine 中，而非未来的 worker 中。
+
+```go
+package main
+
+import "fmt"
+
+func nextID() int {
+
+	fmt.Println("当前 goroutine：计算任务参数")
+	return 42
+}
+
+func handle(id int) {
+
+	fmt.Println("新 goroutine：处理任务", id)
+}
+
+func main() {
+
+	// 先执行 nextID()，再让 runtime 安排 handle(42)。
+	go handle(nextID())
+
+	// 这里不等待的话，main 返回时 handle 可能还没有机会输出。
+	// 示例刻意省略等待，只用来说明参数求值时机。
+}
+```
+
+以下几条是写代码时更有用的语言规则：
+
+- `go f()` 与普通 `f()` 一样要求 `f` 可调用；`go f` 缺少调用括号，不能编译。
+- `go` 调用的返回值没有接收位置；需要结果时让函数写入 channel、受保护的共享结构，或返回给一个包装 goroutine。
+- `defer` 属于执行它的 goroutine。子 goroutine 的 `defer` 不会因为父 goroutine 返回而自动运行完。
+- goroutine 的开始时刻、完成次序和是否与当前 goroutine 并行都没有语言层面的时序保证。
+
+### 匿名函数：让任务输入成为快照
+
+匿名函数适合把一次性任务、错误处理和 `defer` 放在同一个局部范围。最后的 `()` 很关键：它使匿名函数成为一次调用，满足 `go` 语句的语法。
+
+```go
+package main
+
+import (
+	"fmt"
+	"sync"
+)
+
+func main() {
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	go func(name string) {
+		// defer 绑定到这个新 goroutine；无论后续怎样 return，计数都会归还。
+		defer wg.Done()
+		fmt.Println("执行一次性任务：", name)
+	}("清理过期缓存") // 参数在当前循环/当前调用点取值，传给新函数。
+
+	wg.Wait()
+}
+```
+
+### 循环启动：不要把可变状态偷偷交给闭包
+
+Go 1.22 为 `for range` 的迭代变量提供每轮独立语义，但项目可能使用旧 Go 版本，且循环外的可变变量仍可能被闭包共享。将输入显式作为参数传入，不依赖版本细节，也让读者立刻知道任务拿到的是启动时快照。
+
+```go
+package main
+
+import (
+	"fmt"
+	"sync"
+)
+
+func main() {
+
+	ids := []int{101, 205, 309}
+	var wg sync.WaitGroup
+
+	for _, id := range ids {
+		wg.Add(1)
+		go func(orderID int) {
+			defer wg.Done()
+			// orderID 是本次调用的参数，不会随外层循环继续变化。
+			fmt.Println("处理订单", orderID)
+		}(id)
+	}
+
+	wg.Wait()
+}
+```
+
+不要通过输出顺序验证这个例子。正确性来自每个任务得到正确的 `orderID`，而不是 101、205、309 以哪种顺序打印。
+
+## `main` 退出是进程边界，不是等待点
+
+程序从 `main.main` 返回后，runtime 会让进程退出；它不会等待普通 goroutine，也不承诺它们的后续语句或 `defer` 得到执行机会。这个规则使“启动后台 goroutine，然后让 main 返回”特别危险：日志可能没刷完、文件可能没关闭、数据也可能只写了一半。
+
+```go
+package main
+
+import (
+	"fmt"
+	"sync"
+)
+
+func main() {
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+		defer fmt.Println("worker 的清理动作")
+		fmt.Println("worker 正在工作")
+	}()
+
+	// 这是显式生命周期边界：只有任务结束，main 才能返回。
+	wg.Wait()
+	fmt.Println("安全退出")
+}
+```
+
+服务程序往往以根 `context` 表示进程的生命周期：收到关闭信号后先取消根 context，停止接收新工作，再等待已经开始的可收尾任务。`WaitGroup` 只能实现最后一步的等待；它本身没有“停止”含义。
+
+## `WaitGroup` 的正确协议与替代选择
+
+将 `Add`、`go` 和 `Done` 放在同一控制路径，能让计数的所有权清晰可查：谁登记，谁保证归还。特别是 `Wait` 与“从零计数重新 Add”并发时极易留下竞态；应先结束上一轮，再开始下一轮。
+
+| 需求 | 优先选择 | 为什么 |
+| --- | --- | --- |
+| 只等固定数量任务结束 | `sync.WaitGroup` | 简单、无结果通道负担 |
+| 要传递单个完成信号 | `chan struct{}` | 显式表达一个同步事件 |
+| 要流式传递数据 | `chan T` | 传值与背压都在协议中 |
+| 第一个错误后希望其余任务停止 | `context` + 错误收集 | `WaitGroup` 不会传播错误或取消 |
+| 要限制同时工作的数量 | worker pool / 有界信号量 | `WaitGroup` 不限制并发 |
+
+现代 Go 的 `(*sync.WaitGroup).Go` 可以把“Add、启动和 Done”合成一次调用；但它要求任务不 panic，且旧版本并不具备该方法。教程和公共库若需要兼容广泛版本，仍可使用先 `Add`、后 `go`、函数开头 `defer Done` 的显式写法。
+
+## 调度控制 API：观察与边界
+
+`runtime` 包提供少量调度相关 API，主要用于运行时集成、诊断或教学。它们不是协调业务顺序的替代品。
+
+### `runtime.Gosched`：让出一次，不交出控制权
+
+`runtime.Gosched()` 使当前 goroutine 主动让出处理器，重新变为可运行状态，让调度器有机会运行其他可运行 goroutine。它不阻塞到某个事件发生，也不保证指定 goroutine 会立刻运行。
+
+```go
+package main
+
+import (
+	"fmt"
+	"runtime"
+	"sync"
+)
+
+func main() {
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+		fmt.Println("worker 获得执行机会")
+	}()
+
+	// 仅用于演示“让出”；正确等待仍由 wg.Wait() 建立。
+	runtime.Gosched()
+	fmt.Println("main 继续执行")
+	wg.Wait()
+}
+```
+
+不要用 `Gosched` 修复竞态、等待初始化或试图“保证另一个 goroutine 先跑”。这些需求应使用 channel、锁或 `WaitGroup` 的同步边。
+
+### `runtime.Goexit`：结束当前 goroutine，仍运行 defer
+
+`runtime.Goexit()` 会终止调用它的**当前** goroutine，并按栈展开顺序运行已登记的 `defer`。它不会结束其他 goroutine，也不会产生可由 `recover` 取得的 panic 值；一般业务代码几乎不需要它。
+
+```go
+package main
+
+import (
+	"fmt"
+	"runtime"
+	"sync"
+)
+
+func main() {
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()                    // Goexit 仍会执行，因此主 goroutine 不会永远等待。
+		defer fmt.Println("外层 defer")
+		defer fmt.Println("内层 defer")
+		runtime.Goexit()
+		fmt.Println("不会执行")
+	}()
+	wg.Wait()
+}
+```
+
+若在 main goroutine 调用 `Goexit`，其余任务仍可能失去明确的退出边界；不要把它当作正常的程序退出机制。
+
+### `runtime.GOMAXPROCS`：限制可并行执行 Go 代码的 P 数
+
+`runtime.GOMAXPROCS(n)` 设置并返回旧值；`runtime.GOMAXPROCS(0)` 只查询当前值。它控制 P 的数量，也就是同一时刻可执行用户 Go 代码的 M/P 组合数。它不限制 goroutine 数，不是连接池大小，也不代表进程内线程总数。
+
+```go
+package main
+
+import (
+	"fmt"
+	"runtime"
+)
+
+func main() {
+
+	current := runtime.GOMAXPROCS(0)
+	fmt.Println("当前可并行执行 Go 代码的 P 数：", current)
+
+	// 生产程序通常保留默认值；只有压测或受控运行环境才考虑调整。
+	old := runtime.GOMAXPROCS(2)
+	fmt.Println("调整前的值：", old)
+}
+```
+
+Go 版本、CPU affinity 和容器 cgroup 限额都会影响默认值的推导。历史资料里“永远等于 CPU 核数”的说法并不精确。更重要的是：即使设为 1，多个 goroutine 仍可并发交替；设为大于 1 只是为 CPU 密集任务创造并行条件，未保证提速。
+
+## GMP：把实现细节放在正确的位置
+
+GMP 是理解性能和 trace 的好模型，却不是 Go 语言规范的一部分。语言保证的是 goroutine、channel、同步原语的可观察语义；本节的队列、窃取与抢占路径只是 Go runtime 某版本的实现策略，不能作为业务正确性的前提。
+
+### 一次简化的调度路径
+
+```mermaid
+flowchart TD
+    A[当前 G 执行 go f] --> B[newproc 创建新 G]
+    B --> C[优先放入当前 P 的本地队列]
+    C --> D[M 持有 P，从可运行队列取 G]
+    D --> E{G 的下一状态}
+    E -->|完成| F[回到调度循环]
+    E -->|channel/锁/网络等待| G[挂起 G，执行其他可运行任务]
+    E -->|阻塞系统调用| H[M 可能交还 P]
+    H --> I[其他 M 接手 P 继续执行任务]
+    F --> J[本地空闲时查询全局队列、计时器、网络轮询或窃取]
+```
+
+当前 G 新建任务时，runtime 通常偏好当前 P 的本地队列，以降低全局竞争并保留局部性。某个 P 没有工作时，可以从全局可运行队列、网络轮询器、到期定时器或其他 P 的队列寻找任务；从其他 P 取走部分任务的策略称为 work stealing。任务队列容量、取任务比例、检查顺序都可能随版本调整。
+
+阻塞系统调用是 M 与 P 的重要区别：若 OS 线程真的被系统调用卡住，runtime 可将 P 交给另一个可用 M，让其上的可运行 G 不必一起停住。相反，channel 等 runtime 管理的等待通常只会挂起 G，M/P 仍可转去运行别的 G。
+
+### 关于抢占、栈和成本的安全结论
+
+- Go runtime 具备抢占能力，但抢占点与时间阈值是实现细节；不要通过无限计算循环赌调度器何时介入。
+- goroutine 栈按需增长和收缩，起始大小也会因版本变化；“每个 goroutine 固定占几 KB”不是容量规划公式。
+- 数十万 goroutine 仍可能消耗大量栈、定时器、请求对象、文件描述符和下游连接。并发量应以负载测试、内存曲线、队列延迟和下游限额决定。
+- `GODEBUG=schedtrace=1000` 可输出调度摘要，`runtime/trace` 可展示 G/M/P 状态；观察时关注阻塞原因与排队时间，而非某次运行里的编号。
+
 ## 用工具验证并发假设
 
 数据竞争常在测试机上“看似正常”，上线后才暴露。给并发代码补测试，并优先运行 race detector：

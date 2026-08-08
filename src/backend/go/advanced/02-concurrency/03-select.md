@@ -227,6 +227,248 @@ loop:
 
 规范只承诺多个可执行 case 中的均匀伪随机选择，不承诺业务层面的优先级、公平服务时间或每个 case 都在固定次数内被选中。需要优先级时，应把优先级设计为明确的协议，例如先单独尝试高优先级队列，再进入正常阻塞等待；不要误用 case 的排列顺序。
 
+## `select` 的完整执行规则
+
+`select` 的每个 `case` 必须是 channel 的发送或接收。它在进入时并非按顺序“逐个等待”，而是把所有可选通信作为一个等待集合处理。
+
+| 进入 `select` 时的状态 | 行为 |
+| --- | --- |
+| 只有一个通信 case 就绪 | 执行该 case |
+| 有多个通信 case 就绪 | 在就绪 case 中作均匀伪随机选择 |
+| 没有 case 就绪，且存在 `default` | 立即执行 `default` |
+| 没有 case 就绪，也没有 `default` | 当前 goroutine 阻塞，直到某个通信可进行 |
+| 所有通信 channel 都为 `nil`，没有 `default` | 永久阻塞 |
+| 空 `select {}` | 永久阻塞 |
+
+这里的“就绪”取决于通信能否立刻完成：读取有值的缓冲 channel、向未满缓冲 channel 发送、与无缓冲 channel 的另一端配对，以及从已关闭 channel 接收都可能就绪。不要把 case 的书写顺序当作优先级，也不要假设一次选择后下次仍会选择同一个 channel。
+
+### 求值时机：未选中，不等于不会执行表达式
+
+进入 `select` 时，每个 case 的 channel 操作数，以及发送 case 的右值，会按源码顺序求值一次；只有接收赋值左侧在对应 case 真正选中后才计算。副作用、昂贵计算或可能 panic 的调用不应放在发送右侧。
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+)
+
+func makePayload() string {
+	fmt.Println("makePayload 已求值")
+	return "payload"
+}
+
+func main() {
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // 使 ctx.Done() 在进入 select 前就可接收。
+	out := make(chan string)
+
+	select {
+	case out <- makePayload():
+		fmt.Println("发送成功")
+	case <-ctx.Done():
+		// 即使这一分支被选中，makePayload 也已经执行过。
+		fmt.Println("已取消")
+	}
+}
+```
+
+若构建 payload 很贵，先在外层检查取消，或在 goroutine 内把计算和可取消的发送分开；不要依赖“这个 case 多半不会被选中”来避免工作。
+
+## 一次性超时：`Timer`、`time.After` 与取消范围
+
+`time.After(d)` 返回一个在 d 后可接收的 channel，写起来短，但它只能让当前 `select` 有机会走超时分支。它不会自动叫停已经发出的工作；真正的调用链取消仍应传递 `context`。
+
+对于循环或可能提前结束的流程，显式 `Timer` 更容易控制生命周期。重置 timer 前要正确处理可能已经到达的信号，最简单可靠的做法是只由一个 goroutine 拥有和操作它。
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"time"
+)
+
+func waitForResult(ctx context.Context, result <-chan string, limit time.Duration) (string, error) {
+	timer := time.NewTimer(limit)
+	defer timer.Stop() // 提前收到结果时，释放该定时器不再需要的等待。
+
+	select {
+	case value := <-result:
+		return value, nil
+	case <-timer.C:
+		return "", fmt.Errorf("等待结果超过 %s", limit)
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+}
+
+func main() {
+
+	result := make(chan string, 1)
+	go func() {
+		// 缓冲为 1：调用方超时返回后，此演示发送者不会卡在发送点。
+		result <- "完成"
+	}()
+
+	value, err := waitForResult(context.Background(), result, time.Second)
+	fmt.Println(value, err)
+}
+```
+
+缓冲只是避免这个“一次发送”的 goroutine 因无人接收而卡住；若工作本身会调用网络、数据库或无限循环，仍必须让它监听同一个 `ctx.Done()`。
+
+## 周期事件：`Ticker` 必须停止，也不能补回每一次 tick
+
+`time.Ticker` 通过 `C` 周期性提供时间信号，常用于批量刷新、心跳和限速检查。退出前调用 `Stop`，防止定时器资源无意义地继续活动。ticker 的用途是“现在可以做一次周期工作”，不是精确计数器；当消费者来不及处理时，不能依赖每一个理论 tick 都被逐一接收。
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"time"
+)
+
+func heartbeat(ctx context.Context, send func() error) error {
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err() // 服务关闭时，不再等下一次 tick。
+		case now := <-ticker.C:
+			// 真实 send 应设置自身的 I/O deadline 或接收 ctx。
+			fmt.Println("发送心跳：", now.Format(time.StampMilli))
+			if err := send(); err != nil {
+				return err
+			}
+		}
+	}
+}
+
+func main() {
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1100*time.Millisecond)
+	defer cancel()
+	_ = heartbeat(ctx, func() error { return nil })
+}
+```
+
+## 可取消 worker pool：把任务、结果和停机路径配对
+
+worker pool 不只是“开 N 个 goroutine”。可靠的版本需要同时定义：谁停止投递任务、worker 如何在取消时离开、谁确认所有结果发送者都结束后再关闭结果流。下面示例将这些责任拆开。
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"sync"
+)
+
+type Result struct {
+	Input  int
+	Square int
+}
+
+func worker(ctx context.Context, jobs <-chan int, results chan<- Result, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for {
+		select {
+		case <-ctx.Done():
+			return // 取消时不再等待新任务。
+		case job, ok := <-jobs:
+			if !ok {
+				return // 任务生产者结束，worker 正常退出。
+			}
+
+			result := Result{Input: job, Square: job * job}
+			select {
+			case results <- result:
+				// 结果交给消费者；顺序由 worker 调度决定。
+			case <-ctx.Done():
+				return // 消费者不再读取时，不被发送永久卡住。
+			}
+		}
+	}
+}
+
+func squareAll(parent context.Context, inputs []int, count int) ([]Result, error) {
+	if count <= 0 {
+		return nil, fmt.Errorf("worker 数必须大于 0")
+	}
+	ctx, cancel := context.WithCancel(parent)
+	defer cancel() // 任意返回路径都通知内部 goroutine 收尾。
+
+	jobs := make(chan int, count)    // 有界等待队列。
+	results := make(chan Result, count)
+
+	var workers sync.WaitGroup
+	workers.Add(count)
+	for i := 0; i < count; i++ {
+		go worker(ctx, jobs, results, &workers)
+	}
+
+	go func() {
+		defer close(jobs) // 唯一任务生产者拥有 jobs 的关闭权。
+		for _, input := range inputs {
+			select {
+			case jobs <- input:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	go func() {
+		workers.Wait()
+		// 所有 worker 都已退出，之后不可能再发送 results，关闭才安全。
+		close(results)
+	}()
+
+	output := make([]Result, 0, len(inputs))
+	for result := range results {
+		output = append(output, result)
+	}
+	return output, nil
+}
+
+func main() {
+
+	values, err := squareAll(context.Background(), []int{1, 2, 3, 4}, 2)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(values)
+}
+```
+
+该例用 `select` 将每一个潜在阻塞点与取消信号并列：生产者发送 `jobs`，worker 接收 `jobs` 和发送 `results`。这比“只在最外层等待超时”多了一条真正可退出的路径。
+
+## `default` 的正确范围：一次尝试，而非循环等待
+
+非阻塞接收适合探测当前是否已有一条缓存消息：
+
+```go
+func tryReceive(in <-chan string) (string, bool) {
+	select {
+	case value := <-in:
+		return value, true
+	default:
+		return "", false // 此刻没有可立刻接收的值。
+	}
+}
+```
+
+若 `in` 已关闭，上面的接收 case 会立即就绪，并返回零值；现实函数需要 comma-ok 形式来区分关闭。更重要的是，`default` 放进无限循环会形成忙等。等待事件时，应删除 `default` 让调度器挂起 goroutine，或将 ticker、退避定时器和明确的丢弃策略纳入设计。
+
 ## 常见错误
 
 ### 只让外层超时，却没有取消下游

@@ -336,6 +336,311 @@ MySQL 默认隔离级别、死锁检测和锁等待超时是数据库层规则�
 - MySQL 服务器或负载均衡器可能主动断开长期空闲连接。`ConnMaxLifetime`/`ConnMaxIdleTime` 用来主动淘汰陈旧连接；不要把它们设成零后假定网络永远可靠。
 - 观察 `db.Stats()` 中的 `WaitCount` 与 `WaitDuration`，并结合 MySQL 慢查询日志、`SHOW PROCESSLIST`、锁等待信息判断瓶颈在应用池、SQL 还是数据库。
 
+## 从 SQL 语言到可审查的语句
+
+直接使用 `database/sql` 的优势是 SQL 就在代码里，因此团队必须读得懂 SQL 的形状和风险。常见分类如下：
+
+| 分类 | 常见命令 | 本文中的用途 | 生产注意点 |
+| --- | --- | --- | --- |
+| DDL（数据定义） | `CREATE`、`ALTER`、`DROP` | 建库、建表、建索引 | 走版本化迁移，评估元数据锁与回滚 |
+| DML（数据操作） | `INSERT`、`UPDATE`、`DELETE` | 订单的新增、状态变更、删除 | 写清 `WHERE`，检查受影响行数 |
+| DQL（数据查询） | `SELECT` | 列表、详情、统计 | 明确列、索引与排序，避免无界读取 |
+| TCL（事务控制） | `START TRANSACTION`、`COMMIT`、`ROLLBACK` | 保证多步写入一致 | 在 Go 中通过 `*sql.Tx` 管理 |
+| DCL（权限控制） | `GRANT`、`REVOKE` | 为应用创建最小权限账号 | 不在业务请求中执行 |
+
+一条典型查询由若干固定部件组成：
+
+```sql
+SELECT id, product_id, quantity, status, created_at -- 返回哪些列
+FROM orders                                          -- 从哪张表读取
+WHERE status = 'created' AND id < 1000               -- 哪些行有资格
+ORDER BY id DESC                                      -- 以什么稳定顺序排列
+LIMIT 20;                                             -- 最多返回多少行
+```
+
+SQL 的书写顺序并不完全等于数据库的逻辑处理顺序。阅读查询时可先从 `FROM`/`WHERE` 判断候选行，再看 `SELECT` 的投影和 `ORDER BY`/`LIMIT` 的结果整理；优化则需要以 `EXPLAIN` 的实际计划为准。列表接口必须有稳定排序：仅按 `created_at` 排序在同一时刻多条记录时可能翻页重复或漏数据，通常加主键作为第二排序键。
+
+### SQL 注入：值与结构必须分开
+
+下面的代码看似只是查询，却让客户端内容成为 SQL 文本的一部分：
+
+```go
+// 不要这样写：input 若为 ' OR 1=1 -- ，条件就可能被改写。
+query := "SELECT id, status FROM orders WHERE status = '" + input + "'"
+rows, err := db.QueryContext(ctx, query)
+```
+
+`fmt.Sprintf` 不会改变风险，本质仍是拼接。正确方式是让 SQL 模板保持不变，让驱动单独编码参数：
+
+```go
+rows, err := db.QueryContext(ctx,
+	"SELECT id, status FROM orders WHERE status = ?", input)
+// `input` 无论包含引号、注释还是关键字，都只是一个字符串值。
+```
+
+不要给 `?` 手工加单引号；驱动会按 Go 值的类型处理字符串、时间、整数和 `NULL`。参数化查询是主要防线，但不是唯一防线：请求参数还应做业务格式校验，数据库账号只授予所需库表权限，错误响应不可泄露完整 SQL/DSN。
+
+占位符**不能**替代表、列、关键字、排序方向或整个条件片段。需要动态排序时，把用户选项映射为代码中固定的安全片段：
+
+```go
+func orderClause(input string) string {
+	allowed := map[string]string{
+		"newest": "created_at DESC, id DESC",
+		"oldest": "created_at ASC, id ASC",
+		"id":     "id DESC",
+	}
+	if clause, ok := allowed[input]; ok {
+		return clause
+	}
+	return allowed["newest"] // 原始输入从未进入 SQL 结构。
+}
+
+func ListByOrder(ctx context.Context, db *sql.DB, status, sort string) (*sql.Rows, error) {
+	query := "SELECT id, status FROM orders WHERE status = ? ORDER BY " + orderClause(sort)
+	return db.QueryContext(ctx, query, status)
+}
+```
+
+同理，`IN` 条件不可把逗号列表作为一个参数塞进 `IN (?)`。由程序根据元素个数生成固定数量的 `?`，每个 ID 仍然单独传参；空集合应提前返回空结果，不能生成 `IN ()`。
+
+## 完整 CRUD Repository：每一步都明确资源与结果
+
+下面的仓储实现把新增、详情、分页列表、更新和删除放在一起。它不试图隐藏 SQL；注释标出每个方法要维护的边界。示例假定已定义 `Order` 类型并已创建 `orders` 表。
+
+```go
+package store
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"strings"
+)
+
+type OrderRepository struct {
+	db *sql.DB // 注入进程级连接池；repository 不拥有、也不关闭它。
+}
+
+func NewOrderRepository(db *sql.DB) *OrderRepository { return &OrderRepository{db: db} }
+
+type OrderPage struct {
+	Items []Order
+	NextID int64 // 0 表示当前页没有下一页；用于基于主键的游标分页。
+}
+
+func (r *OrderRepository) Create(ctx context.Context, productID int64, quantity int) (Order, error) {
+	if productID <= 0 || quantity <= 0 {
+		return Order{}, errors.New("productID 和 quantity 必须为正数")
+	}
+	result, err := r.db.ExecContext(ctx, `
+		INSERT INTO orders(product_id, quantity, status, created_at)
+		VALUES (?, ?, ?, NOW())`, productID, quantity, "created")
+	if err != nil {
+		return Order{}, fmt.Errorf("新增订单: %w", err)
+	}
+	id, err := result.LastInsertId() // 只在 INSERT 且驱动支持时有业务意义。
+	if err != nil {
+		return Order{}, fmt.Errorf("读取新增订单 ID: %w", err)
+	}
+	// 重新读一遍让返回模型以数据库实际默认值为准；也可用 MySQL RETURNING 能力时再调整。
+	return r.ByID(ctx, id)
+}
+
+func (r *OrderRepository) ByID(ctx context.Context, id int64) (Order, error) {
+	var order Order
+	err := r.db.QueryRowContext(ctx, `
+		SELECT id, product_id, quantity, status, created_at
+		FROM orders WHERE id = ?`, id,
+	).Scan(&order.ID, &order.ProductID, &order.Quantity, &order.Status, &order.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Order{}, fmt.Errorf("订单 %d 不存在", id)
+	}
+	if err != nil {
+		return Order{}, fmt.Errorf("按 ID 查询订单: %w", err)
+	}
+	return order, nil
+}
+
+func (r *OrderRepository) PageCreated(ctx context.Context, beforeID int64, size int) (OrderPage, error) {
+	if size < 1 || size > 100 {
+		return OrderPage{}, errors.New("size 必须在 1 到 100 之间")
+	}
+	if beforeID <= 0 {
+		beforeID = int64(^uint64(0) >> 1) // 首页从最大 int64 开始向前取。
+	}
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, product_id, quantity, status, created_at
+		FROM orders
+		WHERE status = ? AND id < ?
+		ORDER BY id DESC LIMIT ?`, "created", beforeID, size+1)
+	if err != nil {
+		return OrderPage{}, fmt.Errorf("分页查询订单: %w", err)
+	}
+	defer rows.Close() // 不论 Scan 或循环中何处失败，均归还连接。
+
+	items := make([]Order, 0, size+1)
+	for rows.Next() {
+		var item Order
+		if err := rows.Scan(&item.ID, &item.ProductID, &item.Quantity, &item.Status, &item.CreatedAt); err != nil {
+			return OrderPage{}, fmt.Errorf("扫描订单分页: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return OrderPage{}, fmt.Errorf("读取订单分页: %w", err)
+	}
+	page := OrderPage{Items: items}
+	if len(items) > size {
+		page.Items = items[:size]
+		page.NextID = page.Items[len(page.Items)-1].ID
+	}
+	return page, nil
+}
+
+func (r *OrderRepository) Cancel(ctx context.Context, id int64) error {
+	result, err := r.db.ExecContext(ctx, `
+		UPDATE orders SET status = ?
+		WHERE id = ? AND status = ?`, "cancelled", id, "created")
+	if err != nil {
+		return fmt.Errorf("取消订单: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("读取取消结果: %w", err)
+	}
+	if affected != 1 {
+		return fmt.Errorf("订单不存在，或已不处于 created 状态")
+	}
+	return nil
+}
+
+func (r *OrderRepository) DeleteDraft(ctx context.Context, id int64) error {
+	// 删除条件同时保护对象身份与业务状态，防止误删除已生效订单。
+	result, err := r.db.ExecContext(ctx, "DELETE FROM orders WHERE id = ? AND status = ?", id, "draft")
+	if err != nil {
+		return fmt.Errorf("删除草稿订单: %w", err)
+	}
+	if n, err := result.RowsAffected(); err != nil || n != 1 {
+		if err != nil { return fmt.Errorf("读取删除结果: %w", err) }
+		return fmt.Errorf("草稿订单不存在或不能删除")
+	}
+	return nil
+}
+
+// BuildIn 保证每个元素都成为独立参数；调用方只能传受控的列名常量。
+func BuildIn(column string, ids []int64) (string, []any, error) {
+	if len(ids) == 0 { return "", nil, errors.New("ids 不能为空") }
+	ph := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+	args := make([]any, len(ids))
+	for i, id := range ids { args[i] = id }
+	return column + " IN (" + ph + ")", args, nil
+}
+
+```
+
+示例刻意没有用 `SELECT *`：列清单是接口契约，增加一个大字段不会意外扩大所有列表的网络传输。游标分页以 `id` 为边界，避免深页 `OFFSET` 逐渐扫描大量已跳过行；业务若按时间排序，可使用 `(created_at, id)` 这样的复合游标与匹配索引。
+
+## NULL、时间和预处理：三个容易在测试外出错的细节
+
+### 让 NULL 在 Go 模型中可见
+
+数据库中的 `NULL` 表示“未知或不存在”，不是空字符串、零数量或 Unix epoch。可空列扫描到基本类型会失败，或者迫使你在 SQL 中丢失语义。用 `sql.NullString`、`sql.NullInt64`、`sql.NullBool`、`sql.NullTime`，或者仓储内部使用指针字段。
+
+```go
+type PaymentRow struct {
+	ID          int64
+	ExternalRef sql.NullString // Valid=false 说明是 SQL NULL，而非 ""。
+	PaidAt      sql.NullTime
+}
+
+func (r *OrderRepository) Payment(ctx context.Context, id int64) (PaymentRow, error) {
+	var p PaymentRow
+	err := r.db.QueryRowContext(ctx, `
+		SELECT id, external_ref, paid_at FROM payments WHERE order_id = ?`, id,
+	).Scan(&p.ID, &p.ExternalRef, &p.PaidAt)
+	return p, err
+}
+```
+
+### 统一时间约定
+
+`DATE` 只表示日历日期，`DATETIME` 表示无时区的日期时间，`TIMESTAMP` 则有 MySQL 特定的时区转换行为。项目应先约定“存 UTC、展示时转换”或其他明确规则，再让数据库 session、DSN 的 `loc` 和应用格式化保持一致。对 MySQL 驱动，`parseTime=true` 让日期/时间列可扫描到 `time.Time`；没有它时常得到 `[]byte`，而不是可直接使用的时间对象。
+
+不要以 `time.Local` 的机器配置作为业务规则。测试应覆盖夏令时地区、跨日边界与 `NULL` 时间；时间范围查询使用半开区间 `created_at >= ? AND created_at < ?`，避免在精度不一致时漏掉“当天最后一瞬”。
+
+### 显式预处理并非注入防线
+
+每次 `ExecContext(ctx, "... ?", value)` 都已经把模板和值分开，因此已经具备注入防护。`PrepareContext` 的用途是重复使用同一语句、表达生命周期或配合批量写入；是否带来性能收益取决于驱动、服务端配置和实际压测。
+
+```go
+func InsertAuditBatch(ctx context.Context, db *sql.DB, orderIDs []int64) error {
+	stmt, err := db.PrepareContext(ctx,
+		"INSERT INTO audit_logs(order_id, action, created_at) VALUES (?, ?, NOW())")
+	if err != nil { return fmt.Errorf("准备审计插入: %w", err) }
+	defer stmt.Close() // 结束批次后释放 statement 的资源。
+
+	for _, id := range orderIDs {
+		if _, err := stmt.ExecContext(ctx, id, "batch-import"); err != nil {
+			return fmt.Errorf("写入订单 %d 审计: %w", id, err)
+		}
+	}
+	return nil
+}
+```
+
+`*sql.Stmt` 可以并发使用，也可能在池中的多条物理连接上分别准备。批量中的所有写入若必须全成或全败，应在 `BeginTx` 后使用 `tx.PrepareContext`，并在发生错误时回滚；不能把循环 + 预处理误认为自动事务。
+
+## InnoDB 运行故障：从连接、计划、锁到重试
+
+排障先缩小“到底在哪里等”：连接池、网络、SQL 扫描、行锁还是提交。下面的顺序比直接把池上限调大更可靠。
+
+1. 应用侧读取 `db.Stats()`：`WaitCount`/`WaitDuration` 上升说明请求在等池连接；检查事务是否结束、`Rows` 是否关闭、实例总连接数是否超过预算。
+2. 服务端检查慢查询日志和 `EXPLAIN`：确认索引、估计行数与排序/临时表，不要仅凭 SQL 看上去简单。
+3. 检查 `SHOW PROCESSLIST`、InnoDB 锁等待与最近死锁信息：长事务常是阻塞者，短事务只是受害者。
+4. 核对 DSN 的网络超时与负载均衡空闲超时：陈旧连接应通过 `ConnMaxIdleTime`/`ConnMaxLifetime` 主动淘汰。
+5. 最后才在容量预算内调整池上限，并重新压测，不让多个实例同时把 `max_connections` 耗尽。
+
+死锁不是“数据库坏了”：两个事务以不同顺序请求相同行锁时，InnoDB 会选择一个回滚。正确做法是缩短事务、统一更新顺序、建立合适索引，并仅对幂等且调用方尚未获得成功响应的短事务做有限退避重试。网络超时后的提交状态也可能未知；对于创建类操作，使用业务唯一键/幂等键，重试时先查询该键，而不是盲目再次插入。
+
+### 事务重试要以幂等性为前提
+
+不是所有错误都该重试。语法错误、权限错误、字段校验失败和唯一键冲突通常重试无效；死锁或短暂的可用性错误才可能适合重试。更重要的是，网络中断发生在 `Commit` 附近时，客户端可能不知道服务端究竟提交成功还是失败，因此“再执行一次”可能造出重复订单。
+
+一种常见设计是在表中保存由调用方提供的幂等键，并让数据库的唯一索引最终裁决：
+
+```sql
+ALTER TABLE orders
+  ADD COLUMN request_id CHAR(36) NOT NULL,
+  ADD UNIQUE KEY uk_orders_request_id (request_id);
+```
+
+```go
+func CreateIdempotent(ctx context.Context, db *sql.DB, requestID string, productID int64) (int64, error) {
+	// requestID 必须来自调用链的稳定标识；不要每次重试都生成新的 UUID。
+	result, err := db.ExecContext(ctx, `
+		INSERT INTO orders(request_id, product_id, quantity, status, created_at)
+		VALUES (?, ?, ?, ?, NOW())`, requestID, productID, 1, "created")
+	if err == nil {
+		return result.LastInsertId()
+	}
+	// 真实项目应通过驱动错误码精确识别重复键，而非比对错误字符串。
+	var existingID int64
+	readErr := db.QueryRowContext(ctx,
+		"SELECT id FROM orders WHERE request_id = ?", requestID).Scan(&existingID)
+	if readErr == nil { return existingID, nil }
+	return 0, fmt.Errorf("创建幂等订单: %w", err)
+}
+```
+
+这个模式不替代业务校验，却把“重复请求只能有一条记录”放在可靠的数据库约束中。支付、消息投递等跨系统副作用还需要 outbox 或专门的幂等协议，不能只靠一次 SQL 事务承诺全局一致性。
+
+### 索引与锁的简要读法
+
+索引服务于具体访问路径，不是“每个列一个索引”。例如订单列表常按用户和主键游标查询，`(user_id, id)` 比两个独立索引更能支持 `WHERE user_id = ? AND id < ? ORDER BY id DESC`。相反，为写入频繁的每个字段建索引会放大 `INSERT`/`UPDATE` 成本。
+
+执行 `EXPLAIN SELECT ...` 时关注访问类型、可能/实际索引、估计行数和是否出现额外排序或临时表；但优化前先采集真实参数与数据分布。事务内的 `SELECT ... FOR UPDATE` 会申请锁，它必须在明确的事务和受控索引路径内使用，否则可能扩大锁范围并造成无谓阻塞。
+
 ## 总结
 
 访问 MySQL 的可靠组合是：驱动实现 MySQL 协议，`database/sql` 复用连接池，应用明确传递 context、参数和事务边界。使用 `parseTime` 与时区参数处理时间，使用 `Rows.Close` 归还查询资源，用单条条件更新应对并发库存竞争，并让每个事务内的 SQL 始终经由同一个 `*sql.Tx`。这些规则不依赖 ORM，换成 GORM 仍然成立。

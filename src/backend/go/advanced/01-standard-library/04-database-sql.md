@@ -363,6 +363,121 @@ _, err = stmt.ExecContext(ctx, orderID, "cancelled")
 return err
 ```
 
+`PrepareContext` 的“准备”也可能需要借连接，因此应带上 deadline。若语句只在一个事务中使用，应由事务创建或绑定，不能把池级别的 `Stmt` 想当然地拿进事务：
+
+```go
+func WriteAuditInTx(ctx context.Context, tx *sql.Tx, orderID int64) error {
+	// tx.PrepareContext 保证该 statement 使用当前事务所独占的连接。
+	stmt, err := tx.PrepareContext(ctx,
+		`INSERT INTO audit_logs (order_id, action) VALUES (?, ?)`)
+	if err != nil {
+		return fmt.Errorf("准备审计语句: %w", err)
+	}
+	defer stmt.Close() // 事务结束前关闭语句句柄，释放驱动资源。
+
+	if _, err := stmt.ExecContext(ctx, orderID, "created"); err != nil {
+		return fmt.Errorf("写入审计: %w", err)
+	}
+	return nil
+}
+```
+
+### Context 是操作预算，不是可选装饰
+
+`database/sql` 提供了不带 `Context` 的旧 API，但新业务代码应默认使用 `QueryContext`、`QueryRowContext`、`ExecContext`、`PrepareContext` 和 `BeginTx`。HTTP 层将 `r.Context()` 传到 repository，客户端断开、服务关闭或请求超时时，等待连接和驱动层查询都有机会停止。
+
+```go
+func HandleGetOrder(w http.ResponseWriter, r *http.Request, db *sql.DB) {
+	// 不要从 Background 新造 context，否则会丢掉请求取消信号与截止时间。
+	order, err := FindOrder(r.Context(), db, parseOrderID(r))
+	if err != nil {
+		// 真实项目应将错误映射为适当 HTTP 状态，并记录已脱敏的上下文。
+		http.Error(w, "查询订单失败", http.StatusInternalServerError)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(order)
+}
+```
+
+超时应从入口向下分配，而非每层任意叠加很长的超时。比如网关给请求 800ms，repository 又无条件建一个 3 秒 context，会使取消失效；反过来，后台批处理可以为一批操作创建自己的清晰上限。对数据库来说，context 可能覆盖三段时间：等待池连接、网络 I/O、服务端执行；究竟何时能取消取决于驱动和协议，所以还应设置数据库侧的语句/锁超时作为兜底。
+
+### `Conn`：只有确实需要粘连会话时才使用
+
+绝大多数业务只需要 `DB` 或 `Tx`。`db.Conn(ctx)` 会从池中借出一条特定连接，直到 `Conn.Close()` 才归还；适用于会话变量、临时表、驱动特性等必须在同一连接连续执行的少数场景。
+
+```go
+func WithSessionVariable(ctx context.Context, db *sql.DB) error {
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("借出连接: %w", err)
+	}
+	defer conn.Close() // 这是归还连接到池，不是关闭整个 DB。
+
+	// 例子只说明“同一会话”的边界；变量语义属于具体数据库。
+	if _, err := conn.ExecContext(ctx, "SET SESSION sql_mode = ?", "STRICT_ALL_TABLES"); err != nil {
+		return fmt.Errorf("设置会话变量: %w", err)
+	}
+	_, err = conn.ExecContext(ctx, "INSERT INTO audit_logs(order_id, action) VALUES (?, ?)", 42, "session-demo")
+	return err
+}
+```
+
+不要为了“确保连续两条 SQL 在同一连接”而滥用 `Conn`：若这两条语句需要原子性，应使用 `Tx`；若不需要会话状态，让池自由分配连接才能获得更好的并发能力。
+
+### 空值、多结果集和列元数据
+
+SQL 的 `NULL` 不等于 Go 零值。扫描可空字段时，以 `sql.Null*` 保存值和有效性，序列化给 API 前再根据业务模型转换为指针或省略字段：
+
+```go
+type CustomerRow struct {
+	ID    int64
+	Email sql.NullString // String 即使为空也不能说明数据库是否为 NULL。
+	Seen  sql.NullTime
+}
+
+func ScanCustomer(row *sql.Row) (CustomerRow, error) {
+	var customer CustomerRow
+	err := row.Scan(&customer.ID, &customer.Email, &customer.Seen)
+	if err != nil {
+		return CustomerRow{}, err
+	}
+	return customer, nil
+}
+```
+
+少数存储过程会返回多个结果集。此时每个结果集都应完整消费或关闭，并通过 `NextResultSet` 推进；不要假定 `rows.Next()` 只覆盖一个结果集。`Rows.Columns()` 与 `ColumnTypes()` 可以协助做通用导出工具，但正常业务查询应显式列出列和扫描目标，因为编译器无法保护“列顺序变了”的运行时错误。
+
+### `DB.Stats` 应当如何成为监控指标
+
+`Stats` 是进程内当前池的快照，适合定期采集而不是每次请求打印。至少监控 `OpenConnections`、`InUse`、`Idle`、`WaitCount`、`WaitDuration`、`MaxIdleClosed`、`MaxLifetimeClosed`；前两个趋势配合 QPS 和延迟更有解释力。
+
+| 指标组合 | 合理推断 | 下一步 |
+| --- | --- | --- |
+| `InUse` 接近上限，`WaitCount` 持续增加 | 池已造成排队 | 找长事务、未关闭 Rows、慢 SQL、实例总连接数 |
+| `OpenConnections` 很低但 SQL 慢 | 不一定是池问题 | 看执行计划、服务端 CPU/IO、锁等待 |
+| `MaxLifetimeClosed` 突增且有连接错误 | 轮换过于激进或基础设施主动切断 | 调整生命周期并核对 LB/DB 超时 |
+| `Idle` 长期为零且没有等待 | 当前并发确实会吃满连接 | 结合吞吐评估是否要增加上限 |
+
+监控只能揭示现象，不能替代容量规划：应用的 `MaxOpenConns × 实例数` 必须小于数据库为该业务预留的连接预算，且要扣除迁移、只读副本、管理会话与故障切换余量。
+
+### 生命周期检查清单
+
+一次普通读操作的资源责任可以压缩成下面这张表。把这些动作放在 code review 清单里，能避免许多在压测后才暴露的池耗尽问题。
+
+| 对象 | 谁创建 | 必须何时结束 | 常见误用 |
+| --- | --- | --- | --- |
+| `*sql.DB` | 应用启动组合根 | 进程退出 | 每个请求 `Open` 或 `Close` |
+| `*sql.Rows` | `QueryContext` | 读取后立即 `Close` | 只检查 `Next`，提前 return 时泄漏 |
+| `*sql.Tx` | `BeginTx` | 恰好一次 Commit/Rollback | 一条语句走 `tx`、另一条走 `db` |
+| `*sql.Stmt` | `PrepareContext` | 不再复用时 `Close` | 长期创建后忘记关闭 |
+| `*sql.Conn` | `DB.Conn` | 会话工作结束 `Close` | 用它替代事务或忘记归还 |
+
+`Close` 的语义也不同：`Rows.Close` 结束结果集，`Tx.Rollback` 放弃事务，`Conn.Close` 把连接归还给池，`DB.Close` 才是关闭整个池。不要因为方法名相同而把它们放到错误的生命周期里。
+
+### 测试 repository 时测试什么
+
+单元测试可用接口、mock 或轻量数据库验证错误映射；但最终仍要在目标数据库/驱动集成测试，因为占位符、`NULL`、事务隔离、时间和 `LastInsertId` 都是具体实现语义。至少覆盖：找不到记录、`Rows.Err`、context 超时、重复键、回滚、并发条件更新，以及连接池在并发下不会无限等待。测试需要断言业务结果，而不是只断言“调用了某段 SQL”。
+
 ## 常见故障的定位顺序
 
 | 现象 | 先检查什么 | 常见根因 |

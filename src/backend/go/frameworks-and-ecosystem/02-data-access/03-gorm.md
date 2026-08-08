@@ -373,6 +373,246 @@ func CreateOrderWithStock(
 
 GORM 最合适的定位是“清晰地表达大多数 SQL 的工具”。遇到关联预加载要留意 N+1 查询与返回数据量；遇到复杂查询要敢于回到参数化 SQL；遇到性能问题要以真实 SQL 和执行计划为证据，而不是猜测链式 API 做了什么。
 
+## 模型与迁移：约定能省字，但约束要写清
+
+已有的订单模型只展示了订单本身。下面把用户、订单与订单项放到一个最小关系中，同时演示常用 tag。tag 是描述映射和迁移意图的声明；字段的真实约束、索引名与在线变更策略仍要在数据库中审查。
+
+```go
+package model
+
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
+
+type User struct {
+	ID uint64 `gorm:"primaryKey"` // 默认 ID 也会被识别为主键；显式写出便于读者确认。
+	// uniqueIndex 让迁移创建唯一索引；应用仍需把重复键错误翻译为业务错误。
+	Email string `gorm:"size:254;not null;uniqueIndex:uk_users_email"`
+	Name  string `gorm:"size:80;not null"`
+	// 外键保存在 orders.user_id；Preload("Orders") 依此关系加载。
+	Orders []Order
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt gorm.DeletedAt `gorm:"index"` // 普通查询自动添加 deleted_at IS NULL。
+}
+
+type Order struct {
+	ID uint64 `gorm:"primaryKey"`
+	UserID uint64 `gorm:"not null;index:idx_orders_user_created"`
+	Status string `gorm:"size:32;not null;index:idx_orders_status_created"`
+	TotalCents int64 `gorm:"not null"` // 金额使用整数最小单位，避免 float 精度问题。
+	Items []OrderItem `gorm:"constraint:OnUpdate:CASCADE,OnDelete:RESTRICT;"`
+	CreatedAt time.Time `gorm:"index:idx_orders_user_created"`
+	UpdatedAt time.Time
+	DeletedAt gorm.DeletedAt `gorm:"index"`
+}
+
+type OrderItem struct {
+	ID uint64 `gorm:"primaryKey"`
+	OrderID uint64 `gorm:"not null;index"`
+	SKU string `gorm:"size:64;not null"`
+	Quantity int `gorm:"not null"`
+	UnitCents int64 `gorm:"not null"`
+}
+```
+
+GORM 默认把 `User` 命名为 `users`，`UserID` 命名为 `user_id`，把 `CreatedAt`/`UpdatedAt` 作为自动时间字段。约定很方便，但在遗留表、缩写、分库分表和多租户表中，要明确指定 `column:`、`table:` 或实现 `TableName()`；不要猜命名策略会“刚好匹配”。
+
+```go
+func MigrateForDevelopment(db *gorm.DB) error {
+	// AutoMigrate 适合开发、测试和简单的新增列/索引。
+	// 它不会安全地替你完成所有破坏性变更，也不应成为生产回滚方案。
+	return db.AutoMigrate(&User{}, &Order{}, &OrderItem{})
+}
+```
+
+生产迁移应当是可审查的版本化 SQL：先扩展 schema，再兼容读写、分批回填、切换代码，最后在确认无旧版本后收缩旧列。特别是大表建索引、改列类型和增加外键，都可能持有锁或造成复制延迟；`AutoMigrate` 无法替团队做发布窗口和风险判断。
+
+## 查询与分页：链式 API 仍需要明确边界
+
+GORM 的链式条件可以组织得很清晰，但要注意可复用查询对象、分页上限与错误发生位置。下面的例子使用游标，而非无限增大的 `Offset`：
+
+```go
+type OrderPage struct {
+	Items []Order
+	NextID uint64
+}
+
+func PageOrders(ctx context.Context, db *gorm.DB, userID, beforeID uint64, size int) (OrderPage, error) {
+	if userID == 0 || size < 1 || size > 100 {
+		return OrderPage{}, fmt.Errorf("非法分页参数")
+	}
+	q := db.WithContext(ctx).
+		Where("user_id = ?", userID).
+		Order("id DESC").
+		Limit(size + 1) // 多取一行，用于判断是否有下一页。
+	if beforeID != 0 {
+		q = q.Where("id < ?", beforeID)
+	}
+	var orders []Order
+	if err := q.Find(&orders).Error; err != nil {
+		return OrderPage{}, fmt.Errorf("查询订单分页: %w", err)
+	}
+	page := OrderPage{Items: orders}
+	if len(orders) > size {
+		page.Items = orders[:size]
+		page.NextID = page.Items[len(page.Items)-1].ID
+	}
+	return page, nil
+}
+```
+
+该查询需要与 `WHERE user_id = ? AND id < ? ORDER BY id DESC` 相匹配的索引；实际选用 `(user_id, id)` 还是其他组合，必须基于真实过滤条件和 `EXPLAIN`。`Find` 没有记录会返回空切片且 `Error == nil`，这是列表 API 的正常语义；`First`/`Take` 找不到才用 `errors.Is(err, gorm.ErrRecordNotFound)` 处理。
+
+### 零值规则必须进入接口设计
+
+GORM 的几种更新方式语义不同：
+
+| 写法 | 是否更新零值 | 适用情形 |
+| --- | --- | --- |
+| `Updates(struct)` | 默认忽略 `0`、`false`、`""` | 部分更新且零值代表“未提供” |
+| `Updates(map)` | map 中的键都会更新 | 需要明确写入零值 |
+| `Select("field").Updates(struct)` | 仅更新选定字段，包括零值 | 白名单字段的强类型更新 |
+| `UpdateColumn` | 跳过 hooks 和自动时间 | 极少数已明确需要绕过模型逻辑的维护操作 |
+
+Web 的 PATCH 请求通常应用指针字段区分“未提交”和“提交零值”，再映射出白名单更新：
+
+```go
+type UpdateProductInput struct {
+	Name  *string
+	Stock *int
+}
+
+func UpdateProduct(ctx context.Context, db *gorm.DB, id uint64, in UpdateProductInput) error {
+	changes := map[string]any{}
+	if in.Name != nil {
+		if *in.Name == "" { return fmt.Errorf("名称不能为空") }
+		changes["name"] = *in.Name // 调用者明确传空字符串时才能被区分并校验。
+	}
+	if in.Stock != nil {
+		if *in.Stock < 0 { return fmt.Errorf("库存不能小于零") }
+		changes["stock"] = *in.Stock // 0 是合法库存，map 不会忽略它。
+	}
+	if len(changes) == 0 { return nil }
+	result := db.WithContext(ctx).Model(&Product{}).Where("id = ?", id).Updates(changes)
+	if result.Error != nil { return fmt.Errorf("更新商品: %w", result.Error) }
+	if result.RowsAffected != 1 { return fmt.Errorf("商品不存在") }
+	return nil
+}
+```
+
+不要把整个 HTTP JSON 结构体直接交给 `Updates`，否则客户端能否修改内部列会变得不清楚。GORM 的全局更新保护也不是业务授权：即使拥有 `WHERE`，仍应确保调用方有权修改该条记录。
+
+## 关联：`Preload` 解决 N+1，但也会扩大读取
+
+关系字段不会在普通 `Find` 时自动查询。逐个订单查询订单项会产生典型 N+1：一次订单列表加 N 次子查询。`Preload` 会以批量查询预加载关联：
+
+```go
+func UserWithRecentOrders(ctx context.Context, db *gorm.DB, userID uint64) (User, error) {
+	var user User
+	err := db.WithContext(ctx).
+		// 仅加载最近 20 个订单；避免一次把历史订单全部装入内存。
+		Preload("Orders", func(q *gorm.DB) *gorm.DB {
+			return q.Order("id DESC").Limit(20)
+		}).
+		// 嵌套预加载让每个订单同时得到 Items；需评估总行数与响应体大小。
+		Preload("Orders.Items").
+		First(&user, userID).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) { return User{}, fmt.Errorf("用户不存在") }
+	if err != nil { return User{}, fmt.Errorf("预加载用户订单: %w", err) }
+	return user, nil
+}
+```
+
+GORM 通常将 `Preload` 拆成主查询和关联查询，而非总是一个巨大的 `JOIN`。这能避免一对多 join 把用户列重复 N 次，却仍可能在关联集合很大时读取过多数据。`Joins` 更适合一对一或确实需要在一条 SQL 中过滤关联表的情形；多对多、一对多的分页和条件应先画清楚 SQL 及期望行数，不能只看生成的对象是否“方便”。
+
+关联保存也要节制。默认 `Create(&order)` 可能处理关联对象；复杂写入请通过显式事务组织，并用 `Select`/`Omit` 表达需要持久化的字段与关联，避免从请求对象意外级联写入。
+
+## Hooks：适合维护模型不变量，不适合隐藏业务流程
+
+GORM 支持 `BeforeCreate`、`AfterCreate`、`BeforeUpdate`、`AfterFind`、`BeforeDelete` 等 hooks。它们由 callback 链执行，因此必须使用传入的 `tx`，并且保持快速、可预测。以下例子将应用层的规范化放在 `BeforeCreate`：
+
+```go
+func (u *User) BeforeCreate(tx *gorm.DB) error {
+	// Hook 应保持纯粹而快速；不要在这里发 HTTP、读大文件或启动 goroutine。
+	u.Email = strings.ToLower(strings.TrimSpace(u.Email))
+	if u.Email == "" {
+		return fmt.Errorf("email 不能为空") // 返回错误会中止当前创建流程。
+	}
+	return nil
+}
+```
+
+Hooks 不应承担关键的跨服务副作用：若 `AfterCreate` 发送消息而事务随后失败，或者网络成功而外层最终回滚，状态会很难恢复。需要“事务提交后可靠地发布事件”时，应使用 outbox 表，把事件和业务数据写在同一数据库事务里，再由独立投递器发送。也不要在 hook 中偷偷查询/更新大量数据；这会让一个看似简单的 `Create` 变成难以分析的长事务。
+
+## 原生 SQL、错误和性能的落地清单
+
+`Raw`/`Exec` 不是失败，而是 GORM 的正常出口：复杂聚合、窗口函数、特定锁语句或迁移 SQL 常常用原生 SQL 更清晰。原则仍是 SQL 结构来自代码、数据值通过占位符：
+
+```go
+func LockOrder(ctx context.Context, tx *gorm.DB, id uint64) (Order, error) {
+	var order Order
+	err := tx.WithContext(ctx).Raw(`
+		SELECT id, user_id, status, total_cents, created_at, updated_at
+		FROM orders WHERE id = ? FOR UPDATE`, id).Scan(&order).Error
+	if err != nil { return Order{}, fmt.Errorf("锁定订单: %w", err) }
+	return order, nil
+}
+
+func MarkExpired(ctx context.Context, db *gorm.DB, before time.Time) (int64, error) {
+	result := db.WithContext(ctx).Exec(
+		"UPDATE orders SET status = ? WHERE status = ? AND created_at < ?",
+		"expired", "pending", before,
+	)
+	if result.Error != nil { return 0, fmt.Errorf("标记过期订单: %w", result.Error) }
+	return result.RowsAffected, nil
+}
+```
+
+错误处理统一在执行方法的 `.Error`（或 `result.Error`）中检查；`RowsAffected` 是业务结果的一部分。请求上下文必须在链上用 `WithContext(ctx)` 传入。为了定位 SQL，可以短期使用 `db.Debug()` 或受控 logger，但生产日志应避免原样记录密码、令牌、身份证件等参数，也要防止高吞吐下日志反过来拖慢服务。
+
+性能优化的顺序通常是：
+
+1. 用指标、慢查询日志和 trace 确认慢点，而不是先换 ORM API。
+2. 观察 GORM 实际生成的 SQL，并对它执行 `EXPLAIN`；检查索引、扫描行数、排序和回表。
+3. 明确查询列、分页上限和预加载范围，避免 `SELECT *`、深 `OFFSET` 和无界关联。
+4. 让事务短小，处理死锁/超时，并按实例总数配置底层 `*sql.DB` 连接池。
+5. 对热点批量操作再评估 `CreateInBatches`、预处理、批量更新或原生 SQL，并用压测验证。
+
+GORM 的 Schema、Statement 与 Callback 解释了它如何工作，却不是稳定的业务扩展 API。除非正在开发和维护 GORM 插件，否则不要依赖未导出的内部状态；大多数需求用模型、scope、事务和受控的 `Raw` 已能清楚表达。
+
+### 可复用 Scope：复用条件，而不是复用错误状态
+
+当多个查询共享一段固定、可信的条件时，可以定义 Scope，使业务含义留在代码中而不是重复字符串：
+
+```go
+func ActiveOrders(db *gorm.DB) *gorm.DB {
+	return db.Where("status IN ?", []string{"created", "paid"})
+}
+
+func RecentBefore(id uint64) func(*gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		if id == 0 { return db }
+		return db.Where("id < ?", id) // id 是值，仍使用参数绑定。
+	}
+}
+
+func ListActive(ctx context.Context, db *gorm.DB, before uint64) ([]Order, error) {
+	var orders []Order
+	err := db.WithContext(ctx).Scopes(ActiveOrders, RecentBefore(before)).
+		Order("id DESC").Limit(50).Find(&orders).Error
+	return orders, err
+}
+```
+
+Scope 应只组合可预测的 clause，不能把未校验的列名或排序字符串包进“复用函数”后掩盖注入风险。调用完成后仍从返回的 `*gorm.DB` 检查 `Error`；不要在带有错误或特殊 `Model`/`Select` 状态的链对象上跨请求缓存和复用。
+
+### 删除后的数据治理
+
+软删除只是让默认查询加上 `deleted_at IS NULL`，不是备份，也不是自动合规策略。设计前要回答：谁能 `Unscoped` 读取？保留多久？唯一键是否应包含软删除字段或使用部分唯一索引替代方案？关联记录如何处理？恢复时是否会与新数据冲突？这些问题决定模型和数据库约束，不能只因 `gorm.DeletedAt` 容易添加就跳过。
+
 ## 总结
 
 GORM 将结构体解析为 Schema，把链式条件累积到 Statement，并通过 Callback 生成 SQL、调用底层 `database/sql`。使用它时应显式管理底层连接池与 context，理解结构体更新会跳过零值，检查每次操作的 `Error` 和必要的 `RowsAffected`，并让同一原子业务的全部操作经由事务回调中的 `tx` 执行。ORM 能减少样板代码，但安全、索引、锁、迁移和事务边界仍是应用与数据库共同承担的责任。
