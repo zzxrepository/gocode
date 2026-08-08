@@ -91,14 +91,6 @@ npm run docs:build
 - 资源导航里如果有官方中文文档，优先放中文链接。
 - 资源导航要控制质量，不要堆砌低质量、重复、很少用的网站。
 
-## 教程写作要求
-
-- 教程必须是可独立阅读的文章：读者不需要知道需求来源或此前的对话，也能理解它要解决的问题、核心概念、示例和结论。
-- 对话只用于确定选题与范围，不能把需求沟通、写作计划、个人背景或问答内容整理进正文。
-- 实质性教程应包含 `## 前言` 和 `## 总结`。示例、前提条件、使用边界和方案对比应围绕解释主题服务。
-- 技术术语应准确、稳定；涉及版本、协议、框架行为等内容时，以官方文档、规范或项目原始文档为准。
-- `## 参考资料` 按实际需要添加，只列出实际用于核对或支撑文章的资料，优先官方文档、规范和项目文档，不添加凑数链接。
-
 ## 当前站点配置
 
 当前域名配置：
@@ -122,39 +114,6 @@ gocode.mmzhang.cn -> CNAME -> zzxrepository.github.io
 - 搜索：`@vuepress/plugin-slimsearch`，配置在 `src/.vuepress/theme.ts`。
 - 评论：Giscus，配置在 `src/.vuepress/theme.ts`。
 - 访问统计：Umami Cloud 脚本，配置在 `src/.vuepress/config.ts`。
-
-## 维护与发布流程
-
-以后更新这个项目时，先读本 README，再读 `src/site-guide/README.md`，然后阅读当前栏目首页和目标文章。
-
-只改文章或资源内容时：
-
-1. 修改 `src/` 下对应的 Markdown 文件。
-2. 检查 frontmatter 和侧边栏排序。
-3. 如果新增资源链接，要顺手检查整个资源分类的质量、语言、重复情况和使用价值。
-4. 执行 `npm run docs:build`。
-5. 提交源码到 `master`。
-6. 推送 `master` 到远端。
-7. 把构建产物发布到 `gh-pages`。
-8. 确认构建产物里仍然有 `CNAME` 和 `.nojekyll`。
-
-修改站点配置时：
-
-1. 先判断改动应该放在 `config.ts`、`theme.ts`、`navbar.ts`、`sidebar.ts`、样式文件还是静态资源里。
-2. 如果这个改动会影响以后维护方式，要同步更新 `src/site-guide/README.md`。
-3. 执行 `npm run docs:build`。
-4. 推送源码并部署 `gh-pages`。
-5. 部署后检查对应线上页面。
-
-重要习惯：
-
-- 不要回滚和当前任务无关的本地改动。
-- 不要删除 `src/.vuepress/public/CNAME`。
-- 不要删除 `src/.vuepress/public/.nojekyll`。
-- 不要同时混用多个评论系统，除非毛毛张明确要求。
-- 根目录 README 只写项目用途和维护操作；很长的网站搭建说明放到 `src/site-guide/README.md`。
-- 除非明确要求不发布，每次完成项目更新后都要构建、提交任务相关改动、推送 `master` 并部署 `gh-pages`。
-- `./deploy.sh` 只负责构建并发布静态文件到 `gh-pages`；源码必须先由明确的提交推送步骤发布到 `master`。
 
 ## 更多说明
 
