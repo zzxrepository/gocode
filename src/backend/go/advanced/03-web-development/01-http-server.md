@@ -145,6 +145,29 @@ func (f HandlerFunc) ServeHTTP(w ResponseWriter, r *Request) {
 
 `ServeMux` 的职责只是“选择哪个 Handler”，不是验证业务参数。当前版本的模式可以写成 `METHOD /path/{name}`：`GET /articles/{id}` 会匹配一个非空路径段，随后通过 `r.PathValue("id")` 得到字符串。更具体的模式优先；路径能匹配而方法不匹配时，`ServeMux` 返回 `405` 并给出 `Allow`，没有任何路径匹配才是 `404`。这些规则让路由表成为接口的第一层边界，但 `id` 是否为正整数、调用者能否访问资源仍必须由业务代码判断。
 
+### 结构体 Handler 与 `DefaultServeMux`
+
+当一组处理器共享数据库、缓存、日志器或配置时，把这些长期依赖放进结构体比使用全局变量更清楚。结构体本身仍会被多个请求并发调用，因此只能保存并发安全的依赖，不能保存“当前请求的用户”之类的临时数据。
+
+```go
+// articleHandler 持有进程级依赖，而不是某次请求的数据。
+type articleHandler struct {
+	store  *articleStore
+	logger *log.Logger
+}
+
+func (h *articleHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// 真正的路由通常由 ServeMux 完成；这里仅演示结构体如何成为 Handler。
+	h.logger.Printf("method=%s path=%s", r.Method, r.URL.Path)
+	writeJSON(w, http.StatusOK, map[string]string{"status": "handled"})
+}
+
+// mux.Handle 接收 Handler，因此可直接注册结构体指针。
+mux.Handle("GET /articles", &articleHandler{store: store, logger: logger})
+```
+
+`http.Handle`、`http.HandleFunc` 会把路由注册到包级全局变量 `http.DefaultServeMux`；`http.ListenAndServe(addr, nil)` 在 handler 为 nil 时也使用它。十行演示很方便，但真实服务优先使用 `http.NewServeMux()` 并显式传给 `Server`：路由不再受其他包或测试影响，也能同时创建多个独立服务。
+
 ## 先启动一个最小 HTTP 服务
 
 先只做一件事：访问 `/hello` 时返回文本。显式创建 `ServeMux`，不要让路由落在全局 `DefaultServeMux` 中。
@@ -660,6 +683,31 @@ client := &http.Client{Transport: transport, Timeout: 10 * time.Second}
 
 客户端还常遇到两类协议行为。第一，默认 Client 会跟随有限次重定向；安全边界严格时可通过 `CheckRedirect` 限制跳转目标和次数。第二，浏览器会自动管理 Cookie，而 Go 客户端只有配置 `cookiejar.Jar` 后才会跨请求保存并发送 Cookie。Cookie 与登录状态密切相关，不能把“服务端返回了 Set-Cookie”误解为所有客户端都会自动记住它。
 
+```go
+func newAPIClient() (*http.Client, error) {
+	// Jar 是 Go 客户端的 Cookie 容器；没有它时，收到的 Set-Cookie 不会自动用于后续请求。
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		return nil, fmt.Errorf("create cookie jar: %w", err)
+	}
+
+	return &http.Client{
+		Timeout: 10 * time.Second,
+		Jar:     jar,
+		CheckRedirect: func(next *http.Request, previous []*http.Request) error {
+			// 不让异常服务通过无限跳转持续占用调用方资源。
+			if len(previous) >= 5 {
+				return errors.New("too many redirects")
+			}
+			// 真实项目可在这里限制只能跳转到受信任域名。
+			return nil
+		},
+	}, nil
+}
+```
+
+`http.Client` 的四个最常用配置分别是：`Transport` 控制传输和连接池，`Timeout` 限制完整请求，`Jar` 管理 Cookie，`CheckRedirect` 决定重定向策略。它们通常在应用启动时配置一次并长期复用，而不是在业务函数里临时创建。
+
 ## 服务端生命周期：超时、Context 与关闭
 
 `http.Server` 的超时不是同一个概念：
@@ -675,42 +723,70 @@ client := &http.Client{Transport: transport, Timeout: 10 * time.Second}
 
 `Shutdown(ctx)` 停止接收新连接并等待活动请求结束，但不会替应用停止任意后台 goroutine，也不会关闭被 Hijack 的 WebSocket 连接。长连接需要应用自己注册关闭通知并定义退出协议。
 
-## 用 `httptest` 验证 Handler
+### 客户端 IP 与可信代理
 
-Handler 依赖的是接口，不需要真的监听端口就可以测试。`httptest.NewRequest` 构造请求，`httptest.NewRecorder` 收集响应：
+`r.RemoteAddr` 是**直接**连到当前 Go 服务的地址，通常形如 `IP:端口`。服务位于 Nginx、负载均衡器或网关之后时，它通常是代理 IP，而不是用户 IP。只有网络拓扑保证外部流量不能绕过可信代理，并且代理会删除外部传来的转发头、自己重新设置转发头时，才可使用 `X-Forwarded-For` 或 `X-Real-IP`。
 
 ```go
-func TestCreateArticle(t *testing.T) {
-	// 每个测试创建独立 store 和 mux，避免全局路由、共享数据互相污染。
-	h := newHandler(newArticleStore())
-
-	requestBody := strings.NewReader(`{"title":"可测试的 Handler"}`)
-	req := httptest.NewRequest(http.MethodPost, "/articles", requestBody)
-	req.Header.Set("Content-Type", "application/json")
-
-	// Recorder 实现 ResponseWriter；Handler 写入的结果可从 Result 中读取。
-	recorder := httptest.NewRecorder()
-	h.ServeHTTP(recorder, req)
-
-	resp := recorder.Result()
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusCreated)
+func clientIP(r *http.Request, trustProxy bool) string {
+	if trustProxy {
+		// X-Forwarded-For 可能是“客户端, 代理1, 代理2”。
+		// 只有可信代理已重建该头时，第一个值才有意义。
+		if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
+			first := strings.TrimSpace(strings.Split(forwarded, ",")[0])
+			if net.ParseIP(first) != nil {
+				return first
+			}
+		}
 	}
 
-	var got article
-	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
-		t.Fatalf("decode response: %v", err)
+	// 未信任代理时，只返回直接对端地址，避免相信客户端伪造的 header。
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
 	}
-	if got.Title != "可测试的 Handler" {
-		t.Fatalf("title = %q", got.Title)
-	}
+	return host
 }
 ```
 
+### 反向代理的职责
+
+反向代理对客户端表现为服务端，对后端服务表现为客户端：接收请求、转发到上游、再将上游响应回传。`httputil.ReverseProxy` 适合理解这一模式或实现小型内部代理；生产网关仍要额外考虑鉴权、上游超时、限流、重试、流式响应和可观测性。
+
+```go
+func newDocsProxy() (*httputil.ReverseProxy, error) {
+	target, err := url.Parse("https://go.dev")
+	if err != nil {
+		return nil, fmt.Errorf("parse upstream URL: %w", err)
+	}
+
+	return &httputil.ReverseProxy{
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			// SetURL 改写即将发往上游的 scheme、host 和基础路径。
+			pr.SetURL(target)
+			// 由代理统一生成 X-Forwarded-*，不要转发客户端伪造的同名值。
+			pr.SetXForwarded()
+		},
+		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
+			log.Printf("upstream request failed: %v", err) // 内部细节只记日志。
+			http.Error(w, "upstream unavailable", http.StatusBadGateway)
+		},
+	}, nil
+}
+
+func registerDocsProxy(mux *http.ServeMux) error {
+	proxy, err := newDocsProxy()
+	if err != nil {
+		return err
+	}
+	// /docs/guide 被去掉 /docs 前缀后，以 /guide 的形式转发到 https://go.dev。
+	mux.Handle("GET /docs/", http.StripPrefix("/docs", proxy))
+	return nil
+}
+
 ## 源码视角：标准库怎样把字节交给代码
 
-源码用于解释实现，不是应用应依赖的内部契约。以下片段均来自 Go 1.26.5，省略了日志、错误退避和协议分支。
+Go 1.26.5 的服务端实现在 `src/net/http/server.go`，路由实现位于 `routing_tree.go`，客户端传输实现位于 `transport.go`。请求从监听器进入、离开时回到连接池的关键路径如下。
 
 ### 1. `ListenAndServe` 只负责建立监听器
 
