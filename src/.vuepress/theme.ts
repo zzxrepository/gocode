@@ -141,6 +141,7 @@ export default hopeTheme({
         "/go/concurrency.html": "/backend/go/advanced/02-concurrency/",
         "/go/gin.html": "/backend/go/advanced/03-web-development/",
         "/go/engineering.html": "/backend/go/advanced/04-engineering-practice/",
+        "/backend/go/advanced/04-engineering-practice/01-viper-config/": "/backend/go/advanced/06-third-party-libraries/01-viper-config/",
         "/java/": "/backend/java/",
         "/java/basics.html": "/backend/java/basics.html",
         "/java/collections-and-concurrency.html": "/backend/java/collections-and-concurrency.html",
