@@ -19,11 +19,13 @@ tag:
 
 ## 前言
 
-HTTP 是应用程序彼此交换信息的一套约定：客户端说明“要什么”，服务端说明“给什么、结果如何”。浏览器访问网页、手机调用接口、服务间 RPC 的 HTTP 网关，底层都在处理请求、响应、连接和超时。
+当浏览器打开一篇文章、手机提交一笔订单，或一个服务向另一个服务查询数据时，发起方并不是在“调用网页”或“调用接口”。它先把意图组织成一条 HTTP 请求，接收方读懂请求、执行业务逻辑，再回送一条 HTTP 响应。页面、JSON 接口、文件上传和服务间调用看起来不同，背后却共享这套最基本的约定。
 
-`net/http` 是 Go 对这套约定的标准库实现。在 Go 1.0 正式发布时它已是标准库的一部分；今天很多 Web 框架的最终入口仍是 `http.Handler`。这里以 **Go 1.26.5** 的公开 API 和源码为准：先把 HTTP 报文与客户端/服务端的职责讲清，再把它们映射到 Go 代码，最后阅读标准库如何接收连接、调用 Handler 和复用客户端连接。
+刚接触 Web 编程时，最容易把注意力放在路由、JSON 或框架函数上，却不知道请求体何时该关闭、为什么状态码写晚了会失效、客户端为什么要复用、进程退出时怎样不打断正在处理的请求。这些并不是零散的“最佳实践”，而是 HTTP 消息、网络连接和程序生命周期共同决定的边界。理解它们，写 Handler 时才知道每一行代码在保护什么。
 
-阅读时始终抓住同一条链路：**请求从网络进入，变成 `Request`；路由选择 Handler；业务读取输入并写出 `ResponseWriter`；连接随后被复用或关闭。** 这条链路比记住零散函数更重要。
+Go 的 `net/http` 自 Go 1.0 起就是标准库的一部分。它把协议中的请求、响应和连接分别落实为 `Request`、`ResponseWriter`、`Handler`、`Server`、`Client` 和 `Transport` 等小而清晰的类型；许多 Web 框架也以 `http.Handler` 作为最终接入点。因此，掌握标准库不仅能直接编写 HTTP 服务，也能看懂框架替程序完成了哪些工作。
+
+阅读时可以始终追踪一条具体链路：**客户端发出请求，服务端将它解析为 `Request`，路由选择 `Handler`，Handler 写入 `ResponseWriter`，最后连接被复用或关闭。** 先从可读的 HTTP 报文和最小 Go 程序开始，再逐步进入超时、取消和标准库源码；每个概念都会回到这条链路上，而不是孤立地记忆 API。文中的 API 与源码均以 **Go 1.26.5** 为准。
 
 ## HTTP 到底在交换什么
 
@@ -1179,5 +1181,6 @@ HTTP 编程的基础是读懂请求和响应；`net/http` 则把它们落成清�
 - [Go 1.26.5 `net/http/server.go` 源码](https://cs.opensource.google/go/go/+/go1.26.5:src/net/http/server.go)
 - [Go 1.26.5 `net/http/routing_tree.go` 源码](https://cs.opensource.google/go/go/+/go1.26.5:src/net/http/routing_tree.go)
 - [Go 1.26.5 `net/http/transport.go` 源码](https://cs.opensource.google/go/go/+/go1.26.5:src/net/http/transport.go)
+- [MDN：HTTP 概览](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Overview)
 - [RFC 9110：HTTP Semantics](https://www.rfc-editor.org/rfc/rfc9110)
 - [Go 1 Release Notes](https://go.dev/doc/go1)
