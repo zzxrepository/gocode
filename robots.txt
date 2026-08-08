@@ -1,0 +1,4 @@
+User-agent:*
+Disallow:
+
+Sitemap: https://gocode.mmzhang.cn/sitemap.xml
