@@ -1,6 +1,6 @@
 ---
 permalink: /backend/go/advanced/03-web-development/01-http-server/
-title: 01. HTTP 编程：用 net/http 构建可靠服务
+title: 01. HTTP 编程
 shortTitle: 01. HTTP 编程
 order: 1
 category:
@@ -15,147 +15,122 @@ tag:
   - HTTP 客户端
 ---
 
-# 01. HTTP 编程：用 net/http 构建可靠服务
+# 01. HTTP 编程
 
 ## 前言
 
-浏览器打开页面、前端提交表单、服务调用支付接口，看起来是不同的事情，实际都在交换 HTTP 请求和响应。客户端把方法、路径、请求头和可选的请求体发送给服务端；服务端选择处理逻辑，完成校验和业务操作，再返回状态码、响应头和响应体。
+HTTP 编程关注的是让程序通过 HTTP 协议接收请求、返回响应，或调用其他 HTTP 服务。Go 标准库的 `net/http` 同时提供服务端和客户端能力，是学习 Go Web 开发的基础。
 
-Web 框架能减少样板代码，却不会改变这条链路。Gin、Chi、Echo 等框架最终仍要接收 `http.Request`、向 `http.ResponseWriter` 写入结果，并运行在 `http.Server` 管理的连接之上。先理解 `net/http`，遇到“为什么返回 405”“响应头为什么不生效”“客户端连接为什么越来越多”这类问题时，就能判断责任究竟在协议、标准库还是业务代码。
+Go 标准库中的 `net/http` 包同时提供了 HTTP 客户端和 HTTP 服务端的完整实现。使用它可以完成以下常见工作：
 
-文章中的路由示例使用 Go 1.22 引入的方法路由与路径参数语法。可以始终跟着这条主线：**请求到达 → 路由选择 Handler → Handler 读取并校验输入 → 写出响应 → 服务端或客户端处理连接生命周期。**
+- 创建 HTTP 或 HTTPS 服务；
+- 注册路由并处理动态请求；
+- 提供 HTML、CSS、JavaScript、图片等静态资源；
+- 接收查询参数、表单数据和 JSON 数据；
+- 向其他 HTTP 服务发送 GET、POST 等请求；
+- 配置连接池、超时、Cookie 和重定向策略；
+- 实现反向代理和服务的优雅关闭。
 
-## 阅读前准备
+大多数 Go Web 框架，例如 Gin、Echo 和 Chi，底层都建立在 `net/http` 提供的接口和服务器模型之上。因此，在学习 Web 框架之前，理解 `net/http` 的基本设计非常重要。
 
-需要已经掌握 Go 的函数、结构体、接口、错误处理和 `context` 的基本用法；并不需要会 Gin、数据库或前端框架。文中的服务均可在本机运行，准备好 Go 1.22 或更高版本后，在代码所在目录执行：
+## HTTP 请求的基本过程
 
-```bash
-go run .
-```
+HTTP 是一种应用层协议。一次典型的 HTTP 通信过程如下：
 
-随后另开一个终端，用 `curl` 发请求并观察响应：
-
-```bash
-# -i 同时显示状态行和响应头，便于观察 200、Content-Type 等 HTTP 信息。
-curl -i http://127.0.0.1:8080/hello
-```
-
-Go 1.22 的 `ServeMux` 支持 `"GET /users/{id}"` 这种模式和 `r.PathValue("id")`。若项目仍使用旧版 Go，不能照抄这种写法；应注册普通路径，例如 `"/users/"`，再在 Handler 中判断 `r.Method`、解析路径。先确认本机版本可以避免把路由问题误认为业务问题。
-
-## HTTP 请求与响应
-
-HTTP 是应用层协议。TCP 负责可靠地传输字节；HTTP 规定这些字节如何表示方法、路径、请求头、状态码和正文。HTTPS 则在 HTTP 之下增加 TLS，保护传输内容不被窃听或篡改。
-
-一次普通请求大致会经历下面的过程：
+1. 客户端根据域名查找服务器地址；
+2. 客户端与服务器建立网络连接；
+3. 如果使用 HTTPS，还需要进行 TLS 握手；
+4. 客户端向服务器发送 HTTP 请求；
+5. 服务器根据请求路径和请求方法找到对应的处理器；
+6. 处理器执行业务逻辑并生成 HTTP 响应；
+7. 客户端读取状态码、响应头和响应体；
+8. HTTP/1.1 通常会复用底层连接，避免每次请求都重新建立连接。
 
 ```mermaid
 sequenceDiagram
     participant C as 浏览器或 HTTP 客户端
-    participant S as Go HTTP 服务
-    participant H as 业务 Handler
+    participant S as Go HTTP 服务端
 
-    C->>S: 建立 TCP 连接；HTTPS 时完成 TLS 握手
-    C->>S: 发送请求行、请求头和可选请求体
-    S->>S: 解析请求并匹配路由
-    S->>H: 调用对应 Handler
-    H-->>S: 设置响应头、状态码和响应体
+    C->>S: 建立 TCP/TLS 连接
+    C->>S: 发送 HTTP 请求
+    S->>S: 路由匹配
+    S->>S: 执行业务处理器
     S-->>C: 返回 HTTP 响应
-    Note over C,S: 连接可能被保留，供后续请求复用
 ```
 
-例如，客户端查询带 `go` 标签的文章时，可以发送：
+HTTP 请求通常由以下部分组成：
 
-```http
-GET /articles?tag=go HTTP/1.1
-Host: example.com
-Accept: application/json
-```
+- 请求方法，例如 `GET`、`POST`、`PUT`、`PATCH`、`DELETE`；
+- 请求 URL；
+- 请求头；
+- 可选的请求体。
 
-服务端返回的内容可能是：
+HTTP 响应通常由以下部分组成：
 
-```http
-HTTP/1.1 200 OK
-Content-Type: application/json; charset=utf-8
+- 状态码，例如 `200`、`201`、`400`、`404`、`500`；
+- 响应头；
+- 可选的响应体。
 
-[{"id":1,"title":"理解 HTTP"}]
-```
+HTTP 本身是一种无状态的应用层协议。服务端不会因为客户端上一次发送过请求，就自动记住客户端的状态；登录状态通常需要通过 Cookie、Session 或 Token 等机制实现。标准的 HTTP 请求方法。完整替换资源通常使用 `PUT`，部分修改资源通常使用 `PATCH`。
 
-请求中的方法表达意图，路径定位资源，查询参数表达筛选条件，请求头携带元数据，正文承载提交的数据。响应状态码则先说明处理结果，响应体再给出结果或错误详情。
+---
 
-| 场景 | 常用状态码 | 含义 |
-| --- | --- | --- |
-| 查询成功 | `200 OK` | 响应体通常包含资源数据 |
-| 创建成功 | `201 Created` | 新资源已经创建 |
-| 请求格式或参数错误 | `400 Bad Request` | 调用方需要修改请求 |
-| 未认证 | `401 Unauthorized` | 需要提供有效认证信息 |
-| 无权访问 | `403 Forbidden` | 身份已确认，但不允许访问 |
-| 资源不存在 | `404 Not Found` | 路径或资源 ID 无效 |
-| 方法不匹配 | `405 Method Not Allowed` | 该资源不支持当前方法 |
-| 服务端异常 | `500 Internal Server Error` | 具体原因只记录到服务端日志 |
+## `net/http` 的核心类型
 
-HTTP 本身是无状态的：服务端不会仅因为请求来自同一条连接，就自动记住用户是谁。Cookie、Session 和 Token 是应用层在多个请求之间传递状态的方式；HTTP keep-alive 则只是复用网络连接，两者不要混为一谈。
+学习 `net/http` 时，首先要理解下面几个核心类型。
 
-### 方法、URL 与幂等性
+| 类型                  | 作用                                   |
+| --------------------- | -------------------------------------- |
+| `http.Request`        | 表示客户端发送的 HTTP 请求             |
+| `http.ResponseWriter` | 用于向客户端写入响应头、状态码和响应体 |
+| `http.Handler`        | HTTP 请求处理器的核心接口              |
+| `http.HandlerFunc`    | 将普通函数适配成 `http.Handler`        |
+| `http.ServeMux`       | 标准库提供的 HTTP 路由器               |
+| `http.Server`         | HTTP 服务端及其配置                    |
+| `http.Client`         | HTTP 客户端及其配置                    |
+| `http.Transport`      | 管理连接池、代理、TLS 和底层网络传输   |
 
-常见方法及其语义如下：
-
-| 方法 | 常见用途 | 是否应只读 | 是否通常幂等 |
-| --- | --- | --- |
-| `GET` | 查询资源 | 是 | 是 |
-| `HEAD` | 只查询响应头 | 是 | 是 |
-| `POST` | 创建资源或执行动作 | 否 | 否 |
-| `PUT` | 用完整表示替换资源 | 否 | 是 |
-| `PATCH` | 局部更新资源 | 否 | 不保证 |
-| `DELETE` | 删除资源 | 否 | 通常是 |
-
-幂等表示重复执行相同请求后，资源的最终状态保持一致，不表示每次响应一定完全相同。比如第二次删除同一个资源可能返回 `404`，但资源依然处于“已删除”状态。扣款、发券等不能随意重复的操作，仍要通过幂等键或业务去重保护。
-
-URL 可以拆成 `scheme://host:port/path?query#fragment`。其中 `#fragment` 只供浏览器在本地定位，不会发送给服务端；服务端能读取的是 `r.URL.Path` 和 `r.URL.Query()`。
-
-## `net/http` 的角色划分
-
-`net/http` 已经完成协议解析和网络读写，业务代码不必手动拆 HTTP 报文。常用类型各自只负责一件事：
-
-| 类型 | 职责 |
-| --- | --- |
-| `http.Request` | 表示已经解析好的请求：方法、URL、头、正文和取消信号 |
-| `http.ResponseWriter` | 按顺序构造响应头、状态码和正文 |
-| `http.Handler` | 处理一次请求的统一接口 |
-| `http.ServeMux` | 根据方法和路径选择 Handler |
-| `http.Server` | 监听端口、配置超时并管理服务生命周期 |
-| `http.Client` | 发起请求，管理重定向、Cookie 和整体超时 |
-| `http.Transport` | 管理客户端连接池、代理、TLS 与传输细节 |
-
-最核心的 Handler 接口只有一个方法：
+其中最核心的是 `http.Handler` 接口：
 
 ```go
 type Handler interface {
-	// ServeHTTP 处理一次请求。
-	// w 用于写响应，r 保存本次请求的输入和生命周期。
 	ServeHTTP(ResponseWriter, *Request)
 }
 ```
 
-通常不需要手写接口实现。`http.HandlerFunc` 会把签名正确的普通函数适配为 `Handler`，所以 `func(w http.ResponseWriter, r *http.Request)` 可以直接注册为路由处理函数。需要共享数据库、日志器、配置等长期依赖时，再使用结构体 Handler 会更清楚。
-
-可以把它理解成一条很短的“翻译规则”：普通函数负责具体工作，`HandlerFunc` 让这个函数具备 `ServeHTTP` 方法，从而满足 `Handler` 接口。日常注册路由时最常见的就是这一种写法：
+只要一个类型实现了下面的方法，它就可以作为 HTTP 请求处理器：
 
 ```go
-func hello(w http.ResponseWriter, r *http.Request) {
-	// r 是本次请求的输入；w 是向客户端写入响应的出口。
-	fmt.Fprintln(w, "hello")
-}
-
-mux := http.NewServeMux()
-// HandleFunc 接收普通函数，并在内部将它适配为 http.Handler。
-mux.HandleFunc("GET /hello", hello)
+ServeHTTP(http.ResponseWriter, *http.Request)
 ```
 
-只有当多个 Handler 共享连接池、服务对象或配置时，再选择结构体 Handler；不要为了“面向对象”而给每个很小的接口都创建一个结构体。
+两个参数分别表示：
 
-## 从最小服务开始
+- `http.ResponseWriter`：用于构造并发送 HTTP 响应；
+- `*http.Request`：包含请求方法、URL、请求头、请求体和客户端地址等信息。
 
-先启动一个只处理 `/hello` 的服务。这个例子故意不引入数据库和 JSON，重点是看清路由、Handler 和 Server 如何协作。
+---
+
+## 创建基本 HTTP 服务
+
+一个基本的 HTTP 服务通常需要完成三个任务：
+
+1. 注册处理动态请求的处理器；
+2. 注册静态资源处理器；
+3. 监听端口并接受客户端连接。
+
+假设项目结构如下：
+
+```text
+http-demo/
+├── main.go
+└── static/
+    ├── style.css
+    ├── app.js
+    └── logo.png
+```
+
+完整的基础服务端代码如下：
 
 ```go
 package main
@@ -168,689 +143,1807 @@ import (
 )
 
 func main() {
-	// 每个服务显式创建自己的路由表，避免依赖全局 DefaultServeMux。
+	// 创建一个独立的路由器。
+	//
+	// 与直接使用 http.HandleFunc 相比，显式创建 ServeMux
+	// 可以避免所有路由都注册到全局的 DefaultServeMux 中，
+	// 更适合真实项目和单元测试。
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /hello", hello)
 
+	// Go 1.22 开始，ServeMux 支持在路由模式中指定请求方法。
+	//
+	// /{$} 表示只匹配根路径 "/"，
+	// 不会把所有未匹配的路径都交给 homeHandler。
+	mux.HandleFunc("GET /{$}", homeHandler)
+
+	// 创建静态文件处理器。
+	//
+	// http.Dir("./static") 表示从当前项目的 static 目录中读取文件。
+	fileServer := http.FileServer(http.Dir("./static"))
+
+	// 浏览器请求：
+	//     /static/style.css
+	//
+	// StripPrefix 会先删除 URL 中的 "/static/"，
+	// FileServer 最终读取的文件路径为：
+	//     ./static/style.css
+	mux.Handle(
+		"GET /static/",
+		http.StripPrefix("/static/", fileServer),
+	)
+
+	// 自定义 HTTP Server。
+	//
+	// 相比直接调用 http.ListenAndServe，
+	// 显式创建 Server 可以配置各种超时和请求头大小限制。
 	server := &http.Server{
-		Addr:              ":8080",
-		Handler:           mux,
-		ReadHeaderTimeout: 5 * time.Second,  // 限制慢速请求头。
-		IdleTimeout:       60 * time.Second, // 回收长期空闲的 keep-alive 连接。
+		Addr:    ":8080",
+		Handler: mux,
+
+		// 读取请求头最多允许 5 秒。
+		// 这是公网 HTTP 服务非常重要的安全配置。
+		ReadHeaderTimeout: 5 * time.Second,
+
+		// 读取完整请求的最大时间。
+		ReadTimeout: 10 * time.Second,
+
+		// 写入响应的最大时间。
+		WriteTimeout: 10 * time.Second,
+
+		// Keep-Alive 连接空闲时最多保留 60 秒。
+		IdleTimeout: 60 * time.Second,
+
+		// 请求头最大为 1 MiB。
+		MaxHeaderBytes: 1 << 20,
 	}
 
-	log.Println("listen on http://127.0.0.1:8080")
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	log.Printf("HTTP 服务已启动：http://127.0.0.1%s", server.Addr)
+
+	// ListenAndServe 会阻塞当前 goroutine，
+	// 持续监听并处理客户端连接。
+	//
+	// 它正常停止时也会返回一个非 nil 错误，
+	// 优雅关闭时需要单独判断 http.ErrServerClosed。
+	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func hello(w http.ResponseWriter, r *http.Request) {
-	// 响应头必须在首次 WriteHeader 或 Write 之前设置。
+// homeHandler 处理网站根路径。
+func homeHandler(w http.ResponseWriter, r *http.Request) {
+	// 响应头必须在 WriteHeader 或 Write 之前设置。
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 
-	// 首次写正文时，若没有显式设置状态码，标准库会提交 200 OK。
-	if _, err := fmt.Fprintln(w, "hello, HTTP"); err != nil {
-		// 客户端可能已经断开；此时只记录错误，不能再写一份错误响应。
-		log.Printf("write response: %v", err)
+	// 如果没有显式调用 WriteHeader，
+	// 第一次调用 Write 或 Fprint 时会自动发送 200 OK。
+	_, err := fmt.Fprintln(w, "Welcome to my website!")
+	if err != nil {
+		log.Printf("写入响应失败：%v", err)
 	}
 }
 ```
 
-运行 `go run .` 后，使用 `curl -i http://127.0.0.1:8080/hello` 验证。`-i` 会显示完整响应，能看到代码中设置的 `Content-Type` 和隐式产生的 `200 OK`。
+运行程序：
 
-### 路由、路径参数与结构体 Handler
+```bash
+go run .
+```
 
-从 Go 1.22 开始，`ServeMux` 的模式可写成 `METHOD /path/{name}`。下面三个路由分别表示列出、创建和查询用户：
+访问动态页面：
+
+```text
+http://127.0.0.1:8080/
+```
+
+访问静态文件：
+
+```text
+http://127.0.0.1:8080/static/style.css
+```
+
+`http.FileServer` 会把指定文件系统中的内容作为 HTTP 资源提供；`http.StripPrefix` 则会在调用文件处理器之前删除 URL 中指定的前缀。
+
+本地示例使用 `8080` 而不是 `80` 端口，主要有两个原因：
+
+- 在部分操作系统中，监听 `80` 端口可能需要管理员权限；
+- `8080` 更适合本地开发，不容易与已有 Web 服务冲突。
+
+---
+
+## `Handler`、`HandlerFunc` 与路由
+
+### 1. 自定义 `Handler`
+
+可以定义一个结构体，并为它实现 `ServeHTTP` 方法：
+
+```go
+package main
+
+import (
+	"fmt"
+	"log"
+	"net/http"
+)
+
+// MyHandler 实现了 http.Handler 接口。
+type MyHandler struct {
+	Message string
+}
+
+// ServeHTTP 用于处理每一个匹配到该处理器的请求。
+func (h *MyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+
+	_, err := fmt.Fprintf(
+		w,
+		"请求路径：%s\n返回消息：%s\n",
+		r.URL.Path,
+		h.Message,
+	)
+	if err != nil {
+		log.Printf("写入响应失败：%v", err)
+	}
+}
+
+func main() {
+	mux := http.NewServeMux()
+
+	// http.Handle 或 mux.Handle 接收的是 http.Handler。
+	mux.Handle("/index", &MyHandler{
+		Message: "这是自定义 Handler",
+	})
+
+	log.Fatal(http.ListenAndServe(":8080", mux))
+}
+```
+
+这种方式适合处理器需要保存依赖或状态的情况，例如：
+
+- 数据库连接；
+- 日志组件；
+- 配置对象；
+- 缓存客户端；
+- 业务服务对象。
+
+例如：
+
+```go
+type UserHandler struct {
+	userService *UserService
+	logger      *log.Logger
+}
+```
+
+### 2. 使用 `HandlerFunc`
+
+如果处理器不需要保存复杂状态，每次都定义结构体会显得繁琐。此时可以直接使用函数：
+
+```go
+func indexHandler(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	_, _ = fmt.Fprintln(w, "index")
+}
+
+func main() {
+	mux := http.NewServeMux()
+
+	// HandleFunc 可以直接接收普通处理函数。
+	mux.HandleFunc("/index", indexHandler)
+
+	log.Fatal(http.ListenAndServe(":8080", mux))
+}
+```
+
+`http.HandlerFunc` 本质上是一个适配器类型：
+
+```go
+type HandlerFunc func(
+	http.ResponseWriter,
+	*http.Request,
+)
+```
+
+它实现了 `ServeHTTP` 方法，因此可以将签名正确的普通函数转换为 `http.Handler`。
+
+### 3. 默认路由 `DefaultServeMux`
+
+下面的代码没有显式创建路由器：
+
+```go
+http.HandleFunc("/index", indexHandler)
+log.Fatal(http.ListenAndServe(":8080", nil))
+```
+
+这里发生了两件事：
+
+1. `http.HandleFunc` 将路由注册到全局的 `http.DefaultServeMux`；
+2. `ListenAndServe` 的第二个参数为 `nil`，因此使用 `DefaultServeMux`。
+
+官方文档明确说明，当 `ListenAndServe` 的处理器参数为 `nil` 时，会使用 `DefaultServeMux`。`DefaultServeMux` 很方便，但真实项目通常推荐显式创建：
 
 ```go
 mux := http.NewServeMux()
+```
 
-// 方法写在模式里，因此 GET /users 与 POST /users 可以有不同处理器。
-mux.HandleFunc("GET /users", listUsers)
-mux.HandleFunc("POST /users", createUser)
+这样可以：
 
-// {id} 匹配一个非空路径段，Handler 内通过 PathValue 读取。
-mux.HandleFunc("GET /users/{id}", getUser)
+- 避免全局路由互相影响；
+- 更容易编写测试；
+- 更容易创建多个独立 HTTP 服务；
+- 更容易控制中间件和依赖关系。
 
-func getUser(w http.ResponseWriter, r *http.Request) {
+---
+
+## 使用 `ServeMux` 定义路由
+
+从 Go 1.22 开始，标准库的 `ServeMux` 支持：
+
+- 根据 HTTP 请求方法匹配；
+- 路径通配符；
+- 通过 `Request.PathValue` 获取路径参数。
+
+例如：
+
+```go
+package main
+
+import (
+	"fmt"
+	"log"
+	"net/http"
+)
+
+func main() {
+	mux := http.NewServeMux()
+
+	// 只处理 GET /users。
+	mux.HandleFunc("GET /users", listUsersHandler)
+
+	// 只处理 POST /users。
+	mux.HandleFunc("POST /users", createUserHandler)
+
+	// {id} 是路径参数。
+	// 例如：GET /users/1001
+	mux.HandleFunc("GET /users/{id}", getUserHandler)
+
+	log.Fatal(http.ListenAndServe(":8080", mux))
+}
+
+func listUsersHandler(w http.ResponseWriter, r *http.Request) {
+	_, _ = fmt.Fprintln(w, "用户列表")
+}
+
+func createUserHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusCreated)
+	_, _ = fmt.Fprintln(w, "用户创建成功")
+}
+
+func getUserHandler(w http.ResponseWriter, r *http.Request) {
+	// 获取路由中的 {id}。
 	id := r.PathValue("id")
-	fmt.Fprintf(w, "user id: %s\n", id)
+
+	_, _ = fmt.Fprintf(w, "查询用户：%s\n", id)
 }
 ```
 
-`GET /users/42` 会进入 `getUser`。路由匹配成功只说明 URL 形状正确，`id` 仍是字符串；是否为正整数、调用者是否有权限，仍必须由业务代码校验。
-
-当路径存在但方法不匹配时，`ServeMux` 会返回 `405 Method Not Allowed` 并设置 `Allow` 响应头；完全没有匹配路径才是 `404 Not Found`。`GET` 模式也可以处理 `HEAD` 请求。
-
-路由模式只解决“请求交给谁”的问题，不替你完成业务校验。以 `GET /users/{id}` 为例：
-
-| 问题 | 谁负责 | 示例 |
-| --- | --- | --- |
-| 路径是否匹配 | `ServeMux` | `/users/42` 能匹配，`/orders/42` 不能匹配 |
-| 请求方法是否允许 | `ServeMux` | 对未注册的 `DELETE /users/42` 返回 `405` |
-| `id` 是否是正整数 | Handler | `GET /users/abc` 应返回 `400` |
-| 用户是否有权读取资源 | 业务层 | 当前登录用户不能读取别人的私有数据 |
-
-这种分层能避免把路由、参数转换、认证和数据库访问全塞进一层条件判断中。
-
-如果一组处理器共享依赖，使用结构体比全局变量更容易测试和维护：
+使用方法路由后，不需要在每个处理器中重复编写：
 
 ```go
-// userHandler 保存跨请求复用的依赖；当前请求数据必须留在方法局部变量中。
-type userHandler struct {
-	service *userService
-	logger  *log.Logger
+if r.Method != http.MethodGet {
+	http.Error(
+		w,
+		"method not allowed",
+		http.StatusMethodNotAllowed,
+	)
+	return
 }
+```
 
-func (h *userHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h.logger.Printf("method=%s path=%s", r.Method, r.URL.Path)
-	// 这里省略业务调用，只演示结构体如何满足 http.Handler。
+当路径匹配但请求方法不匹配时，`ServeMux` 可以自动返回 `405 Method Not Allowed`，并在 `Allow` 响应头中指出支持的方法。
+
+需要注意，路由模式中的 `GET` 同时可以匹配 `HEAD` 请求；其他请求方法则进行精确匹配。Go 1.21 或更早版本不能使用方法模式和 `{id}` 路径参数，需要在处理器内部手动检查 `r.Method` 并解析路径。
+
+---
+
+## 读取请求数据
+
+`http.Request` 保存了客户端请求的主要信息，例如：
+
+```go
+r.Method      // 请求方法
+r.URL         // 请求 URL
+r.Header      // 请求头
+r.Body        // 请求体
+r.Host        // 客户端请求的 Host
+r.RemoteAddr  // 直接与服务器建立连接的网络地址
+r.Context()   // 请求上下文
+```
+
+### 1. 读取查询参数
+
+假设客户端请求：
+
+```text
+GET /search?keyword=golang&page=2
+```
+
+服务端可以通过 `r.URL.Query()` 读取参数：
+
+```go
+func searchHandler(w http.ResponseWriter, r *http.Request) {
+	// Query 返回 url.Values。
+	query := r.URL.Query()
+
+	keyword := query.Get("keyword")
+	page := query.Get("page")
+
+	if keyword == "" {
+		http.Error(
+			w,
+			"缺少 keyword 参数",
+			http.StatusBadRequest,
+		)
+		return
+	}
+
+	_, _ = fmt.Fprintf(
+		w,
+		"keyword=%s, page=%s\n",
+		keyword,
+		page,
+	)
+}
+```
+
+`Get` 只返回同名参数中的第一个值。如果需要读取全部值，可以直接访问：
+
+```go
+tags := r.URL.Query()["tag"]
+```
+
+例如：
+
+```text
+/search?tag=go&tag=http
+```
+
+得到：
+
+```go
+[]string{"go", "http"}
+```
+
+### 2. 读取请求头
+
+```go
+func headerHandler(w http.ResponseWriter, r *http.Request) {
+	authorization := r.Header.Get("Authorization")
+	userAgent := r.Header.Get("User-Agent")
+	contentType := r.Header.Get("Content-Type")
+
+	log.Printf("Authorization: %s", authorization)
+	log.Printf("User-Agent: %s", userAgent)
+	log.Printf("Content-Type: %s", contentType)
+
 	w.WriteHeader(http.StatusNoContent)
 }
-
-// mux.Handle 接收 Handler，因此结构体指针可以直接注册。
-mux.Handle("GET /internal/users", &userHandler{service: service, logger: logger})
 ```
 
-`http.HandleFunc` 和 `http.ListenAndServe(addr, nil)` 会使用包级的 `http.DefaultServeMux`。它适合极简示例，但真实项目优先显式创建 `http.NewServeMux()`，这样不同服务和测试之间不会共享路由状态。
-
-### 提供静态文件
-
-动态接口之外，`http.FileServer` 可以提供 CSS、JavaScript、图片等受控静态资源：
+HTTP 请求头名称不区分大小写：
 
 ```go
-// 仅公开项目中的 public 目录。
-files := http.FileServer(http.Dir("./public"))
-
-// /assets/app.css 会先去掉 /assets/，再读取 ./public/app.css。
-mux.Handle("GET /assets/", http.StripPrefix("/assets/", files))
+r.Header.Get("Content-Type")
+r.Header.Get("content-type")
 ```
 
-不要把机器根目录、配置目录、私钥、源码目录或上传临时目录交给 `FileServer`。生产环境的静态资源通常由 CDN 或反向代理提供，Go 服务专注于动态请求。
-
-## 读取并校验请求输入
-
-真正的 Handler 的主要工作，是将网络输入变成可信的业务参数。所有请求数据都来自外部：路径能匹配不代表 ID 合法，带有 `Content-Type: application/json` 不代表正文一定是 JSON。
-
-`Request` 中最常用的字段如下：
+这两种写法读取的是同一个请求头。不过 Go 代码通常使用规范化形式：
 
 ```go
-r.Method      // HTTP 方法
-r.URL         // 路径和查询参数
-r.Header      // 多值请求头，名称不区分大小写
-r.Body        // 只能顺序读取的请求体
-r.RemoteAddr  // 直接连接到当前服务的地址
-r.Context()   // 本次请求的取消和截止时间
+Content-Type
+Authorization
+User-Agent
 ```
 
-### 查询参数与请求头
+---
 
-查询参数适合筛选、分页和排序等不属于资源主体的数据。例如 `GET /articles?tag=go&page=2`：
+## 接收表单数据
+
+HTML 表单常用的编码格式是：
+
+```text
+application/x-www-form-urlencoded
+```
+
+客户端可以使用 `http.PostForm` 发送表单：
 
 ```go
-func searchArticles(w http.ResponseWriter, r *http.Request) {
-	// 同名参数可以有多个值；Get 只取第一个。
-	tag := strings.TrimSpace(r.URL.Query().Get("tag"))
-	if tag == "" {
-		writeError(w, http.StatusBadRequest, "tag is required")
-		return
+package main
+
+import (
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"net/url"
+)
+
+func main() {
+	// url.Values 用于构造表单字段。
+	form := url.Values{}
+	form.Set("name", "张三")
+	form.Set("email", "zhangsan@example.com")
+
+	resp, err := http.PostForm(
+		"http://127.0.0.1:8080/form",
+		form,
+	)
+	if err != nil {
+		log.Fatalf("发送表单失败：%v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalf("读取响应失败：%v", err)
 	}
 
-	// Header.Get 按 HTTP 规则查找，不需要关心大小写。
-	requestID := r.Header.Get("X-Request-ID")
-	writeJSON(w, http.StatusOK, map[string]string{
-		"tag":        tag,
-		"request_id": requestID,
-	})
+	fmt.Println("状态码：", resp.StatusCode)
+	fmt.Println("响应内容：", string(body))
 }
 ```
 
-构造 URL 时不要手拼查询字符串。`url.Values` 会处理空格、中文、`&`、`=` 等转义问题：
+服务端处理代码：
 
 ```go
-endpoint, err := url.Parse("https://api.example.com/articles")
-if err != nil {
-	return err
-}
-
-query := endpoint.Query()
-query.Set("tag", "Go HTTP")
-query.Set("page", "1")
-endpoint.RawQuery = query.Encode()
-```
-
-`RemoteAddr` 是直接连接当前 Go 服务的一端地址。服务部署在 Nginx、网关或负载均衡器之后时，它通常是代理地址；`X-Forwarded-For` 也可能由普通客户端伪造。只有明确处于可信代理网络、且代理会清理并重建转发头时，应用才应使用这些头获取客户端 IP。
-
-### 接收 JSON
-
-JSON 接口不能只调用一次 `Decode` 就认为输入安全。需要限制请求体、拒绝未知字段、检查正文只有一个 JSON 值，并校验业务字段。
-
-```go
-type createArticleInput struct {
-	Title string `json:"title"`
-}
-
-func decodeCreateArticle(w http.ResponseWriter, r *http.Request) (createArticleInput, bool) {
-	// 在读取过程中限制 1 MiB，不能只相信客户端声明的 Content-Length。
+func formHandler(w http.ResponseWriter, r *http.Request) {
+	// 限制请求体最大为 1 MiB。
+	// 防止恶意客户端发送体积过大的请求体。
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields() // 把 "titel" 这类拼写错误立即暴露给调用方。
 
-	var input createArticleInput
-	if err := decoder.Decode(&input); err != nil {
-		var tooLarge *http.MaxBytesError
-		if errors.As(err, &tooLarge) {
-			writeError(w, http.StatusRequestEntityTooLarge, "request body too large")
-		} else {
-			writeError(w, http.StatusBadRequest, "invalid JSON")
-		}
-		return createArticleInput{}, false
-	}
-
-	// 拒绝 {..}{..} 这种被拼接的两个 JSON 值。
-	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		writeError(w, http.StatusBadRequest, "request body must contain one JSON value")
-		return createArticleInput{}, false
-	}
-
-	input.Title = strings.TrimSpace(input.Title)
-	if input.Title == "" {
-		writeError(w, http.StatusBadRequest, "title is required")
-		return createArticleInput{}, false
-	}
-	return input, true
-}
-```
-
-服务端会在请求处理结束后关闭 `r.Body`，Handler 中通常不必再 `defer r.Body.Close()`。这与客户端的 `resp.Body` 不同：客户端必须自己关闭响应体。
-
-### 表单与文件上传
-
-普通 HTML 表单通常使用 `application/x-www-form-urlencoded`。需要严格校验时，显式调用 `ParseForm`，不要用会忽略解析错误的 `FormValue`：
-
-```go
-func submitProfile(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	// ParseForm 解析：
+	// 1. URL 查询参数；
+	// 2. application/x-www-form-urlencoded 请求体。
 	if err := r.ParseForm(); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid form")
+		http.Error(w, "表单格式错误或请求体过大", http.StatusBadRequest)
 		return
 	}
 
-	// PostForm 只读取请求体中的表单字段，不混入 URL 查询参数。
-	name := strings.TrimSpace(r.PostForm.Get("name"))
-	if name == "" {
-		writeError(w, http.StatusBadRequest, "name is required")
+	// PostForm 只包含请求体中的表单字段，
+	// 不包含 URL 查询参数。
+	name := r.PostForm.Get("name")
+	email := r.PostForm.Get("email")
+
+	if name == "" || email == "" {
+		http.Error(w, "name 和 email 不能为空", http.StatusBadRequest)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"name": name})
-}
-```
 
-文件上传使用 `multipart/form-data`，还要分别设计总大小、单文件大小、允许的 MIME 类型、落盘路径和病毒扫描策略。不要把上传临时目录直接暴露为静态目录。
-
-## 正确构造 HTTP 响应
-
-`ResponseWriter` 是一条正在发送的输出流，不是可以随时修改的普通返回值。正确顺序是：**先设置响应头，再写状态码，最后写正文。**
-
-```go
-func writeJSON(w http.ResponseWriter, status int, value any) {
-	// Encode 会立刻写正文，因此响应类型必须先设置。
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
 
-	// 一旦编码开始，响应可能已经部分发送；此时只能记录错误，不能改写为另一份 500 响应。
-	if err := json.NewEncoder(w).Encode(value); err != nil {
-		log.Printf("encode JSON response: %v", err)
-	}
-}
-
-func writeError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
+	_, _ = fmt.Fprintf(w, `{"name":%q,"email":%q}`, name, email)
 }
 ```
 
-首次调用 `WriteHeader` 或 `Write` 后，状态码和普通响应头已经提交，后续再改写通常不会生效。若省略 `WriteHeader`，首次 `Write` 会隐式提交 `200 OK`。这也是所有输入校验都应在输出之前完成的原因。
-
-`http.Error` 适合写简单的纯文本错误：
+也可以使用：
 
 ```go
-if err != nil {
-	http.Error(w, "invalid request", http.StatusBadRequest)
-	return // http.Error 不会自动结束 Handler。
+email := r.FormValue("email")
+```
+
+`FormValue` 会自动调用 `ParseForm`，使用起来比较方便，但它会忽略解析过程中产生的错误。在需要严格校验请求数据的接口中，更推荐显式调用：
+
+```go
+if err := r.ParseForm(); err != nil {
+	// 处理错误
 }
 ```
 
-JSON API 更适合统一使用 `writeError`，让调用方始终能按同一种格式解析错误。`204 No Content` 和 `304 Not Modified` 不应再写普通响应正文。
+然后读取：
 
-## 组合示例：一个可测试的文章 API
+```go
+r.PostForm.Get("email")
+```
 
-将前面出现过的路由、JSON 输入、路径参数和响应组织到一起。存储层使用内存 map，只是为了突出 HTTP 的边界；在真实项目中可替换为数据库调用，并继续向下传递 `r.Context()`。下面是一份可直接保存为 `main.go` 并运行的完整示例。
+`FormValue` 的读取优先级依次为 URL 编码表单请求体、URL 查询参数和 multipart 表单，并且只返回第一个值。
+
+## 接收 JSON 数据
+
+在前后端分离项目中，客户端通常会使用 JSON 发送数据：
+
+```json
+{
+  "name": "张三",
+  "email": "zhangsan@example.com"
+}
+```
+
+服务端可以使用 `encoding/json.Decoder` 将请求体直接解码到结构体。
+
+```go
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"io"
+	"log"
+	"net/http"
+	"strings"
+)
+
+// createUserRequest 描述客户端提交的 JSON 结构。
+type createUserRequest struct {
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+func createUserHandler(w http.ResponseWriter, r *http.Request) {
+	// 将请求体限制为 1 MiB。
+	//
+	// MaxBytesReader 专门用于限制 HTTP 请求体，
+	// 当客户端读取超过限制时会返回错误。
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
+	var input createUserRequest
+
+	decoder := json.NewDecoder(r.Body)
+
+	// 如果客户端发送了结构体中不存在的字段，
+	// 直接返回错误。
+	//
+	// 例如发送：
+	// {"name":"张三","unknown":"value"}
+	decoder.DisallowUnknownFields()
+
+	if err := decoder.Decode(&input); err != nil {
+		http.Error(w, "JSON 格式错误", http.StatusBadRequest)
+		return
+	}
+
+	// 确保请求体中只有一个 JSON 值。
+	//
+	// 以下请求体是不合法的：
+	// {"name":"张三"}{"name":"李四"}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		http.Error(w, "请求体只能包含一个 JSON 值", http.StatusBadRequest)
+		return
+	}
+
+	input.Name = strings.TrimSpace(input.Name)
+	input.Email = strings.TrimSpace(input.Email)
+
+	if input.Name == "" || input.Email == "" {
+		http.Error(w, "name 和 email 不能为空", http.StatusBadRequest)
+		return
+	}
+
+	// 设置 JSON 响应类型。
+	w.Header().Set("Content-Type","application/json; charset=utf-8")
+
+	// 创建成功通常返回 201。
+	w.WriteHeader(http.StatusCreated)
+
+	response := map[string]any{
+		"id":    1001,
+		"name":  input.Name,
+		"email": input.Email,
+	}
+
+	// Encoder 会直接将 JSON 写入 ResponseWriter。
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("写入 JSON 响应失败：%v", err)
+	}
+}
+```
+
+`http.MaxBytesReader` 与 `io.LimitReader` 类似，但它专门用于限制传入的 HTTP 请求体，并在读取超过限制时返回明确错误。
+
+不需要在 Handler 中手动执行：
+
+```go
+defer r.Body.Close()
+```
+
+因为 `net/http` 服务端会在请求处理结束后关闭请求体。客户端发送请求时的响应体则不同，必须由客户端代码显式关闭。
+
+## 构造 HTTP 响应
+
+服务端通过 `http.ResponseWriter` 返回响应。
+
+### 1. 设置响应头
+
+```go
+w.Header().Set("Content-Type", "application/json; charset=utf-8")
+```
+
+### 2. 设置状态码
+
+```go
+w.WriteHeader(http.StatusCreated)
+```
+
+常用状态码包括：
+
+| 常量                             | 状态码 | 含义                   |
+| -------------------------------- | ------ | ---------------------- |
+| `http.StatusOK`                  | 200    | 请求成功               |
+| `http.StatusCreated`             | 201    | 资源创建成功           |
+| `http.StatusNoContent`           | 204    | 请求成功，但没有响应体 |
+| `http.StatusBadRequest`          | 400    | 客户端请求错误         |
+| `http.StatusUnauthorized`        | 401    | 未认证                 |
+| `http.StatusForbidden`           | 403    | 没有访问权限           |
+| `http.StatusNotFound`            | 404    | 资源不存在             |
+| `http.StatusMethodNotAllowed`    | 405    | 请求方法不支持         |
+| `http.StatusConflict`            | 409    | 资源状态冲突           |
+| `http.StatusInternalServerError` | 500    | 服务端内部错误         |
+
+### 3. 写入响应体
+
+```go
+_, _ = w.Write([]byte("hello"))
+```
+
+也可以使用：
+
+```go
+fmt.Fprintln(w, "hello")
+```
+
+或者返回 JSON：
+
+```go
+json.NewEncoder(w).Encode(data)
+```
+
+需要注意：
+
+```go
+w.Header().Set("Content-Type", "application/json")
+w.WriteHeader(http.StatusCreated)
+json.NewEncoder(w).Encode(data)
+```
+
+顺序不能随意交换。第一次调用 `WriteHeader` 或 `Write` 后，响应头通常就已经发送，之后再修改响应头不会生效。
+
+如果不显式调用 `WriteHeader`，第一次写入响应体时会自动发送：
+
+```text
+200 OK
+```
+
+### 4. 返回错误
+
+可以使用 `http.Error`：
+
+```go
+http.Error(w, "请求参数错误", http.StatusBadRequest)
+return
+```
+
+调用 `http.Error` 后应立即 `return`，避免继续向响应中写入成功数据。官方文档也指出，`http.Error` 不会主动终止当前处理函数，需要由调用者确保后面不再写入响应。
+
+## 基本 HTTP 客户端
+
+`net/http` 提供了几个快捷函数：
+
+```go
+http.Get()
+http.Head()
+http.Post()
+http.PostForm()
+```
+
+这些函数适合简单脚本和教学示例。
+
+### 1. 发送 GET 请求
+
+```go
+package main
+
+import (
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"time"
+)
+
+func main() {
+	// 不直接使用没有超时的默认客户端，
+	// 而是显式设置整体请求超时。
+	client := &http.Client{Timeout: 5 * time.Second}
+
+	resp, err := client.Get("http://127.0.0.1:8080/")
+	if err != nil {
+		log.Fatalf("GET 请求失败：%v", err)
+	}
+
+	// 客户端必须关闭响应体。
+	defer resp.Body.Close()
+
+	// HTTP 404、500 等状态不会被 client.Get
+	// 当成 Go error 返回，因此需要自己检查状态码。
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		log.Fatalf("服务端返回异常状态：%s", resp.Status)
+	}
+
+	// 对于体积可控的小型响应，可以直接读取全部内容。
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalf("读取响应体失败：%v", err)
+	}
+
+	fmt.Println("状态：", resp.Status)
+	fmt.Println("响应头：", resp.Header)
+	fmt.Printf("响应体：%s", body)
+}
+```
+
+对于来源不可信或者体积未知的响应，不应无限制地将整个响应读入内存，可以限制读取大小：
+
+```go
+const maxResponseSize = 1 << 20 // 1 MiB
+
+body, err := io.ReadAll(
+	io.LimitReader(resp.Body, maxResponseSize),
+)
+```
+
+客户端成功收到响应后，必须关闭 `resp.Body`。如果响应体既没有读取到 EOF，也没有被关闭，底层连接可能无法继续被连接池复用。
+
+### 2. 构造带查询参数的 GET 请求
+
+不要通过字符串拼接构造 URL 参数：
+
+```go
+// 不推荐
+requestURL := "/search?keyword=" + keyword
+```
+
+参数中可能包含空格、中文、`&`、`=` 等特殊字符，应使用 `net/url`：
+
+```go
+package main
+
+import (
+	"fmt"
+	"log"
+	"net/http"
+	"net/url"
+	"time"
+)
+
+func main() {
+	endpoint, err := url.Parse(
+		"http://127.0.0.1:8080/search",
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	query := endpoint.Query()
+	query.Set("keyword", "Go HTTP 编程")
+	query.Set("page", "1")
+
+	// Encode 会自动进行 URL 编码。
+	endpoint.RawQuery = query.Encode()
+
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+
+	resp, err := client.Get(endpoint.String())
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	fmt.Println("请求地址：", endpoint.String())
+	fmt.Println("响应状态：", resp.Status)
+}
+```
+
+---
+
+## 发送 POST 请求
+
+### 1. 使用 `http.Post` 发送 JSON
+
+定义数据结构：
+
+```go
+type Person struct {
+	UserID   string `json:"userId"`
+	Username string `json:"username"`
+	Age      int    `json:"age"`
+	Address  string `json:"address"`
+}
+```
+
+发送请求：
+
+```go
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"time"
+)
+
+type Person struct {
+	UserID   string `json:"userId"`
+	Username string `json:"username"`
+	Age      int    `json:"age"`
+	Address  string `json:"address"`
+}
+
+func main() {
+	person := Person{
+		UserID:   "120",
+		Username: "jack",
+		Age:      18,
+		Address:  "usa",
+	}
+
+	// 将结构体编码成 JSON。
+	data, err := json.Marshal(person)
+	if err != nil {
+		log.Fatalf("JSON 编码失败：%v", err)
+	}
+
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+
+	resp, err := client.Post(
+		"http://127.0.0.1:8080/users",
+		"application/json; charset=utf-8",
+		bytes.NewReader(data),
+	)
+	if err != nil {
+		log.Fatalf("POST 请求失败：%v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalf("读取响应失败：%v", err)
+	}
+
+	fmt.Println("响应状态：", resp.Status)
+	fmt.Println("响应内容：", string(body))
+}
+```
+
+不应忽略 `json.Marshal` 返回的错误。下面这种写法不推荐：
+
+```go
+data, _ := json.Marshal(person)
+```
+
+### 2. 使用 `NewRequestWithContext`
+
+当需要设置以下内容时，应使用 `http.NewRequestWithContext`：
+
+- 自定义请求方法；
+- 自定义请求头；
+- 请求级别超时；
+- 请求取消；
+- `PUT`、`PATCH`、`DELETE` 请求；
+- 更复杂的请求体。
+
+```go
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"io"
+	"log"
+	"net/http"
+	"time"
+)
+
+func main() {
+	data := map[string]any{
+		"username": "jack",
+		"age":      18,
+	}
+
+	body, err := json.Marshal(data)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// 请求最多执行 5 秒。
+	ctx, cancel := context.WithTimeout(
+		context.Background(),
+		5*time.Second,
+	)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		"http://127.0.0.1:8080/users",
+		bytes.NewReader(body),
+	)
+	if err != nil {
+		log.Fatalf("创建请求失败：%v", err)
+	}
+
+	// 设置请求头。
+	req.Header.Set(
+		"Content-Type",
+		"application/json; charset=utf-8",
+	)
+	req.Header.Set(
+		"Accept",
+		"application/json",
+	)
+	req.Header.Set(
+		"Authorization",
+		"Bearer 123456",
+	)
+
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Fatalf("发送请求失败：%v", err)
+	}
+	defer resp.Body.Close()
+
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Printf(
+		"status=%s body=%s",
+		resp.Status,
+		responseBody,
+	)
+}
+```
+
+`http.Client.Do` 只会在以下情况返回 Go 错误：
+
+- DNS 解析失败；
+- 无法建立连接；
+- TLS 握手失败；
+- 请求超时或被取消；
+- 重定向策略返回错误；
+- HTTP 协议通信失败。
+
+服务端返回 `400`、`404` 或 `500` 时，`err` 通常仍然是 `nil`，因此业务代码必须检查：
+
+```go
+resp.StatusCode
+```
+
+官方文档明确说明，非 2xx 状态码本身不会导致 `Client.Do` 返回错误。
+
+## 自定义 `http.Client`
+
+简单示例中可以使用：
+
+```go
+http.Get(url)
+```
+
+但真实项目通常应创建并长期复用一个自定义客户端：
+
+```go
+client := &http.Client{
+	Timeout: 10 * time.Second,
+}
+```
+
+`http.Client` 主要包含四类配置：
+
+| 字段            | 作用                                 |
+| --------------- | ------------------------------------ |
+| `Transport`     | 配置连接池、代理、TLS 和底层数据传输 |
+| `Timeout`       | 配置一次完整请求的总超时时间         |
+| `Jar`           | 管理 Cookie                          |
+| `CheckRedirect` | 控制重定向策略                       |
+
+### 1. `Timeout`
+
+```go
+client := &http.Client{
+	Timeout: 10 * time.Second,
+}
+```
+
+这个超时包含：
+
+- 建立连接；
+- 发送请求；
+- 重定向；
+- 等待响应；
+- 读取响应体。
+
+零值表示不设置整体超时，因此不建议面向外部服务的请求完全依赖零值。
+
+### 2. `CheckRedirect`
+
+```go
+package main
+
+import (
+	"errors"
+	"net/http"
+	"time"
+)
+
+func newHTTPClient() *http.Client {
+	return &http.Client{
+		Timeout: 10 * time.Second,
+
+		CheckRedirect: func(
+			req *http.Request,
+			via []*http.Request,
+		) error {
+			// 最多允许 5 次重定向。
+			if len(via) >= 5 {
+				return errors.New(
+					"重定向次数过多",
+				)
+			}
+
+			return nil
+		},
+	}
+}
+```
+
+如果 `CheckRedirect` 为 `nil`，客户端默认会在连续重定向次数达到一定限制后停止。
+
+### 3. `Jar`
+
+`Jar` 用于管理 Cookie：
+
+```go
+import "net/http/cookiejar"
+
+jar, err := cookiejar.New(nil)
+if err != nil {
+	log.Fatal(err)
+}
+
+client := &http.Client{
+	Jar:     jar,
+	Timeout: 10 * time.Second,
+}
+```
+
+客户端收到 `Set-Cookie` 后，会将 Cookie 保存到 Jar 中，并在后续符合域名和路径规则的请求中自动携带。
+
+### 4. 长期复用客户端
+
+不推荐每次请求都创建一个新的客户端：
+
+```go
+// 不推荐
+func request() {
+	client := &http.Client{}
+	_, _ = client.Get("https://example.com")
+}
+```
+
+更推荐在应用初始化时创建一个共享客户端：
+
+```go
+var apiClient = &http.Client{
+	Timeout: 10 * time.Second,
+}
+```
+
+然后反复使用：
+
+```go
+resp, err := apiClient.Do(req)
+```
+
+`http.Client` 内部的 Transport 会缓存 TCP 连接，因此客户端应当长期复用。`http.Client` 也可以由多个 goroutine 并发使用。
+
+## 自定义 `http.Transport`
+
+`http.Transport` 负责 HTTP 客户端的底层传输，主要包括：
+
+- TCP 连接创建；
+- HTTP Keep-Alive；
+- 连接池；
+- HTTP 代理；
+- TLS 配置；
+- 空闲连接回收；
+- 压缩；
+- HTTP 协议协商。
+
+不建议从空结构体开始配置：
+
+```go
+// 一般不推荐完全从零创建。
+transport := &http.Transport{}
+```
+
+这样可能丢失标准库提供的合理默认值。
+
+推荐复制默认 Transport 后再修改：
+
+```go
+package main
+
+import (
+	"crypto/tls"
+	"net/http"
+	"time"
+)
+
+func newHTTPClient() *http.Client {
+	// 克隆默认 Transport，
+	// 保留标准库提供的默认代理、连接和超时配置。
+	transport := http.DefaultTransport.
+		(*http.Transport).
+		Clone()
+
+	// 所有目标主机的最大空闲连接数。
+	transport.MaxIdleConns = 100
+
+	// 单个目标主机最多保留的空闲连接数。
+	transport.MaxIdleConnsPerHost = 20
+
+	// 空闲连接最多保留 90 秒。
+	transport.IdleConnTimeout = 90 * time.Second
+
+	// 完整发送请求后，
+	// 等待服务端响应头的最大时间。
+	transport.ResponseHeaderTimeout = 5 * time.Second
+
+	// TLS 最低版本。
+	transport.TLSClientConfig = &tls.Config{
+		MinVersion: tls.VersionTLS12,
+	}
+
+	return &http.Client{
+		Transport: transport,
+		Timeout:   10 * time.Second,
+	}
+}
+```
+
+不要为了“解决证书错误”随意设置：
+
+```go
+InsecureSkipVerify: true
+```
+
+这会跳过 TLS 证书校验，使客户端容易受到中间人攻击。
+
+`http.Transport` 和 `http.Client` 都支持多个 goroutine 并发使用。为了复用连接池并减少 DNS 查询、TCP 握手和 TLS 握手开销，应长期复用它们，而不是为每一个请求创建新的实例。
+
+---
+
+## 自定义 `http.Server`
+
+最简单的 HTTP 服务只需要一行：
+
+```go
+http.ListenAndServe(":8080", nil)
+```
+
+但是这种写法：
+
+- 使用全局的 `DefaultServeMux`；
+- 无法直接配置服务器超时；
+- 不利于优雅关闭；
+- 不适合面向公网的生产服务。
+
+真实项目通常会显式创建 `http.Server`：
+
+```go
+server := &http.Server{
+	Addr:    ":8080",
+	Handler: mux,
+
+	ReadHeaderTimeout: 5 * time.Second,
+	ReadTimeout:       10 * time.Second,
+	WriteTimeout:      10 * time.Second,
+	IdleTimeout:       60 * time.Second,
+
+	MaxHeaderBytes: 1 << 20,
+}
+```
+
+常用字段如下。
+
+| 字段                | 作用                                    |
+| ------------------- | --------------------------------------- |
+| `Addr`              | 监听地址和端口                          |
+| `Handler`           | 请求处理器，通常是 `ServeMux`           |
+| `ReadHeaderTimeout` | 读取请求头的最长时间                    |
+| `ReadTimeout`       | 读取整个请求的最长时间                  |
+| `WriteTimeout`      | 写入响应的最长时间                      |
+| `IdleTimeout`       | Keep-Alive 连接等待下一个请求的最长时间 |
+| `MaxHeaderBytes`    | 请求头最大字节数                        |
+
+对于公网服务，尤其应设置：
+
+```go
+ReadHeaderTimeout
+IdleTimeout
+```
+
+否则慢速客户端可能长期占用连接资源。
+
+`ReadHeaderTimeout` 用于限制读取请求头的最长时间；`ReadTimeout` 用于限制读取整个请求的最长时间；`WriteTimeout` 用于限制写入响应的最长时间；`IdleTimeout` 用于限制 Keep-Alive 连接等待下一个请求的最长时间。
+
+`http.Server` 还提供了一些高级配置字段：
+
+| 字段           | 作用                                 |
+| -------------- | ------------------------------------ |
+| `TLSConfig`    | TLS 配置                             |
+| `ConnState`    | 监听连接状态变化                     |
+| `ErrorLog`     | 设置服务端错误日志                   |
+| `BaseContext`  | 为监听器创建基础 Context             |
+| `ConnContext`  | 为每个连接设置 Context               |
+| `ConnState`    | 观察连接的新建、活跃、空闲和关闭状态 |
+| `TLSNextProto` | 自定义 TLS 协议协商行为              |
+
+这些配置通常用于基础设施、中间件、连接统计或底层协议扩展。普通业务服务不需要把 `http.Server` 的每一个字段都手动填一遍，保持不需要字段的零值即可。
+
+---
+
+## 优雅关闭 HTTP 服务
+
+直接终止 HTTP 服务进程可能导致：
+
+- 正在处理的请求被强制中断；
+- 部分响应只发送了一半；
+- 数据库事务没有正常结束；
+- 日志或缓存没有完成刷新。
+
+`http.Server.Shutdown` 可以实现优雅关闭：
+
+1. 停止接受新连接；
+2. 关闭空闲连接；
+3. 等待正在处理的请求完成；
+4. 超过指定时间后返回超时错误。
+
+完整示例：
 
 ```go
 package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"io"
+	"fmt"
 	"log"
 	"net/http"
-	"strconv"
-	"strings"
-	"sync"
+	"os/signal"
+	"syscall"
 	"time"
 )
 
-type article struct {
-	ID    int64  `json:"id"`
-	Title string `json:"title"`
-}
-
-type createArticleInput struct {
-	Title string `json:"title"`
-}
-
-func decodeCreateArticle(w http.ResponseWriter, r *http.Request) (createArticleInput, bool) {
-	// 限制请求体，防止意外或恶意的大 JSON 长时间占用内存和连接。
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-
-	var input createArticleInput
-	if err := decoder.Decode(&input); err != nil {
-		var tooLarge *http.MaxBytesError
-		if errors.As(err, &tooLarge) {
-			writeError(w, http.StatusRequestEntityTooLarge, "request body too large")
-		} else {
-			writeError(w, http.StatusBadRequest, "invalid JSON")
-		}
-		return createArticleInput{}, false
-	}
-
-	// Decode 一次后再检查 EOF，拒绝 {..}{..} 这样的多个 JSON 值。
-	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		writeError(w, http.StatusBadRequest, "request body must contain one JSON value")
-		return createArticleInput{}, false
-	}
-
-	input.Title = strings.TrimSpace(input.Title)
-	if input.Title == "" {
-		writeError(w, http.StatusBadRequest, "title is required")
-		return createArticleInput{}, false
-	}
-	return input, true
-}
-
-func writeJSON(w http.ResponseWriter, status int, value any) {
-	// 必须在 WriteHeader 或 Encode 写入正文之前设置响应头。
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(value); err != nil {
-		// 响应可能已部分发送，只记录错误，不能再试图写一个 500 响应。
-		log.Printf("encode JSON response: %v", err)
-	}
-}
-
-func writeError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
-}
-
-// articleStore 由多个请求并发访问，因此 map 与 nextID 都由锁保护。
-type articleStore struct {
-	mu     sync.RWMutex
-	nextID int64
-	items  map[int64]article
-}
-
-func newArticleStore() *articleStore {
-	return &articleStore{nextID: 1, items: make(map[int64]article)}
-}
-
-func (s *articleStore) create(ctx context.Context, title string) (article, error) {
-	// 让存储层接口保留取消语义；替换为数据库时仍可直接传入 ctx。
-	if err := ctx.Err(); err != nil {
-		return article{}, err
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	created := article{ID: s.nextID, Title: title}
-	s.nextID++
-	s.items[created.ID] = created
-	return created, nil
-}
-
-func (s *articleStore) get(ctx context.Context, id int64) (article, bool, error) {
-	if err := ctx.Err(); err != nil {
-		return article{}, false, err
-	}
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	item, ok := s.items[id]
-	return item, ok, nil
-}
-
-type api struct {
-	store *articleStore
-}
-
-func newHandler(store *articleStore) http.Handler {
-	a := &api{store: store}
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", a.healthz)
-	mux.HandleFunc("POST /articles", a.createArticle)
-	mux.HandleFunc("GET /articles/{id}", a.getArticle)
-	return mux
-}
-
-func (a *api) healthz(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-}
-
-func (a *api) createArticle(w http.ResponseWriter, r *http.Request) {
-	input, ok := decodeCreateArticle(w, r)
-	if !ok {
-		return // 解码函数已经写入 400 或 413 响应。
-	}
-
-	created, err := a.store.create(r.Context(), input.Title)
-	if err != nil {
-		writeRequestError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, created)
-}
-
-func (a *api) getArticle(w http.ResponseWriter, r *http.Request) {
-	// 路径参数总是字符串，路由匹配成功不代表它是合法业务 ID。
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "id must be a positive integer")
-		return
-	}
-
-	found, ok, err := a.store.get(r.Context(), id)
-	if err != nil {
-		writeRequestError(w, err)
-		return
-	}
-	if !ok {
-		writeError(w, http.StatusNotFound, "article not found")
-		return
-	}
-	writeJSON(w, http.StatusOK, found)
-}
-
-func writeRequestError(w http.ResponseWriter, err error) {
-	if errors.Is(err, context.Canceled) {
-		// 客户端通常已离开；停止下游工作即可，无需强行再写响应。
-		return
-	}
-	log.Printf("request failed: %v", err)
-	writeError(w, http.StatusInternalServerError, "internal server error")
-}
-
 func main() {
-	// 依赖在启动时创建一次，再注入 Handler；不要在每个请求中创建 map 或路由表。
-	handler := newHandler(newArticleStore())
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("GET /{$}", func(
+		w http.ResponseWriter,
+		r *http.Request,
+	) {
+		_, _ = fmt.Fprintln(w, "hello")
+	})
+
 	server := &http.Server{
 		Addr:              ":8080",
-		Handler:           handler,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+
+	// 用于接收 ListenAndServe 的返回结果。
+	errChan := make(chan error, 1)
+
+	go func() {
+		log.Printf(
+			"HTTP 服务已启动：http://127.0.0.1%s",
+			server.Addr,
+		)
+
+		// ListenAndServe 会阻塞当前 goroutine。
+		errChan <- server.ListenAndServe()
+	}()
+
+	// 当程序收到 Ctrl+C、SIGINT 或 SIGTERM 时，
+	// ctx 会被取消。
+	signalContext, stop := signal.NotifyContext(
+		context.Background(),
+		syscall.SIGINT,
+		syscall.SIGTERM,
+	)
+	defer stop()
+
+	select {
+	case <-signalContext.Done():
+		log.Println("收到退出信号，准备关闭服务")
+
+	case err := <-errChan:
+		// 主动调用 Shutdown 后，
+		// ListenAndServe 会返回 http.ErrServerClosed。
+		if !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf(
+				"HTTP 服务异常退出：%v",
+				err,
+			)
+		}
+
+		return
+	}
+
+	// 最多等待 5 秒，让正在执行的请求完成。
+	shutdownContext, cancel := context.WithTimeout(
+		context.Background(),
+		5*time.Second,
+	)
+	defer cancel()
+
+	if err := server.Shutdown(shutdownContext); err != nil {
+		log.Printf("优雅关闭失败：%v", err)
+		return
+	}
+
+	log.Println("HTTP 服务已安全关闭")
+}
+```
+
+调用 `Shutdown` 后，`ListenAndServe` 会立即返回 `http.ErrServerClosed`。程序不能在此时立刻退出，而应继续等待 `Shutdown` 完成。
+
+## 获取客户端 IP 地址
+
+`http.Request.RemoteAddr` 保存了直接与当前 Go 服务建立连接的网络地址，通常格式如下：
+
+```text
+192.168.1.100:53820
+```
+
+可以使用 `net.SplitHostPort` 去掉端口：
+
+```go
+package main
+
+import (
+	"net"
+	"net/http"
+)
+
+func remoteIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		// 如果格式不是 host:port，
+		// 则退回原始值。
+		return r.RemoteAddr
+	}
+
+	return host
+}
+```
+
+但是，当服务部署在反向代理或负载均衡器后面时，`RemoteAddr` 通常得到的是代理服务器地址，而不是真实客户端地址。
+
+代理可能通过以下请求头传递客户端 IP：
+
+```text
+X-Forwarded-For
+X-Real-IP
+```
+
+`X-Forwarded-For` 可能包含多个地址：
+
+```text
+203.0.113.10, 10.0.0.8, 10.0.0.9
+```
+
+通常最左侧是最初的客户端地址，后面的地址是请求经过的代理节点。
+
+```go
+package main
+
+import (
+	"net"
+	"net/http"
+	"strings"
+)
+
+// clientIP 返回客户端 IP。
+//
+// trustProxy 表示当前服务是否位于可信反向代理之后。
+// 只有代理层已经清理并重新生成转发请求头时，
+// 才能信任 X-Forwarded-For 和 X-Real-IP。
+func clientIP(
+	r *http.Request,
+	trustProxy bool,
+) string {
+	if trustProxy {
+		// 优先读取 X-Forwarded-For。
+		if forwardedFor := r.Header.Get(
+			"X-Forwarded-For",
+		); forwardedFor != "" {
+			// X-Forwarded-For 可能包含多个 IP，
+			// 通常取第一个。
+			firstIP := strings.TrimSpace(
+				strings.Split(forwardedFor, ",")[0],
+			)
+
+			if net.ParseIP(firstIP) != nil {
+				return firstIP
+			}
+		}
+
+		// 部分代理使用 X-Real-IP。
+		if realIP := strings.TrimSpace(
+			r.Header.Get("X-Real-IP"),
+		); net.ParseIP(realIP) != nil {
+			return realIP
+		}
+	}
+
+	// 无可信代理时，使用直接连接地址。
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+
+	return host
+}
+```
+
+返回 JSON：
+
+```go
+func ipHandler(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	ip := clientIP(r, true)
+
+	w.Header().Set(
+		"Content-Type",
+		"application/json; charset=utf-8",
+	)
+
+	_ = json.NewEncoder(w).Encode(
+		map[string]string{
+			"ip": ip,
+		},
+	)
+}
+```
+
+不能无条件信任客户端直接发送的：
+
+```text
+X-Forwarded-For
+```
+
+普通客户端完全可以伪造这个请求头。只有在以下情况下才应读取它：
+
+1. 服务确实部署在可信反向代理之后；
+2. 外部客户端不能绕过代理直接访问 Go 服务；
+3. 代理会删除客户端原有的转发头并重新生成；
+4. 应用明确知道哪些代理地址可信。
+
+`RemoteAddr` 由 Go HTTP 服务端在调用 Handler 前设置，通常是 `IP:端口` 形式。
+
+## 使用 `httputil.ReverseProxy` 实现反向代理
+
+反向代理接收客户端请求，将请求转发给后端服务，再把后端响应返回给客户端。
+
+请求流程如下：
+
+```text
+客户端
+   ↓
+Go 反向代理
+   ↓
+后端 HTTP 服务
+   ↓
+Go 反向代理
+   ↓
+客户端
+```
+
+`net/http/httputil` 包提供了开箱即用的 `ReverseProxy`。
+
+下面的示例将：
+
+```text
+http://127.0.0.1:8080/forward/doc/
+```
+
+转发到：
+
+```text
+https://go.dev/doc/
+package main
+
+import (
+	"log"
+	"net/http"
+	"net/http/httputil"
+	"net/url"
+	"time"
+)
+
+func main() {
+	// 解析目标服务地址。
+	target, err := url.Parse("https://go.dev")
+	if err != nil {
+		log.Fatalf("解析目标地址失败：%v", err)
+	}
+
+	proxy := &httputil.ReverseProxy{
+		// Rewrite 用于修改即将发送给后端的请求。
+		Rewrite: func(
+			proxyRequest *httputil.ProxyRequest,
+		) {
+			// 将请求的 Scheme、Host 和基础路径
+			// 修改为目标服务地址。
+			proxyRequest.SetURL(target)
+
+			// 设置：
+			// X-Forwarded-For
+			// X-Forwarded-Host
+			// X-Forwarded-Proto
+			proxyRequest.SetXForwarded()
+		},
+
+		// 后端请求失败时返回统一错误。
+		ErrorHandler: func(
+			w http.ResponseWriter,
+			r *http.Request,
+			err error,
+		) {
+			log.Printf("反向代理失败：%v", err)
+
+			http.Error(
+				w,
+				"upstream service unavailable",
+				http.StatusBadGateway,
+			)
+		},
+	}
+
+	mux := http.NewServeMux()
+
+	// 删除 /forward 前缀后再交给代理。
+	//
+	// /forward/doc/
+	// 会变成：
+	// /doc/
+	mux.Handle(
+		"/forward/",
+		http.StripPrefix("/forward", proxy),
+	)
+
+	server := &http.Server{
+		Addr:              ":8080",
+		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
 
-	log.Println("listen on http://127.0.0.1:8080")
-	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatal(err)
+	log.Fatal(server.ListenAndServe())
+}
+```
+
+旧代码中经常使用：
+
+```go
+proxy := httputil.ReverseProxy{
+	Director: func(r *http.Request) {
+		r.URL.Scheme = "https"
+		r.URL.Host = "go.dev"
 	}
 }
 ```
 
-为便于观察，内存数据会在进程退出后消失。可用下面的命令验证关键分支：
-
-```bash
-# 创建文章：应返回 201。
-curl -i -X POST http://127.0.0.1:8080/articles \
-  -H 'Content-Type: application/json' \
-  -d '{"title":"从 HTTP 开始"}'
-
-# 查询文章：应返回 200。
-curl -i http://127.0.0.1:8080/articles/1
-
-# 路径存在但方法不匹配：应返回 405，并带 Allow 响应头。
-curl -i -X DELETE http://127.0.0.1:8080/articles/1
-```
-
-## 编写 HTTP 客户端
-
-后端服务通常既是服务端，也是客户端：它会调用用户、库存、支付或第三方 API。客户端代码需要区分两类失败：
-
-- `Client.Do` 返回错误，表示 DNS、连接、TLS、超时、取消或重定向等通信失败；
-- 服务端返回 `404`、`429`、`500` 时，通常仍会得到非 nil 的 `resp` 和 nil 的 `error`，业务代码必须检查 `StatusCode`。
-
-对于带请求头、超时、认证或非 GET 方法的调用，使用 `NewRequestWithContext` 和长期复用的 `Client`：
+当前更推荐使用：
 
 ```go
-func createRemoteArticle(ctx context.Context, client *http.Client, endpoint, title string) (article, error) {
-	var body bytes.Buffer
-	if err := json.NewEncoder(&body).Encode(createArticleInput{Title: title}); err != nil {
-		return article{}, fmt.Errorf("encode request: %w", err)
-	}
-
-	// ctx 控制本次调用；调用方取消或超时时，网络等待会一起停止。
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint+"/articles", &body)
-	if err != nil {
-		return article{}, fmt.Errorf("build request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json; charset=utf-8")
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return article{}, fmt.Errorf("send request: %w", err)
-	}
-	// 客户端必须关闭响应体。读完或关闭后，HTTP/1.x 连接才有机会回到连接池。
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusCreated {
-		return article{}, fmt.Errorf("unexpected HTTP status: %s", resp.Status)
-	}
-
-	var created article
-	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
-		return article{}, fmt.Errorf("decode response: %w", err)
-	}
-	return created, nil
-}
-
-func main() {
-	// Client 与其底层 Transport 都支持并发使用，应在应用启动时创建并复用。
-	client := &http.Client{Timeout: 5 * time.Second}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	created, err := createRemoteArticle(ctx, client, "http://127.0.0.1:8080", "客户端创建的文章")
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Printf("created article: %+v", created)
-}
+Rewrite func(*httputil.ProxyRequest)
 ```
 
-`Client.Timeout` 是整个请求的上限，包含连接、重定向、等待响应和读取响应体；请求级 `context.WithTimeout` 则更适合表达某次业务调用的时间预算。两者可以同时存在，先到期者会取消请求。
-
-### 配置 Client 与 Transport
-
-`http.Client` 常用配置包括：
-
-| 字段 | 用途 |
-| --- | --- |
-| `Timeout` | 限制完整请求的总时间 |
-| `Transport` | 配置连接池、代理、TLS 和传输超时 |
-| `Jar` | 跨请求保存和发送 Cookie |
-| `CheckRedirect` | 限制或校验重定向 |
-
-当需要调节连接池时，从默认 Transport 克隆后再做小范围修改，避免丢掉标准库的默认行为：
+`Director` 已被标记为不推荐的新代码入口。使用 `Rewrite` 时，可以通过：
 
 ```go
-transport := http.DefaultTransport.(*http.Transport).Clone()
-
-// 全部目标主机合计最多保留 100 条空闲连接。
-transport.MaxIdleConns = 100
-// 单个目标主机最多保留 20 条空闲连接。
-transport.MaxIdleConnsPerHost = 20
-// 空闲连接 90 秒后回收。
-transport.IdleConnTimeout = 90 * time.Second
-// 请求发送完毕后，最多等待 5 秒取得响应头。
-transport.ResponseHeaderTimeout = 5 * time.Second
-
-client := &http.Client{
-	Transport: transport,
-	Timeout:   10 * time.Second,
-}
+proxyRequest.SetURL(target)
+proxyRequest.SetXForwarded()
 ```
 
-不要为每一次请求新建 `Client` 或 `Transport`，否则会丢失连接池并重复 DNS 查询、TCP 握手和 TLS 握手。也不要为了临时绕过证书错误设置 `tls.Config.InsecureSkipVerify = true`；这会关闭服务端身份验证。
+更清晰地设置目标地址和转发请求头。
 
-## 服务端超时与优雅关闭
+实现反向代理时还要考虑：
 
-最短的 `http.ListenAndServe(":8080", mux)` 很适合验证想法，但公网服务应显式创建 `http.Server`，为网络资源设定边界：
+- 后端连接超时；
+- 请求体大小限制；
+- 身份认证；
+- 请求头清理；
+- WebSocket 和流式响应；
+- 负载均衡；
+- 重试策略；
+- 限流与熔断；
+- 后端服务发现；
+- 日志与链路追踪。
+
+标准库的 `ReverseProxy` 适合实现基础反向代理，但完整网关通常还需要增加更多基础设施能力。
+
+---
+
+## 开发中的常见注意事项
+
+### 1. 不要忽略错误
+
+不推荐：
 
 ```go
-server := &http.Server{
-	Addr:              ":8080",
-	Handler:           mux,
-	ReadHeaderTimeout: 5 * time.Second,  // 读取请求头的上限，防慢速请求头。
-	ReadTimeout:       15 * time.Second, // 读取完整请求的上限。
-	WriteTimeout:      15 * time.Second, // 向慢客户端写响应的上限。
-	IdleTimeout:       60 * time.Second, // 空闲 keep-alive 连接的等待时间。
-	MaxHeaderBytes:    1 << 20,          // 请求头的最大字节数。
-}
+resp, _ := client.Do(req)
+data, _ := json.Marshal(value)
 ```
 
-这些网络超时不能替代业务取消。`r.Context()` 会在客户端断开、请求取消或 Handler 返回时被取消；调用数据库、RPC 或另一个 HTTP 服务时，要继续传递它，而不是改成 `context.Background()`：
+推荐：
 
 ```go
-// 客户端离开后，数据库查询也有机会及时停止。
-user, err := userRepository.FindByID(r.Context(), id)
-```
-
-进程退出时，`Shutdown` 会停止接受新连接、关闭空闲连接，并等待正在处理的请求结束。下面的模式能正确处理 Ctrl+C 与容器常用的 `SIGTERM`：
-
-```go
-func serve(server *http.Server) error {
-	serverErr := make(chan error, 1)
-	go func() {
-		serverErr <- server.ListenAndServe()
-	}()
-
-	stopCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
-	select {
-	case err := <-serverErr:
-		if !errors.Is(err, http.ErrServerClosed) {
-			return fmt.Errorf("HTTP server: %w", err)
-		}
-		return nil
-	case <-stopCtx.Done():
-		log.Println("shutdown signal received")
-	}
-
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		return fmt.Errorf("graceful shutdown: %w", err)
-	}
-
-	// Shutdown 会让 ListenAndServe 返回 ErrServerClosed，这是正常结果。
-	if err := <-serverErr; !errors.Is(err, http.ErrServerClosed) {
-		return fmt.Errorf("HTTP server stopped: %w", err)
-	}
-	return nil
-}
-```
-
-`Shutdown` 不会自动停止任意后台 goroutine，也不会替应用关闭 WebSocket 等长连接；它们仍需要业务自己定义停止和等待策略。SSE、下载、WebSocket 等长响应也不应直接套用普通接口的 `WriteTimeout`，需要单独设计心跳、截止时间与资源上限。
-
-## 进阶主题：反向代理（按需学习）
-
-反向代理接收客户端请求，将其转发给后端服务，再把后端响应返回给客户端。它常用于统一入口、屏蔽后端地址或把多个服务组合在一个域名下。业务 API 服务本身并不需要先掌握它；看懂下面三个职责即可：确定目标地址、转发请求、在后端不可用时返回 `502 Bad Gateway`。
-
-```go
-target, err := url.Parse("https://api.example.com")
+resp, err := client.Do(req)
 if err != nil {
-	log.Fatalf("parse proxy target: %v", err)
+	return err
 }
-
-proxy := &httputil.ReverseProxy{
-	Rewrite: func(pr *httputil.ProxyRequest) {
-		// 将即将发给后端的请求改为目标服务地址。
-		pr.SetURL(target)
-		// 只有当前服务是可信代理时，才生成转发相关请求头。
-		pr.SetXForwarded()
-	},
-	ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
-		log.Printf("upstream request failed: %v", err)
-		writeError(w, http.StatusBadGateway, "upstream service unavailable")
-	},
-}
-
-// /forward/users 去掉 /forward 前缀后，会被转发为后端的 /users。
-mux.Handle("/forward/", http.StripPrefix("/forward", proxy))
 ```
 
-代理并不等于完整网关。生产环境还要根据业务补充后端超时、认证、请求头清理、限流、重试、负载均衡、服务发现、日志追踪，以及 WebSocket 和流式响应策略。
+### 2. 客户端必须关闭响应体
 
-## 把一次请求串起来
-
-这一节不做标准库源码导读。刚开始学习时，能够从公开 API 看清一次请求如何流动，比追踪私有结构体和连接循环更重要：
-
-```mermaid
-flowchart LR
-    A[浏览器或客户端] --> B[http.Server 接收连接]
-    B --> C[net/http 解析为 Request]
-    C --> D[ServeMux 选择 Handler]
-    D --> E[Handler 校验输入并调用业务]
-    E --> F[ResponseWriter 写入响应]
-    F --> G[客户端读取并关闭 Body]
+```go
+resp, err := client.Do(req)
+if err != nil {
+	return err
+}
+defer resp.Body.Close()
 ```
 
-把图中的每一步对应到日常代码：
+### 3. 非 2xx 状态不会自动变成 Go 错误
 
-1. `http.Server` 负责监听端口和管理入站连接；它不知道“用户”或“订单”等业务概念。
-2. `net/http` 将网络数据解析为 `*http.Request`，因此 Handler 可以直接读取 `r.Method`、`r.URL`、`r.Header` 和 `r.Body`，不用手写 HTTP 报文解析器。
-3. `ServeMux` 只决定由哪个 Handler 处理请求。它能区分 `404` 与 `405`，但不知道 `id` 是否为整数、更不知道调用者是否有权限。
-4. Handler 在写响应之前完成参数校验和业务处理。第一次 `WriteHeader` 或 `Write` 后，状态码和响应头就已经提交，不能再把已写出的 `200` 改为 `400`。
-5. Handler 返回后，服务端清理本次请求；`r.Context()` 也会结束。后台任务若要继续运行，必须只带走已经校验的数据，并使用自己管理的 Context，不能继续使用 `r.Body` 或 `ResponseWriter`。
-6. HTTP/1.x 客户端读完并关闭 `resp.Body` 后，底层连接才有机会回到连接池。这个规则正是复用 `http.Client` 和关闭响应体的原因。
+```go
+if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+	return fmt.Errorf(
+		"unexpected status: %s",
+		resp.Status,
+	)
+}
+```
 
-这些行为足以指导绝大多数业务开发和排错。只有需要解决协议升级、极端性能或自定义传输的问题时，才有必要带着具体问题继续阅读标准库实现。
+### 4. HTTP 客户端应长期复用
 
-## 实战检查清单
+不推荐每次请求创建一个新的 `http.Client` 或 `http.Transport`。长期复用可以使用连接池，减少重复建立连接的开销。
 
-- 路由显式使用 `http.NewServeMux()`；方法和路径分开设计。
-- 所有路径参数、查询参数、请求头和正文都按不可信输入处理。
-- JSON、表单和上传接口设置合适的请求体大小上限。
-- 先写响应头和状态码，再写正文；写错误后立即 `return`。
-- 对外请求设置超时、检查 `StatusCode`、关闭 `resp.Body`，并复用 `http.Client`。
-- 向数据库、RPC 和下游 HTTP 调用传递 `r.Context()`。
-- 面向公网的 `http.Server` 配置请求头、读、写和空闲超时。
-- 在退出信号到来时调用 `Shutdown`，并单独管理后台任务与长连接。
-- 只在可信代理边界内使用 `X-Forwarded-For`、`X-Forwarded-Host` 等转发头。
+### 5. 服务端应设置超时
+
+面向公网的服务不应完全依赖 `http.Server` 的零值超时配置。
+
+至少应考虑：
+
+```go
+ReadHeaderTimeout
+ReadTimeout
+WriteTimeout
+IdleTimeout
+```
+
+### 6. 限制请求体大小
+
+处理 JSON、表单和文件上传时，应根据业务场景设置请求体上限：
+
+```go
+r.Body = http.MaxBytesReader(
+	w,
+	r.Body,
+	1<<20,
+)
+```
+
+### 7. 不要暴露任意文件目录
+
+下面的代码可能将整个目录暴露给客户端：
+
+```go
+http.FileServer(http.Dir("/"))
+```
+
+静态文件目录应使用专门的受控目录：
+
+```go
+http.FileServer(http.Dir("./static"))
+```
+
+不要把配置文件、密钥、源码或上传临时目录直接作为静态目录。
+
+### 8. 使用 Context 处理超时和取消
+
+客户端请求应优先使用：
+
+```go
+http.NewRequestWithContext
+```
+
+服务端内部调用数据库或其他服务时，应向下传递：
+
+```go
+r.Context()
+```
+
+例如：
+
+```go
+result, err := userService.FindUser(
+	r.Context(),
+	userID,
+)
+```
+
+当客户端断开连接、取消请求或处理器返回后，请求 Context 会被取消。
 
 ## 总结
 
-`net/http` 用很少的类型覆盖了完整 HTTP 链路：`Request` 表示输入，`ResponseWriter` 表示输出，`Handler` 承载业务，`ServeMux` 负责路由，`Server` 管理入站连接，`Client` 和 `Transport` 管理出站请求及连接复用。
+Go 的 `net/http` 包采用一套统一而简洁的设计：
 
-能够返回 JSON 只是 HTTP 服务的起点。可靠服务还要在输入校验、响应提交、超时、取消、连接复用和优雅退出处明确边界。掌握这些规则后，再使用任意 Go Web 框架时，也能分辨框架替自己完成了哪些工作，以及哪些责任仍必须由应用代码承担。
+```text
+Server
+  ↓
+Handler
+  ↓
+ServeMux
+  ↓
+具体处理函数
+```
+
+服务端开发的核心是：
+
+1. 使用 `ServeMux` 注册路由；
+2. 使用 `Handler` 或 `HandlerFunc` 处理请求；
+3. 从 `http.Request` 读取参数、请求头和请求体；
+4. 通过 `http.ResponseWriter` 返回状态码、响应头和响应体；
+5. 使用 `http.FileServer` 提供静态资源；
+6. 使用 `http.Server` 配置超时和连接限制；
+7. 使用 `Server.Shutdown` 实现优雅关闭。
+
+客户端开发的核心是：
+
+1. 使用 `http.Client` 发送请求；
+2. 使用 `NewRequestWithContext` 设置方法、请求头和超时；
+3. 检查响应状态码；
+4. 读取并关闭 `resp.Body`；
+5. 长期复用 `http.Client` 和 `http.Transport`；
+6. 根据需要配置 Cookie、重定向、TLS 和连接池。
+
+掌握这些内容后，再学习 Gin 等 Web 框架时，就能够理解路由、中间件、请求上下文、响应写入和服务启动等功能在底层是如何工作的。
 
 ## 参考资料
 
 - [Go `net/http` 包文档](https://pkg.go.dev/net/http)
-- [Go 1.22 Release Notes：增强的 ServeMux 路由](https://go.dev/doc/go1.22)
 - [Go `net/http/httputil` 包文档](https://pkg.go.dev/net/http/httputil)
+- [Go 1.22 Release Notes：增强的 ServeMux 路由](https://go.dev/doc/go1.22)
 - [RFC 9110：HTTP Semantics](https://www.rfc-editor.org/rfc/rfc9110)
