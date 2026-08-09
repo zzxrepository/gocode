@@ -21,22 +21,20 @@ tag:
 
 HTTP 编程关注的是让程序通过 HTTP 协议接收请求、返回响应，或调用其他 HTTP 服务。Go 标准库的 `net/http` 同时提供服务端和客户端能力，是学习 Go Web 开发的基础。
 
-## 版本与范围
-
 `net/http` 在 **Go 1.0** 的标准库中就已经存在。Go 1.0 的迁移说明将旧导入路径 `http` 调整为今天使用的 `net/http`；因此，`http.Server`、`http.Client`、`http.Handler` 等核心模型并不是 Go 1.22 才出现的能力。
 
-本文大部分服务端和客户端基础示例适用于很早期的 Go 版本；只有使用下列特性时才需要对应版本：
+服务端、客户端、`Handler` 和传统路径路由等基础能力适用于较早的 Go 版本；部分较新的 API 有明确的最低版本要求：
 
-| 功能 | 最低 Go 版本 | 文中出现的位置 |
+| 功能 | 最低 Go 版本 | 常见使用场景 |
 | --- | --- | --- |
-| `net/http` 的服务端、客户端、`Handler`、`ServeMux` | Go 1.0 | 全文基础能力 |
+| `net/http` 的服务端、客户端、`Handler`、`ServeMux` | Go 1.0 | HTTP 服务与客户端基础能力 |
 | `Request.Context()` | Go 1.7 | 传递取消与超时 |
 | `Server.Shutdown` | Go 1.8 | 优雅关闭服务 |
 | `NewRequestWithContext` | Go 1.13 | 构造带取消信号的客户端请求 |
 | `ReverseProxy.Rewrite`、`ProxyRequest` | Go 1.20 | 反向代理示例 |
 | `ServeMux` 的方法模式、`{id}` 路径参数、`PathValue` | Go 1.22 | 路由示例 |
 
-所以不应因为本机安装了 Go 1.22，就把整篇教程理解为“只能在 Go 1.22 使用”。实际项目应根据 `go.mod` 中声明的 Go 版本选择写法；使用 `"GET /users/{id}"` 前，再确认项目版本不低于 Go 1.22。
+项目应以 `go.mod` 声明的 Go 版本为准。`"GET /users/{id}"`、`PathValue` 等方法路由和路径参数写法需要 Go 1.22；在更早版本中，可以通过传统路径模式、`r.Method` 和自行解析路径实现相同的业务需求。
 
 Go 标准库中的 `net/http` 包同时提供了 HTTP 客户端和 HTTP 服务端的完整实现。使用它可以完成以下常见工作：
 
