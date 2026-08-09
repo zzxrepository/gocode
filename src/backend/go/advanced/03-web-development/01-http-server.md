@@ -678,7 +678,15 @@ func serve(server *http.Server) error {
 ```go
 target, err := url.Parse("https://api.example.com")
 if err != nil {
+<<<<<<< ours
+<<<<<<< ours
 	log.Fatalf("parse proxy target: %v", err)
+=======
+	return err
+>>>>>>> theirs
+=======
+	return err
+>>>>>>> theirs
 }
 
 proxy := &httputil.ReverseProxy{
@@ -699,9 +707,21 @@ mux.Handle("/forward/", http.StripPrefix("/forward", proxy))
 
 代理并不等于完整网关。生产环境还要根据业务补充后端超时、认证、请求头清理、限流、重试、负载均衡、服务发现、日志追踪，以及 WebSocket 和流式响应策略。
 
+<<<<<<< ours
+<<<<<<< ours
 ## 运行过程：理解 API 的边界
 
 这里不做逐行源码拆解。日常开发更重要的是理解标准库在 Handler 前后负责了什么，以及这些行为如何约束业务代码。掌握下面这张流程图已经足够：
+=======
+## 理解标准库的执行过程
+
+阅读源码的目的不是记住 `net/http` 的私有类型或连接循环，而是理解公开 API 的边界。对于日常开发，掌握下面这张流程图已经足够：
+>>>>>>> theirs
+=======
+## 理解标准库的执行过程
+
+阅读源码的目的不是记住 `net/http` 的私有类型或连接循环，而是理解公开 API 的边界。对于日常开发，掌握下面这张流程图已经足够：
+>>>>>>> theirs
 
 ```mermaid
 flowchart LR
@@ -719,7 +739,15 @@ flowchart LR
 3. HTTP/1.x 能否复用连接取决于协议边界是否完整。客户端关闭 `resp.Body`、服务端限制和正确读取请求体，都是为了及时释放连接并避免资源长期占用。
 4. `ServeMux` 只负责找到 Handler。它可以区分 `404` 与 `405`，却无法判断路径参数是否合法、用户是否有权限，这些仍是 Handler 和业务层的职责。
 
+<<<<<<< ours
+<<<<<<< ours
 只有排查协议升级、极端性能问题或自定义传输行为时，才需要结合具体问题阅读 `server.go`、`transport.go` 和路由实现；在此之前，逐行追踪实现细节往往只会掩盖更重要的 HTTP 边界。
+=======
+需要排查协议升级、极端性能问题或自定义传输行为时，再结合具体问题阅读 `server.go`、`transport.go` 和路由实现；在此之前，逐行追踪源码往往只会掩盖更重要的 HTTP 边界。
+>>>>>>> theirs
+=======
+需要排查协议升级、极端性能问题或自定义传输行为时，再结合具体问题阅读 `server.go`、`transport.go` 和路由实现；在此之前，逐行追踪源码往往只会掩盖更重要的 HTTP 边界。
+>>>>>>> theirs
 
 ## 实战检查清单
 
