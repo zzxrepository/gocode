@@ -21,6 +21,23 @@ tag:
 
 HTTP 编程关注的是让程序通过 HTTP 协议接收请求、返回响应，或调用其他 HTTP 服务。Go 标准库的 `net/http` 同时提供服务端和客户端能力，是学习 Go Web 开发的基础。
 
+## 版本与范围
+
+`net/http` 在 **Go 1.0** 的标准库中就已经存在。Go 1.0 的迁移说明将旧导入路径 `http` 调整为今天使用的 `net/http`；因此，`http.Server`、`http.Client`、`http.Handler` 等核心模型并不是 Go 1.22 才出现的能力。
+
+本文大部分服务端和客户端基础示例适用于很早期的 Go 版本；只有使用下列特性时才需要对应版本：
+
+| 功能 | 最低 Go 版本 | 文中出现的位置 |
+| --- | --- | --- |
+| `net/http` 的服务端、客户端、`Handler`、`ServeMux` | Go 1.0 | 全文基础能力 |
+| `Request.Context()` | Go 1.7 | 传递取消与超时 |
+| `Server.Shutdown` | Go 1.8 | 优雅关闭服务 |
+| `NewRequestWithContext` | Go 1.13 | 构造带取消信号的客户端请求 |
+| `ReverseProxy.Rewrite`、`ProxyRequest` | Go 1.20 | 反向代理示例 |
+| `ServeMux` 的方法模式、`{id}` 路径参数、`PathValue` | Go 1.22 | 路由示例 |
+
+所以不应因为本机安装了 Go 1.22，就把整篇教程理解为“只能在 Go 1.22 使用”。实际项目应根据 `go.mod` 中声明的 Go 版本选择写法；使用 `"GET /users/{id}"` 前，再确认项目版本不低于 Go 1.22。
+
 Go 标准库中的 `net/http` 包同时提供了 HTTP 客户端和 HTTP 服务端的完整实现。使用它可以完成以下常见工作：
 
 - 创建 HTTP 或 HTTPS 服务；
@@ -90,6 +107,25 @@ HTTP 本身是一种无状态的应用层协议。服务端不会因为客户端
 | `http.Client`         | HTTP 客户端及其配置                    |
 | `http.Transport`      | 管理连接池、代理、TLS 和底层网络传输   |
 
+这些类型不是彼此独立的 API，可以把它们分成两条链路理解：
+
+```mermaid
+flowchart LR
+    A[浏览器或调用方] --> B[http.Server]
+    B --> C[http.Request]
+    C --> D[http.ServeMux]
+    D --> E[http.Handler]
+    E --> F[http.ResponseWriter]
+    G[业务代码调用外部服务] --> H[http.Client]
+    H --> I[http.Transport]
+    I --> J[网络连接与连接池]
+```
+
+- 左侧链路是**服务端**：`Server` 收到字节流并解析成 `Request`，`ServeMux` 找到 `Handler`，Handler 通过 `ResponseWriter` 返回结果。
+- 右侧链路是**客户端**：`Client` 负责一次调用的重定向、Cookie、超时等策略，实际的连接创建、TLS、代理和空闲连接复用由 `Transport` 完成。
+
+最容易混淆的是 `Request` 和 `ResponseWriter`：前者是本次请求的输入，后者是本次响应的输出。它们都只属于一次 Handler 调用；Handler 返回后不能再读取 `r.Body`，也不能继续使用 `w`。服务端源码中的接口注释明确要求 Handler 写完响应后返回，这个返回动作就是“本次请求处理结束”的信号。
+
 其中最核心的是 `http.Handler` 接口：
 
 ```go
@@ -150,11 +186,9 @@ func main() {
 	// 更适合真实项目和单元测试。
 	mux := http.NewServeMux()
 
-	// Go 1.22 开始，ServeMux 支持在路由模式中指定请求方法。
-	//
-	// /{$} 表示只匹配根路径 "/"，
-	// 不会把所有未匹配的路径都交给 homeHandler。
-	mux.HandleFunc("GET /{$}", homeHandler)
+	// 这里使用 Go 1.0 起就支持的传统路径模式。
+	// 为了让 / 只处理网站根路径，homeHandler 内还会检查路径和方法。
+	mux.HandleFunc("/", homeHandler)
 
 	// 创建静态文件处理器。
 	//
@@ -167,10 +201,7 @@ func main() {
 	// StripPrefix 会先删除 URL 中的 "/static/"，
 	// FileServer 最终读取的文件路径为：
 	//     ./static/style.css
-	mux.Handle(
-		"GET /static/",
-		http.StripPrefix("/static/", fileServer),
-	)
+	mux.Handle("/static/", http.StripPrefix("/static/", fileServer))
 
 	// 自定义 HTTP Server。
 	//
@@ -211,6 +242,16 @@ func main() {
 
 // homeHandler 处理网站根路径。
 func homeHandler(w http.ResponseWriter, r *http.Request) {
+	// 传统的 "/" 模式会匹配所有未被更具体路由接住的路径。
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	// 响应头必须在 WriteHeader 或 Write 之前设置。
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 
@@ -336,16 +377,24 @@ func main() {
 }
 ```
 
-`http.HandlerFunc` 本质上是一个适配器类型：
+`http.HandlerFunc` 本质上是一个适配器类型。下面是 Go 1.22.10 标准库 [`server.go`](https://go.googlesource.com/go/+/go1.22.10/src/net/http/server.go#2167) 中的原始实现：
 
 ```go
 type HandlerFunc func(
 	http.ResponseWriter,
 	*http.Request,
 )
+
+// ServeHTTP 只是把接口调用转回原来的函数调用。
+func (f HandlerFunc) ServeHTTP(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	f(w, r)
+}
 ```
 
-它实现了 `ServeHTTP` 方法，因此可以将签名正确的普通函数转换为 `http.Handler`。
+这段源码说明 `HandlerFunc` 没有隐藏的调度逻辑：它只是给函数类型补上 `ServeHTTP` 方法，从而满足 `http.Handler` 接口。`mux.HandleFunc("/index", indexHandler)` 注册路由时，标准库会把 `indexHandler` 转成 `HandlerFunc(indexHandler)`；请求到来后，最终仍是直接调用这个普通函数。
 
 ### 3. 默认路由 `DefaultServeMux`
 
@@ -444,6 +493,42 @@ if r.Method != http.MethodGet {
 当路径匹配但请求方法不匹配时，`ServeMux` 可以自动返回 `405 Method Not Allowed`，并在 `Allow` 响应头中指出支持的方法。
 
 需要注意，路由模式中的 `GET` 同时可以匹配 `HEAD` 请求；其他请求方法则进行精确匹配。Go 1.21 或更早版本不能使用方法模式和 `{id}` 路径参数，需要在处理器内部手动检查 `r.Method` 并解析路径。
+
+### 从 `ServeMux` 源码看路由边界
+
+Go 1.22 的 `ServeMux` 在**注册路由时**会解析模式，并检查是否存在无法确定优先级的冲突；因此，冲突通常在程序启动时就会触发 `panic`，而不是等到某个请求到来才随机选择 Handler。请求到来后，它按“更具体的模式优先”选择处理器：
+
+- `GET /posts/latest` 比 `GET /posts/{id}` 更具体，因此会优先匹配；
+- `GET /posts/{id}` 比 `/posts/{id}` 更具体，因为它额外限制了请求方法；
+- 两个模式有重叠但谁都不比谁更具体时，注册阶段会报冲突，避免依赖注册顺序。
+
+请求分派的核心源码也很短。下列片段来自 Go 1.22.10 的 [`ServeMux.ServeHTTP`](https://go.googlesource.com/go/+/go1.22.10/src/net/http/server.go#2674)，省略了对特殊请求 `OPTIONS *` 的处理：
+
+```go
+var h Handler
+if use121 {
+	h, _ = mux.mux121.findHandler(r)
+} else {
+	h, _, r.pat, r.matches = mux.findHandler(r)
+}
+h.ServeHTTP(w, r)
+```
+
+`findHandler` 负责找出匹配结果，随后标准库只做一件事：调用该处理器的 `ServeHTTP`。这里的 `use121` 是 Go 1.22 为兼容旧路由行为保留的内部开关，不是业务代码需要设置的选项。
+
+源码中与这件事直接相关的调用链可以概括为：
+
+```text
+mux.HandleFunc(pattern, handler)
+        ↓
+parsePattern(pattern)     // 解析方法、主机、字面路径和通配符
+        ↓
+检查冲突并注册到路由索引
+        ↓
+请求到来时按“最具体优先”查找 Handler
+```
+
+不需要记住路由树的数据结构。实际开发只要据此避开两类问题：不要注册语义重叠且优先级不明确的路由；不要期待“后注册的路由覆盖先注册的路由”。
 
 ---
 
@@ -823,6 +908,32 @@ return
 ```
 
 调用 `http.Error` 后应立即 `return`，避免继续向响应中写入成功数据。官方文档也指出，`http.Error` 不会主动终止当前处理函数，需要由调用者确保后面不再写入响应。
+
+### 从 `ResponseWriter` 源码理解“先设置头，再写正文”
+
+`ResponseWriter` 是接口；普通 HTTP 服务端实际传给 Handler 的实现是内部的 `response`。下面是 Go 1.22.10 [`response.WriteHeader`](https://go.googlesource.com/go/+/go1.22.10/src/net/http/server.go#1149) 的关键原始片段：
+
+```go
+func (w *response) WriteHeader(code int) {
+	if w.wroteHeader {
+		caller := relevantCaller()
+		w.conn.server.logf("http: superfluous response.WriteHeader call from %s (%s:%d)",
+			caller.Function, path.Base(caller.File), caller.Line)
+		return
+	}
+	checkWriteHeaderCode(code)
+	// 中间的 1xx 响应处理省略。
+	w.wroteHeader = true
+	w.status = code
+}
+```
+
+这不是伪代码：`wroteHeader` 已经为真时，第二次写最终状态码不会覆盖第一次，标准库会记录一条 “superfluous response.WriteHeader” 日志。`Write` 在尚未写状态码时会先触发 `WriteHeader(http.StatusOK)`。这正是下面两条规则的来源：
+
+1. `w.Header().Set(...)` 必须放在首次 `WriteHeader` 或 `Write` **之前**；否则修改的是已经提交后的内存 map，不会改变普通响应头。
+2. 同一个 Handler 只能有一个最终的 `2xx`～`5xx` 状态码；调用 `http.Error` 后继续写“成功”响应，只会得到混乱的输出或日志警告。
+
+源码的写入层还会在未设置 `Content-Type` 时依据最先写入的数据尝试识别类型，并在条件满足时补充 `Content-Length`。这只是兜底行为；JSON、HTML、文件下载等接口仍应主动设置正确的响应头。
 
 ## 基本 HTTP 客户端
 
@@ -1259,6 +1370,60 @@ resp, err := apiClient.Do(req)
 
 `http.Client` 内部的 Transport 会缓存 TCP 连接，因此客户端应当长期复用。`http.Client` 也可以由多个 goroutine 并发使用。
 
+### 从 `Client` 与 `Transport` 源码看调用分层
+
+`Client.Do` 的公开实现本身只有一层转发。下面是 Go 1.22.10 [`client.go`](https://go.googlesource.com/go/+/go1.22.10/src/net/http/client.go#589) 的原始代码：
+
+```go
+func (c *Client) Do(req *Request) (*Response, error) {
+	return c.do(req)
+}
+```
+
+复杂逻辑在未导出的 `c.do` 中；真正值得理解的是职责划分，而不是跟进每一个私有函数：
+
+```text
+Client.Do(request)
+        ↓
+Client：处理重定向、Cookie、总超时等调用策略
+        ↓
+Transport.RoundTrip(request)
+        ↓
+Transport：尝试取得空闲连接；没有可用连接时再建立 TCP/TLS 连接
+        ↓
+读取 HTTP 响应，返回 Response
+```
+
+响应成功后，`Transport` 会尝试把可复用连接放入空闲连接池。Go 1.22.10 [`transport.go`](https://go.googlesource.com/go/+/go1.22.10/src/net/http/transport.go#929) 中的开头逻辑如下：
+
+```go
+func (t *Transport) tryPutIdleConn(pconn *persistConn) error {
+	if t.DisableKeepAlives || t.MaxIdleConnsPerHost < 0 {
+		return errKeepAlivesDisabled
+	}
+	if pconn.isBroken() {
+		return errConnBroken
+	}
+	pconn.markReused()
+
+	t.idleMu.Lock()
+	defer t.idleMu.Unlock()
+	// 后续代码将连接交给等待中的请求，或加入空闲池。
+}
+```
+
+其中 `persistConn` 是标准库的内部连接对象，业务代码不会直接使用它；`idleMu` 表明空闲连接池会被并发保护。这就是“复用 `http.Client` / `http.Transport`”的实际含义：不是复用一个响应对象，而是让多个请求共享同一套连接管理器。
+
+连接能否回收与 `resp.Body` 有直接关系。客户端在读完或关闭响应体后，Transport 才能判断连接是否处于可继续使用的完整协议状态。因此，下面两行不是习惯写法，而是连接复用的资源释放动作：
+
+```go
+resp, err := client.Do(req)
+if err != nil {
+	return err
+}
+defer resp.Body.Close()
+```
+
 ## 自定义 `http.Transport`
 
 `http.Transport` 负责 HTTP 客户端的底层传输，主要包括：
@@ -1403,6 +1568,42 @@ IdleTimeout
 | `TLSNextProto` | 自定义 TLS 协议协商行为              |
 
 这些配置通常用于基础设施、中间件、连接统计或底层协议扩展。普通业务服务不需要把 `http.Server` 的每一个字段都手动填一遍，保持不需要字段的零值即可。
+
+### 从 `Server.Serve` 源码看服务端在做什么
+
+`http.ListenAndServe(":8080", handler)` 可以拆成两步理解：先通过 `net.Listen` 创建 TCP 监听器，再调用 `Server.Serve(listener)`。`Serve` 的核心职责是持续执行 `Accept` 接收连接；每接到一个连接，就交给服务逻辑读取 HTTP 请求并调用已配置的 Handler。
+
+请求已经被解析为 `Request` 后，服务端如何交给你注册的处理器？Go 1.22.10 的 [`serverHandler.ServeHTTP`](https://go.googlesource.com/go/+/go1.22.10/src/net/http/server.go#3133) 给出了核心答案：
+
+```go
+func (sh serverHandler) ServeHTTP(rw ResponseWriter, req *Request) {
+	handler := sh.srv.Handler
+	if handler == nil {
+		handler = DefaultServeMux
+	}
+	if !sh.srv.DisableGeneralOptionsHandler &&
+		req.RequestURI == "*" && req.Method == "OPTIONS" {
+		handler = globalOptionsHandler{}
+	}
+	handler.ServeHTTP(rw, req)
+}
+```
+
+所以 `Server.Handler` 为 `nil` 时会落到全局 `DefaultServeMux`；而你把 `mux` 传给 `ListenAndServe` 或写入 `Server.Handler` 时，最终都会落到同一个 `handler.ServeHTTP(rw, req)` 调用点。
+
+```text
+监听端口
+   ↓ Accept
+接收一个 TCP/TLS 连接
+   ↓ 解析请求
+构造 Request 和 ResponseWriter
+   ↓
+调用 ServeMux / Handler
+   ↓
+完成响应，决定连接关闭还是进入 keep-alive 空闲状态
+```
+
+这解释了 `http.Server` 的配置为什么集中在读超时、写超时、空闲超时和请求头大小：它们约束的是**网络连接与协议读写**，并不替你限制数据库查询、下游 RPC 或业务循环。后者仍应使用 `r.Context()` 或业务自己的超时控制。
 
 ---
 
@@ -1913,9 +2114,9 @@ Go 的 `net/http` 包采用一套统一而简洁的设计：
 ```text
 Server
   ↓
-Handler
-  ↓
 ServeMux
+  ↓
+Handler
   ↓
 具体处理函数
 ```
@@ -1945,5 +2146,12 @@ ServeMux
 
 - [Go `net/http` 包文档](https://pkg.go.dev/net/http)
 - [Go `net/http/httputil` 包文档](https://pkg.go.dev/net/http/httputil)
+- [Go 1 Release Notes：`http` 迁移为 `net/http`](https://go.dev/doc/go1)
+- [Go 1.8 Release Notes：`Server.Shutdown` 与服务端超时](https://go.dev/doc/go1.8)
+- [Go 1.20 Release Notes：`ReverseProxy.Rewrite`](https://go.dev/doc/go1.20)
 - [Go 1.22 Release Notes：增强的 ServeMux 路由](https://go.dev/doc/go1.22)
+- [Go 官方博客：Go 1.22 路由增强](https://go.dev/blog/routing-enhancements)
+- [Go 官方源码：`net/http/server.go`](https://go.dev/src/net/http/server.go)
+- [Go 官方源码：`net/http/client.go`](https://go.dev/src/net/http/client.go)
+- [Go 官方源码：`net/http/transport.go`](https://go.dev/src/net/http/transport.go)
 - [RFC 9110：HTTP Semantics](https://www.rfc-editor.org/rfc/rfc9110)
