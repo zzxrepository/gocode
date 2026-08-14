@@ -181,6 +181,16 @@ body.gocode-focus-reading .theme-container .vp-page [vp-content] {
   color: #111827;
 }
 
+.resource-card__mark--leetcode {
+  background: #fff3e3;
+  color: #e88900;
+}
+
+.resource-card__mark--feishu {
+  background: #eaf1ff;
+  color: #3370ff;
+}
+
 .resource-card__mark--stackoverflow,
 .resource-card__mark--gitlab,
 .resource-card__mark--aliyun,

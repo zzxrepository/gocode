@@ -104,6 +104,8 @@ export default sidebar({
     { text: "资源导航", icon: "compass", link: "/resources/" },
     { text: "常用搜索", icon: "magnifying-glass", link: "/resources/#常用搜索" },
     { text: "编程学习", icon: "graduation-cap", link: "/resources/#编程学习" },
+    { text: "算法刷题", icon: "simple-icons:leetcode", link: "/resources/#算法刷题" },
+    { text: "协作与云盘", icon: "cloud", link: "/resources/#协作与云盘" },
     { text: "代码托管", icon: "code-branch", link: "/resources/#代码托管" },
     { text: "官方文档", icon: "book-open", link: "/resources/#官方文档" },
     { text: "深度学习", icon: "brain", link: "/resources/#深度学习" },

@@ -58,6 +58,31 @@ tag:
   </a>
 </div>
 
+## 算法刷题
+
+<div class="resource-grid">
+  <a class="resource-card" href="https://leetcode.cn/" target="_blank" rel="noopener noreferrer">
+    <span class="resource-card__mark resource-card__mark--leetcode">LC</span>
+    <strong>LeetCode</strong>
+    <p>在线练习算法与数据结构题目，查看题解、讨论和题单。</p>
+  </a>
+  <a class="resource-card" href="https://leetcode.cn/studyplan/top-100-liked/" target="_blank" rel="noopener noreferrer">
+    <span class="resource-card__mark resource-card__mark--leetcode">100</span>
+    <strong>LeetCode 热题 100</strong>
+    <p>按高频题目系统刷题，覆盖常见算法与数据结构题型。</p>
+  </a>
+</div>
+
+## 协作与云盘
+
+<div class="resource-grid">
+  <a class="resource-card" href="https://my.feishu.cn/drive/me/" target="_blank" rel="noopener noreferrer">
+    <span class="resource-card__mark resource-card__mark--feishu">飞</span>
+    <strong>飞书云盘</strong>
+    <p>管理个人文档、文件和团队协作资料。</p>
+  </a>
+</div>
+
 ## 代码托管
 
 <div class="resource-grid">
