@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">AI Agent 的工作闭环</title>
+  <desc id="desc">以大模型为决策核心，感知、思考与规划、执行、工具环境构成任务主链；记忆与核心双向读写；执行结果反馈至感知。</desc>
+  <defs>
+    <marker id="arrow-blue" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#2563EB"/>
+    </marker>
+    <marker id="arrow-slate" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#64748B"/>
+    </marker>
+    <style>
+      .title { font: 700 44px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; fill: #0F172A; }
+      .subtitle { font: 400 20px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; fill: #64748B; letter-spacing: 1px; }
+      .node-title { font: 700 28px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; fill: #0F172A; }
+      .node-copy { font: 400 18px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; fill: #475569; }
+      .core-title { font: 700 38px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; fill: #FFFFFF; }
+      .core-copy { font: 400 21px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; fill: #DBEAFE; }
+      .micro { font: 600 16px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; fill: #64748B; }
+      .tag { font: 600 15px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; fill: #334155; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="900" fill="#FFFFFF"/>
+
+  <text x="800" y="72" text-anchor="middle" class="title">AI Agent 的工作闭环</text>
+  <text x="800" y="108" text-anchor="middle" class="subtitle">大模型 · 感知 · 思考 · 规划 · 记忆 · 执行</text>
+  <line x1="560" y1="135" x2="1040" y2="135" stroke="#E2E8F0" stroke-width="2"/>
+
+  <!-- Memory: a state layer, not a sequential step. -->
+  <rect x="555" y="175" width="490" height="118" rx="18" fill="#FAF5FF" stroke="#8B5CF6" stroke-width="3"/>
+  <rect x="555" y="175" width="9" height="118" rx="4" fill="#8B5CF6"/>
+  <text x="595" y="220" class="node-title">记忆</text>
+  <text x="595" y="252" class="node-copy">短期：上下文与任务状态</text>
+  <text x="840" y="252" class="node-copy">长期：知识与偏好</text>
+  <line x1="814" y1="230" x2="814" y2="266" stroke="#C4B5FD" stroke-width="2"/>
+
+  <!-- Perception -->
+  <rect x="70" y="375" width="350" height="150" rx="18" fill="#F0FDF4" stroke="#22C55E" stroke-width="3"/>
+  <rect x="70" y="375" width="9" height="150" rx="4" fill="#22C55E"/>
+  <text x="110" y="426" class="node-title">感知环境</text>
+  <text x="110" y="460" class="node-copy">接收用户、文件与工具结果</text>
+  <text x="110" y="491" class="micro">观察（Observation）</text>
+
+  <!-- Core -->
+  <rect x="535" y="345" width="530" height="245" rx="22" fill="#1D4ED8"/>
+  <rect x="551" y="361" width="498" height="213" rx="15" fill="none" stroke="#93C5FD" stroke-width="2"/>
+  <circle cx="800" cy="408" r="33" fill="#DBEAFE"/>
+  <path d="M780 408h40M800 388v40M787 395l26 26M813 395l-26 26" stroke="#1D4ED8" stroke-width="4" stroke-linecap="round"/>
+  <text x="800" y="476" text-anchor="middle" class="core-title">AI Agent</text>
+  <text x="800" y="510" text-anchor="middle" class="core-copy">大模型（LLM / MLLM）</text>
+  <text x="800" y="544" text-anchor="middle" class="core-copy">理解目标 · 推理决策 · 选择下一步</text>
+
+  <!-- Thinking and planning -->
+  <rect x="1180" y="335" width="350" height="230" rx="18" fill="#F0FDFF" stroke="#06B6D4" stroke-width="3"/>
+  <rect x="1180" y="335" width="9" height="230" rx="4" fill="#06B6D4"/>
+  <text x="1220" y="388" class="node-title">思考</text>
+  <text x="1220" y="420" class="node-copy">基于信息推理与决策</text>
+  <line x1="1220" y1="450" x2="1490" y2="450" stroke="#A5F3FC" stroke-width="2"/>
+  <text x="1220" y="495" class="node-title">规划</text>
+  <text x="1220" y="527" class="node-copy">拆解任务，选择路径</text>
+
+  <!-- Tools and environment -->
+  <rect x="520" y="690" width="390" height="125" rx="18" fill="#F8FAFC" stroke="#94A3B8" stroke-width="3"/>
+  <text x="560" y="738" class="node-title">工具与环境</text>
+  <text x="560" y="775" class="node-copy">搜索 · 数据库 · API · 外部系统</text>
+
+  <!-- Execution -->
+  <rect x="1040" y="670" width="390" height="145" rx="18" fill="#FFF7ED" stroke="#F97316" stroke-width="3"/>
+  <rect x="1040" y="670" width="9" height="145" rx="4" fill="#F97316"/>
+  <text x="1080" y="724" class="node-title">执行行动</text>
+  <text x="1080" y="758" class="node-copy">调用工具，操作外部世界</text>
+  <text x="1080" y="789" class="micro">Action</text>
+
+  <!-- Main task chain -->
+  <path d="M420 450 H535" fill="none" stroke="#22C55E" stroke-width="5" marker-end="url(#arrow-blue)"/>
+  <path d="M1065 450 H1180" fill="none" stroke="#06B6D4" stroke-width="5" marker-end="url(#arrow-blue)"/>
+  <path d="M1355 565 V625 Q1355 650 1330 650 H1235 Q1215 650 1215 670" fill="none" stroke="#06B6D4" stroke-width="5" marker-end="url(#arrow-blue)"/>
+  <path d="M1040 742 H910" fill="none" stroke="#F97316" stroke-width="5" marker-end="url(#arrow-blue)"/>
+
+  <!-- Memory read/write -->
+  <path d="M770 293 V328" fill="none" stroke="#8B5CF6" stroke-width="4" marker-end="url(#arrow-blue)"/>
+  <path d="M830 328 V293" fill="none" stroke="#8B5CF6" stroke-width="4" marker-end="url(#arrow-blue)"/>
+  <text x="748" y="321" text-anchor="end" class="tag">读取</text>
+  <text x="852" y="321" class="tag">写入</text>
+
+  <!-- Feedback returns to perception. -->
+  <path d="M520 790 C330 850, 135 760, 135 590 C135 565, 145 548, 170 525" fill="none" stroke="#64748B" stroke-width="4" stroke-dasharray="4 12" stroke-linecap="round" marker-end="url(#arrow-slate)"/>
+  <rect x="225" y="807" width="180" height="34" rx="17" fill="#FFFFFF"/>
+  <text x="315" y="830" text-anchor="middle" class="tag">执行结果 / 反馈</text>
+
+  <!-- Small labels show the intended reading order. -->
+  <text x="465" y="430" text-anchor="middle" class="micro">输入</text>
+  <text x="1120" y="430" text-anchor="middle" class="micro">决策</text>
+  <text x="1275" y="630" text-anchor="middle" class="micro">执行</text>
+  <text x="975" y="725" text-anchor="middle" class="micro">调用</text>
+</svg>
