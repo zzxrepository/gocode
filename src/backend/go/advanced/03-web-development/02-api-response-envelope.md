@@ -13,21 +13,23 @@ tag:
   - API 设计
   - Response Envelope
   - 错误处理
+  - 业务错误码
 ---
 
 # 02. API 响应统一封装（Response Envelope）
 
 ## 前言
 
-写 Web 接口时，除了业务逻辑本身，还有一件几乎每个项目都要面对的事：**响应长什么样**。是直接把业务数据序列化返回，还是包一层统一的结构？错误信息放在 HTTP 状态码里，还是放在响应体里？这一篇讨论的就是这个问题——**API 响应统一封装**，也常被称为 Response Envelope（响应信封）、Unified Response Wrapper（统一响应包装器）。
+写 Web 接口时，除了业务逻辑本身，还有一件几乎每个项目都要面对的事：**响应长什么样**。是直接把业务数据序列化返回，还是包一层统一的结构？错误信息放在 HTTP 状态码里，还是放在响应体里？这一篇讨论的就是这个问题——**统一响应封装**，也写作 API 响应封装规范，英文常见叫法是 Response Envelope（响应信封）或 API Envelope，也有人称其为 Unified Response Wrapper（统一响应包装器）。下文这些说法指的都是同一件事。
 
 学完本篇你应当能够：
 
 1. 理解为什么需要统一响应封装，以及它和 HTTP 状态码各自的角色；
 2. 用 Go 标准库 `net/http` 从零实现一套完整的响应封装（含业务错误码、panic 兜底、404 兜底）；
-3. 会用泛型写类型安全的响应结构（Go 1.18+）；
-4. 了解 RFC 9457（Problem Details）这一业界标准方案，知道它与自定义封装的取舍；
-5. 理解"响应结构就是接口契约"，知道什么改动是兼容的、什么改动是破坏性的。
+3. 会用泛型写类型安全的响应结构（Go 1.18+），并写出对应的类型安全客户端；
+4. 掌握一套适合内部管理系统、BFF、运营后台的**生产级封装**：成功失败共用顶层结构、结构化错误字段、分页规范、错误码分段、trace_id；
+5. 了解 RFC 9457（Problem Details）这一业界标准方案，知道它与自定义封装的取舍；
+6. 理解"响应结构就是接口契约"，知道什么改动是兼容的、什么改动是破坏性的，以及如何在新老项目中落地。
 
 本篇所有示例只依赖 Go 标准库。示例使用的方法路由（`"GET /api/books/{id}"`）需要 **Go 1.22**，泛型写法需要 **Go 1.18**：
 
@@ -107,7 +109,7 @@ book not found
 一个常见疑问：既然 HTTP 已经有状态码了，为什么还要业务错误码？因为两者粒度不同：
 
 - HTTP 状态码面向**协议层**：400 表示请求有问题、404 表示资源不存在、500 表示服务端故障。它只有几十种，表达不了"余额不足""手机号已注册"这类业务语义；
-- 业务错误码面向**业务层**：可以自由编号，客户端可以据此做精确分支（例如 `40201` 余额不足时弹充值框）。
+- 业务错误码面向**业务层**：可以自由编号，客户端可以据此做精确分支（例如"库存不足"时弹补货提示）。
 
 推荐做法是**两者对齐而不是二选一**：业务错误的 HTTP 状态码反映它的性质（参数错误用 400、资源不存在用 404、内部故障用 500），响应体里的 `code` 再给出细粒度分类。这样 HTTP 语义、监控告警、缓存行为都保持正常，调用方还能拿业务码做精细处理。
 
@@ -116,6 +118,18 @@ book not found
 有些团队选择"HTTP 状态码永远返回 200，成败全看 body 里的 code"。这种写法确实存在（早期的一些知名 API 就是这么做的），但它会让反向代理、CDN、监控系统和 HTTP 客户端的既有语义全部失效——错误响应会被当成成功缓存、5xx 告警抓不到真实故障。除非有明确的历史包袱，不建议新项目采用。
 
 :::
+
+### 成败判断的唯一依据是 code
+
+规范封装时，要给调用方立一条铁律：**前端/客户端只根据 `code` 做逻辑分支，永远不要解析 `message` 文案**。`message` 是给人看的提示，随时可能为了体验被改写、做多语言翻译；用它做 `if message == "xxx"` 式的判断，等于把逻辑建立在随时会变的字符串上。
+
+围绕这条铁律，还有一组"不要混用"清单，项目里字段命名和形态必须全站唯一：
+
+- 不要 `errno`、`code` 两种成败字段混用；
+- 不要 `errmsg`、`message` 两种文案字段混用；
+- 不要有时 `data: {}`、有时 `data: null`；
+- 不要有的接口带 `err_details` 之类的附加字段、有的接口不带；
+- 不要让前端通过匹配错误文案来处理逻辑。
 
 ### 约定好"空"的形态
 
@@ -166,6 +180,7 @@ type Response struct {
 }
 
 // 业务错误码：集中定义，禁止散落在各个包里随手写魔法数字。
+// （这里的编号仅为演示，实际项目的分段规划见后文"业务码分段"一节。）
 const (
 	CodeOK            = 0
 	CodeBadRequest    = 40001 // 参数非法
@@ -251,6 +266,12 @@ func Fail(w http.ResponseWriter, err error) {
 	})
 }
 ```
+
+::: tip
+
+`encoding/json` 默认会把 `&`、`<`、`>` 转义成 `\u0026`、`\u003c`、`\u003e` 这类 Unicode 转义序列（为了防止 JSON 被嵌入 HTML 时出问题）。如果接口数据里常出现这些字符、又不希望转义，可以在 `writeJSON` 里对 encoder 调用 `SetEscapeHTML(false)`。
+
+:::
 
 ### 第四步：业务层与 handler
 
@@ -409,12 +430,12 @@ $ curl -s http://localhost:8080/api/books
 
 # 创建成功：HTTP 201
 $ curl -s -X POST http://localhost:8080/api/books \
-    -d '{"title":"The Go Programming Language","author":"Donovan & Kernighan","price":59.0}'
-{"code":0,"message":"ok","data":{"id":1,"title":"The Go Programming Language","author":"Donovan & Kernighan","price":59}}
+    -d '{"title":"The Go Programming Language","author":"Alan Donovan","price":59.0}'
+{"code":0,"message":"ok","data":{"id":1,"title":"The Go Programming Language","author":"Alan Donovan","price":59}}
 
 # 查询成功
 $ curl -s http://localhost:8080/api/books/1
-{"code":0,"message":"ok","data":{"id":1,"title":"The Go Programming Language","author":"Donovan & Kernighan","price":59}}
+{"code":0,"message":"ok","data":{"id":1,"title":"The Go Programming Language","author":"Alan Donovan","price":59}}
 
 # 业务错误：HTTP 404 + 业务错误码
 $ curl -s -w "\nHTTP %{http_code}\n" http://localhost:8080/api/books/999
@@ -504,23 +525,57 @@ func mustNewRequest(method, url string, body io.Reader) *http.Request {
 }
 ```
 
-调用侧因此变得非常干净，且全程类型安全：
+有了它，调用侧变得非常干净，且全程类型安全（以书店服务为例，此片段额外用到 `log`、`strings` 两个包）：
 
 ```go
-client := &http.Client{Timeout: 5 * time.Second}
+func main() {
+	client := &http.Client{Timeout: 5 * time.Second}
+	const base = "http://localhost:8080"
 
-books, err := callAPI[ListResult[Book]](client, "GET", "http://localhost:8080/api/books", nil)
-if err != nil {
-	log.Fatal(err)
-}
-for _, b := range books.Items {
-	fmt.Println(b.ID, b.Title)
+	// 先准备一本书（书店服务是内存存储，重启后数据会丢）
+	seed := `{"title":"The Go Programming Language","author":"Alan Donovan","price":59}`
+	resp, err := client.Do(mustNewRequest("POST", base+"/api/books", strings.NewReader(seed)))
+	if err != nil {
+		log.Fatal("需要先启动书店服务: ", err)
+	}
+	resp.Body.Close()
+
+	// 列表接口：data 是数组，解析为 []Book
+	books, err := callAPI[[]Book](client, "GET", base+"/api/books", nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, b := range books {
+		fmt.Println("list:", b.ID, b.Title)
+	}
+
+	// 详情接口：data 是对象，解析为 Book
+	one, err := callAPI[Book](client, "GET", base+"/api/books/1", nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("detail:", one.ID, one.Title)
+
+	// 错误也会被转成 error：业务码非 0 时 callAPI 直接返回错误
+	if _, err := callAPI[Book](client, "GET", base+"/api/books/999", nil); err != nil {
+		fmt.Println("expected error:", err)
+	}
 }
 ```
 
+配合前面启动的书店服务运行，输出为：
+
+```text
+list: 1 The Go Programming Language
+detail: 1 The Go Programming Language
+expected error: 服务端返回错误: code=40401 message=图书 999 不存在
+```
+
+注意第三行：**业务错误在客户端变成了普通的 `error`**，调用方不再需要到处检查 `code` 字段——这正是统一封装在类型系统层面的回报。
+
 ::: tip
 
-注意"外壳统一"与"data 形态统一"是两件事。外壳统一由 `Response`/`Envelope` 保证；`data` 内部的形态（比如列表接口统一用 `{items, total}`）同样需要写进团队规范，否则只是把不一致从外壳挪进了 data。
+"外壳统一"与"data 形态统一"是两件事。外壳统一由 `Response`/`Envelope` 保证；`data` 内部的形态（比如列表接口统一用 `{items, total}` 还是裸数组）同样需要写进团队规范，否则只是把不一致从外壳挪进了 data。后文"生产级封装"一节会给出列表与分页的统一形态。
 
 :::
 
@@ -571,7 +626,424 @@ mux.Handle("GET /api/books", handle(store.apiListBooks))
 mux.Handle("GET /api/books/{id}", handle(store.apiGetBook))
 ```
 
-这个模式的价值在于**结构性地消除不一致**：响应的形状不再依赖每个开发者自觉，而是由唯一的出口保证。Gin、Echo 等框架里常见的"中间件统一处理错误 + c.JSON 封装"，本质上也是同一个思路，只是载体换成了框架的 Context。
+这就是**统一出口原则**，整条链路如下：
+
+```text
+Handler
+  → 调用 Service
+  → Service 返回 data 或 error
+  → 统一出口：errors.As(error, *AppError)
+  → 写入统一响应结构 + 对应 HTTP 状态码
+```
+
+Handler 里**不应该**出现这样的代码：
+
+```go
+// 反例：每个 handler 各自手写响应，结构迟早长歪
+if err != nil {
+	c.JSON(200, map[string]any{
+		"code": 10001,
+		"msg":  err.Error(),
+	})
+}
+```
+
+错误应当 `return` 出去，由统一出口处理。这样能确保所有接口不会逐渐长出不同结构。Gin、Echo 等框架里常见的"错误中间件 + 统一 `c.JSON` 封装"，本质上也是同一个思路，只是载体换成了框架的 Context。
+
+---
+
+## 生产级封装：结构化错误、分页与链路追踪 ID
+
+前面的三字段封装适合入门和小项目。对于内部管理系统、BFF、运营后台这类典型的 Go 后端，推荐使用下面这套增强方案：**采用 `ApiResponse[T]` 泛型信封，成功与失败完全共用同一种顶层结构，统一由 HTTP 出口处理错误**。
+
+### 设计目标
+
+- 所有 JSON API 都返回同一种顶层结构；
+- 成功和失败均可被前端稳定解析；
+- 前端只根据 `code` 判断逻辑，不解析 `message` 文案；
+- 所有响应返回 `trace_id`，用于排查日志与调用链；
+- 服务层只返回业务结果或 `error`；Handler 不手写响应 JSON；
+- 统一错误处理器负责把 Go 的 `error` 转为 API 响应。
+
+### ApiResponse[T]：成功失败共用同一种顶层结构
+
+```go
+// ApiResponse 全站唯一的响应封装。
+type ApiResponse[T any] struct {
+	Code    int          `json:"code"`     // 业务码：0 表示成功
+	Message string       `json:"message"`  // 面向用户的提示文案
+	Data    *T           `json:"data"`     // 成功时为业务数据，失败时固定为 null
+	Error   *ErrorDetail `json:"error"`    // 成功时固定为 null，失败时为结构化错误信息
+	TraceID string       `json:"trace_id"` // 链路追踪 ID
+}
+
+// ErrorDetail 把"错误"从一句文案升级成结构化信息。
+type ErrorDetail struct {
+	Retryable   bool         `json:"retryable"`    // 前端是否可提示用户重试
+	FieldErrors []FieldError `json:"field_errors"` // 参数校验错误；无则 []
+}
+
+// FieldError 精确到字段的校验错误，前端可据此在表单上标红。
+type FieldError struct {
+	Field   string `json:"field"`   // 字段路径，如 price、items[0].date
+	Message string `json:"message"` // 该字段的错误提示
+}
+```
+
+与入门版相比，它多了三样东西，每一样都对应一个真实的工程需求：
+
+| 增强 | 解决的问题 |
+| --- | --- |
+| `Data *T` 用指针 | 失败时能稳定输出 `null`，与"成功必有 data"形成清晰对比 |
+| `Error *ErrorDetail` | 错误不再只有一句文案：是否可重试、哪个字段错了，都能结构化表达 |
+| `TraceID` | 用户报错时，凭响应里的 trace_id 直接捞到服务端日志 |
+
+固定约定如下——**五个字段永远同时出现**：
+
+| 字段 | 成功时 | 失败时 |
+| --- | --- | --- |
+| `code` | `0` | 非 `0` 的业务错误码 |
+| `message` | `success` | 用户可见的错误提示 |
+| `data` | 业务数据；无数据时 `null` | 固定 `null` |
+| `error` | 固定 `null` | `ErrorDetail` 对象 |
+| `trace_id` | 必传 | 必传 |
+
+### 成功响应示例
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "book_id": 1,
+    "shelf_ids": [42]
+  },
+  "error": null,
+  "trace_id": "0ab3a11e6a7bf796a56504df04d7b002"
+}
+```
+
+配套的 HTTP 状态码建议：**创建成功使用 `201`；查询、修改成功使用 `200`；删除成功且无响应体时使用 `204`**。
+
+### 分页响应规范
+
+分页信息属于业务数据的一部分，放在 `data` 内部，**不要**放到顶层：
+
+```go
+// PageData 是列表/分页类接口的通用 data。
+type PageData[T any] struct {
+	Items []T  `json:"items"`
+	Page  Page `json:"page"`
+}
+
+type Page struct {
+	Number int   `json:"number"` // 当前页，从 1 开始
+	Size   int   `json:"size"`   // 每页条数
+	Total  int64 `json:"total"`  // 总条数
+}
+```
+
+有数据时：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "items": [
+      { "id": 1, "title": "The Go Programming Language", "price": 59 }
+    ],
+    "page": { "number": 1, "size": 10, "total": 401 }
+  },
+  "error": null,
+  "trace_id": "0ab3a11e6a7bf796a56504df04d7b002"
+}
+```
+
+空列表时——注意 `items` 是 `[]` 而不是 `null`，`data` 也不能是 `null`：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "items": [],
+    "page": { "number": 1, "size": 10, "total": 0 }
+  },
+  "error": null,
+  "trace_id": "0ab3a11e6a7bf796a56504df04d7b002"
+}
+```
+
+### 失败响应规范：三类典型错误
+
+**参数校验失败（HTTP `400`）**：`field_errors` 精确到字段，前端直接渲染表单错误。
+
+```json
+{
+  "code": 40001,
+  "message": "请求参数校验失败",
+  "data": null,
+  "error": {
+    "retryable": false,
+    "field_errors": [
+      { "field": "price", "message": "不能为负数" }
+    ]
+  },
+  "trace_id": "0ab3a11e6a7bf796a56504df04d7b002"
+}
+```
+
+**业务状态冲突（HTTP `409`）**：例如记录正在审核中，不允许重复提交。
+
+```json
+{
+  "code": 43001,
+  "message": "该记录存在待审核的变更，请勿重复提交",
+  "data": null,
+  "error": {
+    "retryable": false,
+    "field_errors": []
+  },
+  "trace_id": "0ab3a11e6a7bf796a56504df04d7b002"
+}
+```
+
+**下游依赖失败、可以重试（HTTP `502` 或 `503`）**：`retryable: true` 提示前端可以引导用户重试。
+
+```json
+{
+  "code": 51001,
+  "message": "同步索引服务失败，请稍后重试",
+  "data": null,
+  "error": {
+    "retryable": true,
+    "field_errors": []
+  },
+  "trace_id": "0ab3a11e6a7bf796a56504df04d7b002"
+}
+```
+
+::: warning
+
+数据库错误详情、下游服务的原始报错、调用栈、SQL 语句等信息**只写日志，绝不返回给前端**。响应里只有面向用户的文案。
+
+:::
+
+### 业务码分段
+
+业务码不要随手编号，按"HTTP 语义前缀 + 段内细分"规划，全站共用一张表：
+
+| 范围 | 类型 | 例子 |
+| ---: | --- | --- |
+| `0` | 成功 | `OK` |
+| `40000-40999` | 参数与格式错误 | `40001 请求参数校验失败` |
+| `41000-41999` | 身份与权限错误 | `41001 未登录`、`41002 无权限` |
+| `42000-42999` | 资源不存在 | `42001 图书不存在` |
+| `43000-43999` | 状态冲突与重复操作 | `43001 记录待审核，请勿重复提交` |
+| `44000-44999` | 业务规则不满足 | `44001 上架前必须填写作者` |
+| `50000-50999` | 服务内部异常 | `50001 系统繁忙` |
+| `51000-51999` | 下游依赖异常 | `51001 索引服务调用失败` |
+
+这种分段让业务码"看前缀知性质"，和 HTTP 状态码的语义保持同构。三者的职责要分清：
+
+- **HTTP 状态码**：给网关、监控、SDK、重试策略理解；
+- **`code`**：给前端和业务方做稳定的分支判断；
+- **`message`**：给人看的文案，仅此而已。
+
+### HTTP 状态码约定
+
+| 场景 | HTTP 状态码 |
+| --- | ---: |
+| 参数格式、字段校验失败 | `400` |
+| 未登录 | `401` |
+| 无权限 | `403` |
+| 资源不存在 | `404` |
+| 重复提交、当前状态不允许操作 | `409` |
+| 业务规则不满足 | `422` |
+| 限流 | `429` |
+| 服务内部错误 | `500` |
+| 下游返回异常 | `502` |
+| 下游不可用、可稍后重试 | `503` |
+
+即使响应体里有 `code`，也**不要把所有错误都返回 HTTP `200`**。正确的 HTTP 状态码对网关、告警、客户端重试和可观测性都更友好；RFC 9457 也是按这一思路设计错误响应的。
+
+### Go 实现
+
+**领域错误**：比入门版多了 `Retryable`、`FieldErrors` 和 `Cause`。实现 `Unwrap` 之后，`errors.Is`/`errors.As` 可以穿透它找到底层原因，日志里也能拿到完整错误链。
+
+```go
+type AppError struct {
+	HTTPStatus  int
+	Code        int
+	Message     string
+	Retryable   bool
+	FieldErrors []FieldError
+	Cause       error
+}
+
+func (e *AppError) Error() string { return e.Message }
+func (e *AppError) Unwrap() error { return e.Cause }
+```
+
+**成功与失败的构造函数**：
+
+```go
+func Success[T any](traceID string, data T) ApiResponse[T] {
+	return ApiResponse[T]{
+		Code:    0,
+		Message: "success",
+		Data:    &data,
+		Error:   nil,
+		TraceID: traceID,
+	}
+}
+
+func Failure(traceID string, err *AppError) ApiResponse[any] {
+	fieldErrors := err.FieldErrors
+	if fieldErrors == nil {
+		fieldErrors = []FieldError{} // 约定：无字段错误时输出 [] 而不是 null
+	}
+	return ApiResponse[any]{
+		Code:    err.Code,
+		Message: err.Message,
+		Data:    nil,
+		Error: &ErrorDetail{
+			Retryable:   err.Retryable,
+			FieldErrors: fieldErrors,
+		},
+		TraceID: traceID,
+	}
+}
+```
+
+**trace_id 中间件**：优先透传上游传来的 trace id，没有则自己生成，同时写入 context 和响应头。真实项目里通常接入公司的链路追踪系统，这里用随机 16 字节演示原理：
+
+```go
+type traceIDKey struct{}
+
+func traceIDFrom(ctx context.Context) string {
+	if v, ok := ctx.Value(traceIDKey{}).(string); ok {
+		return v
+	}
+	return ""
+}
+
+func newTraceID() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("fallback-%d", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(b)
+}
+
+// traceMiddleware 为每个请求生成/透传 trace_id。
+func traceMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		traceID := r.Header.Get("X-Trace-ID")
+		if traceID == "" {
+			traceID = newTraceID()
+		}
+		ctx := context.WithValue(r.Context(), traceIDKey{}, traceID)
+		w.Header().Set("X-Trace-ID", traceID)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+```
+
+（上面片段需要 `context`、`crypto/rand`、`encoding/hex`、`time` 等导入；Go 会把自定义响应头规范化为 `X-Trace-Id`，客户端读取时大小写不敏感。）
+
+**统一出口**：所有成功走 `WriteSuccess`，所有错误走 `WriteError`，Handler 没有第三条路：
+
+```go
+// WriteSuccess 是唯一的成功响应出口。
+func WriteSuccess(w http.ResponseWriter, r *http.Request, data any) {
+	_ = writeJSON(w, http.StatusOK, Success(traceIDFrom(r.Context()), data))
+}
+
+// WriteError 是唯一的错误响应出口：把任意 error 转成 ApiResponse。
+func WriteError(w http.ResponseWriter, r *http.Request, err error) {
+	traceID := traceIDFrom(r.Context())
+	var appErr *AppError
+	if !errors.As(err, &appErr) {
+		// 未预期错误：带 trace_id 记详细日志，对外只给笼统提示。
+		log.Printf("[%s] unexpected error: %+v", traceID, err)
+		appErr = &AppError{
+			HTTPStatus: http.StatusInternalServerError,
+			Code:       50001,
+			Message:    "系统繁忙，请稍后重试",
+		}
+	}
+	_ = writeJSON(w, appErr.HTTPStatus, Failure(traceID, appErr))
+}
+```
+
+于是 handler 变成这样——成功只调 `WriteSuccess`，失败一律 `return err`：
+
+```go
+// 空分页：items 为 []，data 不为 null
+func listHandler(w http.ResponseWriter, r *http.Request) {
+	data := PageData[map[string]any]{
+		Items: []map[string]any{},
+		Page:  Page{Number: 1, Size: 10, Total: 0},
+	}
+	WriteSuccess(w, r, data)
+}
+
+// 参数校验失败：字段级错误
+func validationHandler(w http.ResponseWriter, r *http.Request) {
+	WriteError(w, r, &AppError{
+		HTTPStatus: http.StatusBadRequest,
+		Code:       40001,
+		Message:    "请求参数校验失败",
+		FieldErrors: []FieldError{
+			{Field: "price", Message: "不能为负数"},
+		},
+	})
+}
+
+// 业务冲突
+func conflictHandler(w http.ResponseWriter, r *http.Request) {
+	WriteError(w, r, &AppError{
+		HTTPStatus: http.StatusConflict,
+		Code:       43001,
+		Message:    "该记录存在待审核的变更，请勿重复提交",
+	})
+}
+
+// 下游失败、可重试
+func downstreamHandler(w http.ResponseWriter, r *http.Request) {
+	WriteError(w, r, &AppError{
+		HTTPStatus: http.StatusServiceUnavailable,
+		Code:       51001,
+		Message:    "同步索引服务失败，请稍后重试",
+		Retryable:  true,
+	})
+}
+
+func main() {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/page", listHandler)
+	mux.HandleFunc("POST /api/validation", validationHandler)
+	mux.HandleFunc("POST /api/conflict", conflictHandler)
+	mux.HandleFunc("POST /api/downstream", downstreamHandler)
+	log.Println("production demo listening on :8081")
+	log.Fatal(http.ListenAndServe(":8081", traceMiddleware(mux)))
+}
+```
+
+装配时把 `traceMiddleware` 套在路由外层即可。运行后验证：
+
+```bash
+$ curl -s http://localhost:8081/api/page
+{"code":0,"message":"success","data":{"items":[],"page":{"number":1,"size":10,"total":0}},"error":null,"trace_id":"9ec3caeca2dff2dad1971e48580e0069"}
+
+$ curl -s -X POST http://localhost:8081/api/conflict
+{"code":43001,"message":"该记录存在待审核的变更，请勿重复提交","data":null,"error":{"retryable":false,"field_errors":[]},"trace_id":"1c0b5e7d91e13fa660ccbe2440215a31"}
+
+$ curl -s -X POST http://localhost:8081/api/downstream
+{"code":51001,"message":"同步索引服务失败，请稍后重试","data":null,"error":{"retryable":true,"field_errors":[]},"trace_id":"1f311b80db29a7980b79c55e1db1209b"}
+```
 
 ---
 
@@ -593,7 +1065,7 @@ mux.Handle("GET /api/books/{id}", handle(store.apiGetBook))
 | --- | --- |
 | `type` | 问题类型的 URI，指向该错误的文档 |
 | `title` | 简短的、人类可读的问题分类 |
-| `status` | HTTP 状态码（与响应行一致） |
+| `status` | HTTP 状态码（与响应行保持一致） |
 | `detail` | 本次请求的具体描述 |
 | `instance` | 出错请求的 URI |
 
@@ -677,6 +1149,29 @@ func writeProblem(w http.ResponseWriter, status int, typ, title, detail, instanc
 
 ---
 
+## 项目落地清单
+
+规范写得再好，落不了地等于零。下面这份清单可以直接搬进团队文档：
+
+- 新项目从第一天起只允许这一种 `ApiResponse[T]`，不给"特殊情况"开口子；
+- 在 OpenAPI/Swagger 里定义统一的成功、失败、分页 schema，让契约可检查；
+- 所有 Handler 只调用 `WriteSuccess`，错误统一 `return error`；
+- 所有业务码集中定义在一个包里（例如 `pkg/apierror`），禁止散落魔法数字；
+- 所有响应都由 trace 中间件写入 `trace_id`，排障时一键关联日志；
+- 单元测试至少覆盖六类场景：**成功、参数错误、权限错误、业务冲突、下游失败、空分页**；
+- 老项目**不直接修改历史接口**：新模块或 `/v2` 接口采用新规范，老接口通过适配层渐进迁移。
+
+### 跨技术栈的同款思路
+
+"统一出口处理错误"不是 Go 独有的模式，换个技术栈只是换个名字：
+
+- **go-zero**：提供统一错误处理出口（`httpx.SetErrorHandler`），可以在一处集中决定如何把 `error` 转换成 `code`/`msg`/`data` 这类响应结构；
+- **Spring**：通常用 `@RestControllerAdvice` + `@ExceptionHandler` 做同类事情——Controller 只管抛异常，全局通知把异常统一翻译成约定好的响应结构。
+
+形式不同，本质一致：**把响应的序列化收敛到唯一出口**，让每个接口的结构一致性不再依赖开发者自觉。
+
+---
+
 ## 用 httptest 把契约定下来
 
 响应结构既然是契约，就值得用测试固化。标准库 `net/http/httptest` 可以在不启动真实端口的情况下完整验证 handler。前面把路由装配抽成了 `newRouter`，测试可以直接复用它：
@@ -748,7 +1243,7 @@ func TestCreateAndList(t *testing.T) {
 }
 ```
 
-运行 `go test ./...` 即可。这类测试的价值在于：当有人无意中改了响应结构（比如给 `Response` 删了个字段、把空列表改成了 `null`），测试会立刻报红，契约在代码评审之前就被守住了。
+运行 `go test ./...` 即可。这类测试的价值在于：当有人无意中改了响应结构（比如给 `Response` 删了个字段、把空列表改成了 `null`），测试会立刻报红，契约在代码评审之前就被守住了。按落地清单的要求，完整项目还应补齐权限错误、业务冲突、下游失败、空分页等场景的同类用例。
 
 ---
 
@@ -760,25 +1255,28 @@ func TestCreateAndList(t *testing.T) {
 | --- | --- | --- |
 | 1 | 成功返回裸数据、失败返回封装 | 客户端必须先猜响应形状才能解析 |
 | 2 | 每个模块自定义一套封装 | 全站形态漂移，通用解析无从谈起 |
-| 3 | 把内部错误原文塞进 `message` | 泄露堆栈、SQL、文件路径等敏感信息 |
-| 4 | `null`、`{}`、字段缺失混用 | 客户端被迫到处判空，还总有漏网的 |
-| 5 | 空列表返回 `null` 而不是 `[]` | 前端 `data.map(...)` 直接崩溃 |
-| 6 | HTTP 永远 200，成败只看 body | 监控、缓存、网关的 HTTP 语义全部失效 |
-| 7 | 404/panic 路径忘了走封装 | 封装"漏风"，客户端仍要写特判 |
-| 8 | 随手修改已上线接口的响应结构 | 破坏契约，所有调用方一起出事故 |
-| 9 | 错误码散落各处、随手写魔法数字 | 码值冲突、含义不可考 |
+| 3 | `code`/`errno`、`message`/`errmsg` 等命名混用 | 同一项目出现多套字段名，客户端要写兼容逻辑 |
+| 4 | 把内部错误原文塞进 `message` | 泄露堆栈、SQL、文件路径等敏感信息 |
+| 5 | `null`、`{}`、字段缺失混用 | 客户端被迫到处判空，还总有漏网的 |
+| 6 | 空列表返回 `null` 而不是 `[]` | 前端 `data.map(...)` 直接崩溃 |
+| 7 | HTTP 永远 200，成败只看 body | 监控、缓存、网关的 HTTP 语义全部失效 |
+| 8 | 404/panic 路径忘了走封装 | 封装"漏风"，客户端仍要写特判 |
+| 9 | 前端靠匹配 `message` 文案做逻辑分支 | 文案一改，逻辑全断；分支只认 `code` |
+| 10 | 随手修改已上线接口的响应结构 | 破坏契约，所有调用方一起出事故 |
+| 11 | 错误码散落各处、随手写魔法数字 | 码值冲突、含义不可考 |
 
 ---
 
 ## 小结
 
 - 统一响应封装是一个**全站级约定**：所有 JSON 接口共用同一个顶层结构（常见为 `code`/`message`/`data`），成功与失败形状一致；
-- 业务错误码与 HTTP 状态码**分工协作、互相对齐**：状态码管协议语义，业务码管业务分支；不要用"永远 200"取代状态码；
+- 业务错误码与 HTTP 状态码**分工协作、互相对齐**：状态码管协议语义，业务码管业务分支；不要用"永远 200"取代状态码；成败判断只认 `code`，`message` 只给人看；
 - 封装的落地靠**唯一出口**：`writeJSON` + `OK`/`Fail`，或更进一步用 `(data, error)` + 适配器，让业务代码根本没有机会绕开封装；
 - 404 兜底、panic 兜底、空列表形态这些**边角出口**也必须纳入封装，否则契约就有洞；
-- Go 1.18+ 可以用泛型写出类型安全的 `Envelope[T]`，客户端解析因此又快又安全；
+- 生产级方案用 `ApiResponse[T]` 泛型信封：`Data *T` 区分成败形态、`Error` 携带 `retryable` 与 `field_errors`、`trace_id` 打通日志排障；分页用 `PageData[T]` 放进 `data`；业务码按 HTTP 语义分段规划；
+- Go 1.18+ 的泛型让客户端也能类型安全地解封装：`callAPI[T]` 把业务错误直接变成 `error`；
 - 对外 API 可以参考 **RFC 9457 Problem Details** 标准；它与自定义封装是两个流派，选定一个并保持一致；
-- 响应结构是**接口契约**：新增接口遵循现有封装，不破坏已有结构，确需破坏就走版本化迁移。
+- 响应结构是**接口契约**：新增接口遵循现有封装，不破坏已有结构，确需破坏就走版本化迁移；老项目通过适配层渐进迁移。
 
 ## 参考资料
 
@@ -788,6 +1286,8 @@ func TestCreateAndList(t *testing.T) {
 - [JSON:API Specification](https://jsonapi.org/format/) —— 另一种成体系的响应规范（顶层 `data`/`errors`/`meta`）
 - [Microsoft REST API Guidelines](https://github.com/microsoft/api-guidelines/blob/vNext/Guidelines.md) —— 微软的 REST API 设计规范
 - [GitHub REST API: Errors](https://docs.github.com/en/rest/overview/resources-in-the-rest-api#errors) —— "裸资源 + 错误对象"流派的代表性实现
+- [go-zero 官方文档](https://go-zero.dev/) —— `httpx.SetErrorHandler` 统一错误出口
+- [Spring Framework: @ControllerAdvice](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-advice.html) —— Java 生态的全局异常处理同款方案
 - [Go `encoding/json` 包文档](https://pkg.go.dev/encoding/json)
 - [Go `net/http/httptest` 包文档](https://pkg.go.dev/net/http/httptest)
 - [Go 1.22 Release Notes: 增强的 ServeMux 路由](https://go.dev/doc/go1.22)
