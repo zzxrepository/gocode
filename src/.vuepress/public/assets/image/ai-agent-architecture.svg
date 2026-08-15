@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
-  <title id="title">AI Agent 的工作闭环</title>
+  <title id="title">LLM Agent 的工作闭环</title>
   <desc id="desc">以大模型为决策核心，感知、思考与规划、执行、工具环境构成任务主链；记忆与核心双向读写；执行结果反馈至感知。</desc>
   <defs>
     <marker id="arrow-blue" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
@@ -22,7 +22,7 @@
 
   <rect width="1600" height="900" fill="#FFFFFF"/>
 
-  <text x="800" y="72" text-anchor="middle" class="title">AI Agent 的工作闭环</text>
+  <text x="800" y="72" text-anchor="middle" class="title">LLM Agent 的工作闭环</text>
   <text x="800" y="108" text-anchor="middle" class="subtitle">大模型 · 感知 · 思考 · 规划 · 记忆 · 执行</text>
   <line x1="560" y1="135" x2="1040" y2="135" stroke="#E2E8F0" stroke-width="2"/>
 
@@ -46,7 +46,7 @@
   <rect x="551" y="361" width="498" height="213" rx="15" fill="none" stroke="#93C5FD" stroke-width="2"/>
   <circle cx="800" cy="408" r="33" fill="#DBEAFE"/>
   <path d="M780 408h40M800 388v40M787 395l26 26M813 395l-26 26" stroke="#1D4ED8" stroke-width="4" stroke-linecap="round"/>
-  <text x="800" y="476" text-anchor="middle" class="core-title">AI Agent</text>
+  <text x="800" y="476" text-anchor="middle" class="core-title">LLM Agent</text>
   <text x="800" y="510" text-anchor="middle" class="core-copy">大模型（LLM / MLLM）</text>
   <text x="800" y="544" text-anchor="middle" class="core-copy">理解目标 · 推理决策 · 选择下一步</text>
 

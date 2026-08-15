@@ -16,25 +16,68 @@ tag:
 
 ## 前言
 
-> **一句话定义：AI Agent 是以大模型为核心，能够感知、思考、规划、记忆和执行，并根据反馈完成目标的智能系统。**
+Agent 是一个比大模型更早出现的概念。它描述的不是某一种模型，而是一类能够围绕目标与环境交互的实体或程序：获取信息、作出决策并执行动作。AI Agent 和 LLM Agent 都属于这个更大的范围。
 
-> **完整定义：AI Agent（人工智能代理／智能体）是一种以大模型（文本场景通常为大语言模型 LLM，多模态场景通常为多模态大模型 MLLM）为核心，能够感知环境、利用记忆进行推理与思考、规划任务步骤，并调用工具执行行动、根据反馈持续调整，从而完成目标的智能系统。**
+本文先说明三个概念的边界，再重点介绍当前生成式 AI 应用中最常见的 **LLM Agent**。为简洁起见，后文在没有特别说明时，"Agent" 指的都是 LLM Agent，而不是所有广义 Agent。
 
-![AI Agent 的感知、思考、规划、记忆、执行与反馈闭环](/assets/image/ai-agent-architecture.svg)
+## Agent、AI Agent 与 LLM Agent
 
-*图中将能力模块和运行路径分开：大模型是决策核心，记忆与核心双向读写；任务主线由“环境 → 感知 → 思考与规划 → 执行 → 工具与环境”组成，执行结果再以反馈回到感知。*
+三者是逐层收窄的关系：
 
-“Agent”这个词近两年很容易被说得很神秘：仿佛只要给大模型接上搜索和数据库，它就成了一个会自主思考的数字员工。更准确的理解是：它不仅生成回答，还会在任务过程中获取信息、作出判断、采取行动，再利用反馈调整下一步。
+```text
+Agent（代理）
+└── AI Agent（人工智能智能体）
+    └── LLM Agent（大语言模型智能体）
+```
 
-对用户来说，普通聊天机器人主要负责“回答”；Agent 的目标是“把事情推进到可以交付的状态”。例如，用户说“帮我为缺货图书创建补货申请”，Agent 不只生成一段建议，还可能查询库存、查询供应商价格、整理方案，并在获得授权后调用采购系统创建申请。
+### Agent：围绕目标感知、决策与行动
 
-这不代表 Agent 可以脱离人和程序独立工作。它仍然运行在开发者给定的权限、工具、预算、超时和安全规则之内；所谓“自主”，是指它能在这些边界内自己决定下一步，而不是每一步都由人或固定代码预先写死。
+Agent 原意是“代理者、执行者”。在计算机领域，它是能够感知环境、基于目标作出决策并执行动作的实体或程序。经典人工智能教材《Artificial Intelligence: A Modern Approach》（AIMA）进一步强调“理性行动”：在已有信息和目标下，选择更可能达成目标的行动。[AIMA 作者的在线导读](https://aima.eecs.berkeley.edu/~russell/intro.html) 是理解这一视角的好起点。
 
-## 从经典 AI 到 LLM Agent
+广义 Agent 不必使用人工智能。例如，监控程序发现服务不可用后按固定规则重启服务，也可以被称为 Agent；它有输入、目标和动作，但没有机器学习或大模型能力。
 
-在经典人工智能中，智能体（agent）可以朴素地理解为“**感知环境并采取行动的实体**”。《Artificial Intelligence: A Modern Approach》（AIMA）进一步把重点放在理性行动：在已有信息和目标下，选择更有可能达成目标的行动。[AIMA 作者的在线导读](https://aima.eecs.berkeley.edu/~russell/intro.html) 是理解这个定义的好起点。
+### AI Agent：用 AI 方法完成决策的 Agent
 
-现代 LLM Agent 沿用了这个框架，只是把“感知”和“决策”换成了更适合软件系统的形态：
+AI Agent（人工智能智能体）是使用人工智能方法进行感知、判断、推理、规划或决策的 Agent。它可以采用规则与知识表示、机器学习、强化学习、计算机视觉等技术；游戏中的智能角色、强化学习控制器和机器人决策系统都可能属于这一类。
+
+AI Agent 的关键不是“能聊天”，而是围绕目标持续形成闭环：
+
+```text
+感知环境 → 理解目标 → 决策或规划 → 执行动作 → 观察结果 → 调整下一步
+```
+
+### LLM Agent：以大语言模型为核心决策器
+
+LLM Agent 是 AI Agent 的一种：它以大语言模型作为理解自然语言、推理和选择下一步的主要决策组件。在多模态任务中，这个核心也可能是多模态大模型（MLLM）。
+
+模型本身只是模型，不会天然拥有业务事实、长期记忆或执行权限；这些能力来自模型外部的检索、存储、工具与运行时控制。因此，一个 LLM Agent 更准确的理解是：**以 LLM 为决策核心，结合规划、记忆、工具调用、行动和反馈循环组成的应用系统。**
+
+在今天的生成式 AI / 大模型语境中，人们口头所说的“Agent”通常默认指 LLM Agent。本文也采用这一约定。
+
+## LLM Agent 的概念架构
+
+![LLM Agent 的感知、思考、规划、记忆、执行与反馈闭环](/assets/image/ai-agent-architecture.svg)
+
+*图中展示的是 LLM Agent，而不是所有类型 Agent 的通用架构：大模型是决策核心，记忆与核心双向读写；任务主线由“环境 → 感知 → 思考与规划 → 执行 → 工具与环境”组成，执行结果再以反馈回到感知。本图为面向本文的重新绘制，结构参考 Lilian Weng 的 [LLM-powered Autonomous Agents](https://lilianweng.github.io/posts/2023-06-23-agent/)（2023）。*
+
+这类架构中，图中央的 Agent 不是“一个大语言模型”的同义词，而是由模型和外围能力共同构成的系统。常见的四类能力是：
+
+| 能力 | 作用 | 典型内容 |
+| --- | --- | --- |
+| Planning（规划） | 把目标转化为可执行的下一步 | 子任务拆解、路径选择、反思与修正 |
+| Memory（记忆） | 保存和取回任务所需的信息 | 当前任务状态、长期知识、用户偏好 |
+| Tools（工具） | 访问外部信息或系统能力 | 搜索、数据库、日历、代码执行、业务 API |
+| Action（行动） | 将决策落实为对环境的操作 | 调用工具、发送消息、创建工单、提交申请 |
+
+一个典型执行过程如下：接收用户目标，读取当前上下文和必要记忆，由 LLM 决定下一步；如果需要外部事实或操作，就选择并调用工具；工具结果回到上下文后，系统继续判断、规划或反思，直到任务完成、需要澄清、达到资源上限，或遇到必须由人审批的动作。
+
+对用户而言，普通聊天机器人主要负责“回答”；LLM Agent 的目标是“把事情推进到可以交付的状态”。例如，“为缺货图书创建补货申请”不仅需要生成建议，还可能需要查询库存、比对供应商报价、整理方案，并在获得授权后调用采购系统创建申请。
+
+这不代表 Agent 可以脱离人和程序独立工作。它始终运行在开发者给定的权限、工具、预算、超时和安全规则之内；所谓“自主”，是指它能在这些边界内选择下一步，而不是每一步都由人或固定代码预先写死。
+
+## 从经典 Agent 到 LLM Agent
+
+LLM Agent 沿用了经典 Agent 的“感知—决策—行动”框架，只是把感知和决策换成了更适合软件系统的实现：
 
 | 经典智能体概念 | LLM Agent 中常见的实现 |
 | --- | --- |
@@ -182,13 +225,16 @@ Agent 的风险主要不来自“回答错一句话”，而来自它能读写�
 
 ## 总结
 
-AI Agent 不是单一模型功能，而是一种系统形态：它围绕目标运行，在受控边界内获取信息、选择动作、观察结果并继续推进任务。大模型让系统更擅长理解语言和选择路径；工具让它接触真实数据与业务系统；记忆和规划则是在任务复杂时可加入的能力。
+Agent、AI Agent 与 LLM Agent 的关系是逐层收窄的：Agent 关注“围绕目标感知、决策与行动”；AI Agent 用 AI 方法完成其中的决策；LLM Agent 则以大语言模型作为主要决策组件。当前大模型应用中常被简称为“Agent”的，通常就是最后这一类。
+
+LLM Agent 不是单一模型功能，而是一种系统形态：它围绕目标运行，在受控边界内获取信息、选择动作、观察结果并继续推进任务。大模型让系统更擅长理解语言和选择路径；工具让它接触真实数据与业务系统；记忆和规划则是在任务复杂时可加入的能力。
 
 真正决定一个 Agent 是否可用的，往往不是它能否写出漂亮回答，而是工具是否可靠、权限是否收敛、停止条件是否明确、失败是否可追踪，以及高风险动作是否保留给人来确认。
 
 ## 参考资料
 
 - Stuart Russell、Peter Norvig，《[Artificial Intelligence: A Modern Approach](https://www.pearson.com/en-us/subject-catalog/p/Russell-Artificial-Intelligence-A-Modern-Approach-4th-Edition/P200000003500)》第 1 章及 [作者在线导读](https://aima.eecs.berkeley.edu/~russell/intro.html)：经典“理性智能体”视角。
+- Lilian Weng，[LLM-powered Autonomous Agents](https://lilianweng.github.io/posts/2023-06-23-agent/)：LLM 作为核心控制器，并结合规划、记忆和工具使用的概念架构。
 - OpenAI，[A practical guide to building agents](https://openai.com/business/guides-and-resources/a-practical-guide-to-building-ai-agents/)：模型、工具、指令、编排和 guardrails 的工程实践。
 - Shunyu Yao 等，[ReAct: Synergizing Reasoning and Acting in Language Models](https://research.google/blog/react-synergizing-reasoning-and-acting-in-language-models/)：推理与行动交替的研究思路。
 - Anthropic，[Building Effective AI Agents](https://www.anthropic.com/engineering/building-effective-agents)：从工作流到更自主 Agent 的架构取舍。
