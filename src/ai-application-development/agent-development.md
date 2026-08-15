@@ -235,6 +235,7 @@ LLM Agent 不是单一模型功能，而是一种系统形态：它围绕目标�
 
 - Stuart Russell、Peter Norvig，《[Artificial Intelligence: A Modern Approach](https://www.pearson.com/en-us/subject-catalog/p/Russell-Artificial-Intelligence-A-Modern-Approach-4th-Edition/P200000003500)》第 1 章及 [作者在线导读](https://aima.eecs.berkeley.edu/~russell/intro.html)：经典“理性智能体”视角。
 - Lilian Weng，[LLM-powered Autonomous Agents](https://lilianweng.github.io/posts/2023-06-23-agent/)：LLM 作为核心控制器，并结合规划、记忆和工具使用的概念架构。
+- Datawhale，[Agent 教程：1.1 Agent 原理](https://github.com/datawhalechina/agent-tutorial/blob/main/docs/%E7%AC%AC%E4%B8%80%E7%AB%A0%EF%BC%9AAgent%E7%AE%80%E4%BB%8B/1.1%20Agent%E5%8E%9F%E7%90%86.md)：从 LLM 到 Agent 的入门介绍，以及规划、记忆与工具使用的说明。
 - OpenAI，[A practical guide to building agents](https://openai.com/business/guides-and-resources/a-practical-guide-to-building-ai-agents/)：模型、工具、指令、编排和 guardrails 的工程实践。
 - Shunyu Yao 等，[ReAct: Synergizing Reasoning and Acting in Language Models](https://research.google/blog/react-synergizing-reasoning-and-acting-in-language-models/)：推理与行动交替的研究思路。
 - Anthropic，[Building Effective AI Agents](https://www.anthropic.com/engineering/building-effective-agents)：从工作流到更自主 Agent 的架构取舍。
