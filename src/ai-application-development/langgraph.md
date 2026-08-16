@@ -135,23 +135,24 @@ Pregel 运行时（调度、状态写入、检查点、流）
 
 ## 三、一个完整示例：可审核、可恢复的内容工作流
 
-下面的示例不调用外部模型，因此可以直接运行并专注观察图的机制。它模拟了一个常见过程：生成计划和草稿，交给人工审核；拒绝时修订后再次审核，通过后发布。代码位于示例仓库的 `aiagent/langgraph` 目录。
+下面的示例不调用外部模型，因此可以直接运行并专注观察图的机制。它模拟了一个常见过程：生成计划和草稿，交给人工审核；拒绝时修订后再次审核，通过后发布。代码位于示例仓库的 `aiagent/langgraph` 目录。LangChain 与 LangGraph 的 Python 依赖集中在同级的 `aiagent/python` 中，因此不会在两个示例目录分别创建虚拟环境。
 
 ```text
-langgraph/
-├── pyproject.toml
-├── README.md
-└── approval_workflow.py
+aiagent/
+├── langgraph/
+│   ├── README.md
+│   └── approval_workflow.py
+└── python/
+    ├── pyproject.toml
+    └── uv.lock
 ```
 
 安装并运行：
 
 ```bash
-cd gocode-examples/aiagent/langgraph
-python -m venv .venv
-source .venv/bin/activate
-pip install -e .
-python approval_workflow.py
+cd gocode-examples/aiagent/python
+uv sync
+uv run python ../langgraph/approval_workflow.py
 ```
 
 核心状态包含两类字段：`topic`、`draft`、`status` 是单值字段；`events` 是执行记录，需要以追加方式合并。

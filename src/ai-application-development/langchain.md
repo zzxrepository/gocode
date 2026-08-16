@@ -49,15 +49,15 @@ flowchart LR
 
 ## 二、安装、配置与第一个模型调用
 
-Python 3.10+ 环境中可安装核心包和一个 Provider 集成包：
+Python 3.10+ 环境中可安装核心包和一个 Provider 集成包。使用 `uv` 创建独立项目时，可执行：
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -U langchain langchain-openai pydantic
+uv init llm-demo
+cd llm-demo
+uv add langchain langchain-openai pydantic
 ```
 
-最小可运行代码位于 [gocode-examples/aiagent/langchain](https://github.com/zzxrepository/gocode-examples/tree/master/aiagent/langchain)，包含 Message 与流式输出、Pydantic 结构化输出、以及本地固定数据的 Agent Tool Calling 示例。`.env.example` 只是变量模板；shell 不会自动加载 `.env`，运行前仍需以环境变量或自己的密钥管理方式提供认证信息。
+最小可运行代码位于 [gocode-examples/aiagent/langchain](https://github.com/zzxrepository/gocode-examples/tree/master/aiagent/langchain)，包含 Message 与流式输出、Pydantic 结构化输出、以及本地固定数据的 Agent Tool Calling 示例。该示例和 LangGraph 示例共用 `aiagent/python` 中的 `uv` 环境；进入该目录执行 `uv sync` 后，以 `uv run python ../langchain/chat.py` 运行。`.env.example` 只是变量模板；shell 不会自动加载 `.env`，运行前仍需以环境变量或自己的密钥管理方式提供认证信息。
 
 `langchain-openai` 是 OpenAI Provider 集成包，`ChatOpenAI` 将该厂商协议适配为 LangChain 的聊天模型接口。其他模型应安装各自的官方集成包，例如 `langchain-anthropic`、`langchain-google-genai` 或 `langchain-ollama`，而不是假定所有模型都能使用 OpenAI 兼容协议。
 
