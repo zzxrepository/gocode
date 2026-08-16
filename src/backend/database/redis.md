@@ -97,17 +97,105 @@ article:hot          -> zset
 3. 为缓存或会话设置过期时间；
 4. 不用 `KEYS *` 扫描生产实例，使用 `SCAN`。
 
-查看某个 Key 的类型与生存时间：
+## 三、Key 通用命令：不依赖具体数据类型
+
+String、Hash、List、Set、Sorted Set 的操作命令不同，但每个 Redis Key 都可以进行存在性检查、类型查看、过期控制、删除、改名和渐进式扫描。这些命令属于 Key 空间管理，不依赖 Value 的具体数据类型。
+
+### 1. 查看 Key 是否存在、类型和生存时间
 
 ~~~redis
-TYPE user:1001:profile
-TTL user:1001:profile
 EXISTS user:1001:profile
+TYPE user:1001:profile
+
+TTL user:1001:profile
+PTTL user:1001:profile
+EXPIRETIME user:1001:profile
 ~~~
 
-`TTL` 返回秒数：正数表示剩余时间，`-1` 表示永不过期，`-2` 表示 Key 不存在。
+| 命令 | 返回或作用 |
+| --- | --- |
+| `EXISTS key [key ...]` | 返回存在的 Key 数量 |
+| `TYPE key` | 返回 `string`、`hash`、`list`、`set`、`zset` 或 `none` |
+| `TTL key` / `PTTL key` | 返回剩余秒数 / 毫秒数 |
+| `EXPIRETIME key` | 返回过期的 Unix 秒级时间戳（Redis 7.0+） |
 
-## 三、String：最常用的字符串值
+`TTL` 和 `PTTL` 的特殊返回值相同：正数表示剩余时间，`-1` 表示 Key 存在但永不过期，`-2` 表示 Key 不存在。
+
+### 2. 设置、更新和取消过期时间
+
+~~~redis
+EXPIRE session:token-demo 1800
+PEXPIRE session:token-demo 5000
+EXPIREAT session:token-demo 1760000000
+
+PERSIST session:token-demo
+~~~
+
+`EXPIRE` 以秒设置 TTL，`PEXPIRE` 以毫秒设置，`EXPIREAT` 使用 Unix 时间戳；`PERSIST` 移除 TTL，使 Key 恢复为永久 Key。若新建的是 String，优先在 `SET` 时同时设置过期时间：
+
+~~~redis
+SET session:token-demo 1001 EX 1800
+~~~
+
+这样写入值和设置 TTL 是同一条原子命令，避免 `SET` 成功后、`EXPIRE` 执行前进程异常而留下永久缓存。
+
+Redis 7.0+ 的 `EXPIRE` 还支持条件选项：
+
+~~~redis
+EXPIRE session:token-demo 1800 NX
+EXPIRE session:token-demo 3600 XX
+~~~
+
+`NX` 只给当前没有 TTL 的 Key 设置过期时间；`XX` 只更新已经有 TTL 的 Key。它们适合需要区分“首次加过期”与“续期”的场景。
+
+### 3. 删除、改名与复制 Key
+
+~~~redis
+DEL greeting
+UNLINK user:1001:profile
+
+RENAME config:theme config:theme:old
+RENAMENX config:lang config:lang:backup
+COPY source:key target:key
+~~~
+
+| 命令 | 适用场景 |
+| --- | --- |
+| `DEL` | 同步删除一个或多个 Key；普通小 Key 的默认选择 |
+| `UNLINK` | 异步回收实际内存；删除大 Key 时更友好 |
+| `RENAME` | 覆盖目标 Key 并改名；应确认目标是否允许被覆盖 |
+| `RENAMENX` | 仅目标 Key 不存在时改名，避免意外覆盖 |
+| `COPY` | 复制 Key 到新名称；适合迁移或构造测试数据 |
+
+改名或复制不等于修改业务数据模型。尤其是 `RENAME` 会覆盖已有目标 Key，执行前应确认命名空间与目标是否安全。
+
+### 4. 遍历 Key 空间：使用 `SCAN`，谨慎使用 `KEYS`
+
+~~~redis
+SCAN 0 MATCH user:* COUNT 100
+~~~
+
+`SCAN` 返回下一次扫描游标和一批 Key。把返回的游标作为下一次命令的第一个参数，直到游标重新变为 `0`：
+
+~~~text
+SCAN 0 MATCH user:* COUNT 100
+  -> cursor 17, keys [...]
+
+SCAN 17 MATCH user:* COUNT 100
+  -> cursor 0, keys [...]
+~~~
+
+`COUNT` 是提示值而不是精确数量；在遍历期间 Key 可能被新增、删除或重复返回，因此 SCAN 适合运维查看、迁移和后台渐进处理，不应把它当成强一致分页 API。
+
+不要在生产实例的常规请求路径中使用：
+
+~~~redis
+KEYS *
+~~~
+
+`KEYS` 必须遍历整个 Key 空间，大数据量时可能长时间阻塞 Redis。Redis 官方建议对未知规模的 Key 空间使用增量式 `SCAN`。
+
+## 四、String：最常用的字符串值
 
 String 可保存文本、整数、JSON 字符串或序列化后的对象。计数器特别适合使用 String。
 
@@ -128,7 +216,7 @@ MGET config:theme config:lang
 
 `SET ... EX 3600` 在写入时同时设置一小时过期时间，适合验证码、会话和缓存。不要先 `SET` 再单独 `EXPIRE`，否则在两条命令之间发生异常会留下无过期的 Key。
 
-## 四、Hash：一个 Key 下的一组字段
+## 五、Hash：一个 Key 下的一组字段
 
 Hash 适合保存对象的少量字段，例如用户资料、商品简要信息。它避免把每个字段都拆成独立 Key。
 
@@ -145,7 +233,7 @@ HLEN user:1001:profile
 
 `HGETALL` 会返回全部字段，不适合字段极多或未知大小的 Hash；这类场景可使用 `HSCAN` 分批读取。
 
-## 五、List：有顺序、允许重复的元素
+## 六、List：有顺序、允许重复的元素
 
 List 是双端链表，可从左或右推入、弹出。常见用途是简单队列、任务缓冲和最近访问记录。
 
@@ -161,7 +249,7 @@ LLEN queue:email
 
 `LPUSH` / `LPOP` 组合像栈；`RPUSH` / `LPOP` 组合像先进先出队列。需要可靠消费、消费者组和消息确认时，应考虑 Redis Streams 或专业消息队列。
 
-## 六、Set：无序且不重复的成员
+## 七、Set：无序且不重复的成员
 
 Set 自动去重，适合标签、权限、在线用户和集合关系判断。
 
@@ -179,7 +267,7 @@ SINTER user:1001:roles user:1002:roles
 
 `SMEMBERS` 会一次返回全部成员；大集合应使用 `SSCAN`。
 
-## 七、Sorted Set：带分数的有序集合
+## 八、Sorted Set：带分数的有序集合
 
 Sorted Set（ZSet）中的成员不重复，每个成员关联一个浮点数分数。Redis 按分数排序，因此它很适合排行榜、优先级队列和按时间范围筛选。
 
@@ -196,36 +284,24 @@ ZREMRANGEBYSCORE leaderboard -inf 60
 
 `ZREVRANGE` 从高分到低分读取排行榜；`ZRANGE` 从低分到高分读取。Redis 6.2 之后，部分命令支持更统一的 `ZRANGE ... REV` 写法，但阅读已有项目时仍会经常见到 `ZREVRANGE`。
 
-## 八、过期、删除与安全查看
+## 九、数据库级清理与日常排查
 
-缓存和会话通常必须过期。常用命令如下：
-
-~~~redis
-EXPIRE app:token:abc 3600
-EXPIREAT app:token:abc 1760000000
-PERSIST app:token:abc
-
-DEL greeting
-UNLINK user:1001:profile
-~~~
-
-`DEL` 同步删除数据；`UNLINK` 把实际内存回收交给后台线程，对大 Key 更友好。开发环境可以清空当前逻辑数据库：
+Key 的删除与扫描属于通用命令；下面的命令作用于当前逻辑数据库或整个实例，风险更高。
 
 ~~~redis
+DBSIZE
 FLUSHDB
 ~~~
 
-`FLUSHALL` 会清空实例中所有逻辑数据库，除非确认目标是本地测试实例，否则不要执行。
-
-查看 Key 时使用渐进式扫描：
+`DBSIZE` 返回当前逻辑数据库的 Key 数量。`FLUSHDB` 会清空**当前**逻辑数据库，适合明确确认过的本地测试环境。
 
 ~~~redis
-SCAN 0 MATCH user:* COUNT 100
+FLUSHALL
 ~~~
 
-将上次返回的游标再次传入，直到游标回到 `0`。`SCAN` 不会像 `KEYS *` 一样一次阻塞整个实例。
+`FLUSHALL` 会清空实例中的所有逻辑数据库。除非目标是可丢弃的本地测试实例，否则不应执行。排查线上问题时，优先使用 `TYPE`、`TTL`、`SCAN` 和精确的业务 Key，而不是清理命令。
 
-## 九、一次完整练习
+## 十、一次完整练习
 
 下面用 Redis 模拟登录会话与文章浏览量：
 
@@ -248,7 +324,7 @@ ZREVRANGE article:rank 0 9 WITHSCORES
 
 这组命令展示了一个常见组合：String 保存带 TTL 的会话与计数器，Hash 保存对象字段，ZSet 保存排行榜。
 
-## 十、Go 项目中的连接提示
+## 十一、Go 项目中的连接提示
 
 Go 常用客户端是 `github.com/redis/go-redis/v9`。连接对象应在应用启动时创建一次并复用，而不是每个请求新建一个 Client：
 
@@ -266,3 +342,8 @@ if err := client.Ping(ctx).Err(); err != nil {
 Redis 的快速上手路径是：启动服务并用 `redis-cli ping` 验证连接；先掌握 String、Hash、List、Set、Sorted Set；为缓存和会话设置 TTL；使用 `SCAN` 而不是 `KEYS *` 查看未知规模的数据。
 
 选择数据结构时不必追求“Redis 命令越多越好”。只要能根据数据是否有字段、是否需要顺序、是否需要去重、是否需要按分数排序作出选择，就已经能够覆盖大多数本地开发场景。
+
+## 参考资料
+
+- [Redis 官方 Key 空间管理文档](https://redis.io/docs/latest/develop/using-commands/keyspace/)
+- [Redis 官方命令参考](https://redis.io/docs/latest/commands/)
