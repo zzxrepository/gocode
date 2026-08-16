@@ -22,6 +22,20 @@ Redis 是以内存为主的数据存储系统。它常用于缓存、登录会�
 
 本文是面向本地开发的快速入门。目标是能够启动 Redis、连接客户端、理解键和值、使用五种最常见的数据类型，并知道如何安全地查看和清理测试数据。持久化、复制、哨兵、集群和缓存策略会在后续专题中展开。
 
+## 先学会读 Redis 命令语法
+
+Redis 命令按空格分隔参数，第一项始终是命令名，之后各项的位置有固定含义。后文使用以下模板记号：
+
+| 写法 | 含义 | 实际输入时怎么写 |
+| --- | --- | --- |
+| `SET`、`HGET`、`SCAN` | 命令名 | 原样写在第一位；Redis 命令不区分大小写，教程统一大写 |
+| `key`、`value`、`field`、`member` | 占位符 | 改成真实 Key、值、Hash 字段或集合成员，不能照抄 |
+| `[ ... ]` | 可选部分 | 方括号不输入；只有需要该能力时才写其中参数 |
+| `a \| b` | 二选一 | 选择一个选项，不输入竖线 |
+| `...` | 可重复部分 | 前一个参数组可以重复，例如 `key value [key value ...]` |
+
+例如 `HSET key field value [field value ...]` 应读作：先指定整个 Hash 的 Key，再指定一个字段和它的值；后面还可以继续追加“字段、值”成对参数。实际命令 `HSET user:1001:profile name 张三 city 上海` 一次写入了 `name` 和 `city` 两个字段。参数顺序不可调换：`HSET name user:1001:profile 张三` 会把 `name` 当成 Key，而不是字段。
+
 ## 一、启动、停止与连接
 
 ### 1. 确认命令是否可用
@@ -112,7 +126,14 @@ TTL key | PTTL key
 EXPIRETIME key
 ~~~
 
-`EXISTS` 可以一次检查多个 Key，并返回存在数量；`TYPE` 不读取完整 Value；`TTL` 与 `PTTL` 分别以秒、毫秒返回剩余生存时间。下面再使用用户资料 Key 作为示例：
+逐项理解参数与返回值：
+
+- `EXISTS key [key ...]` 中第一个及后续 `key` 都是待检查的 Key，返回的是“存在的参数个数”，不是布尔值。例如 `EXISTS a b c` 可能返回 `2`；重复传入同一个已存在 Key 会按传入次数计数。
+- `TYPE key` 只接受一个 Key，返回其底层类型。Key 不存在时返回 `none`，而不是报错。
+- `TTL key` 与 `PTTL key` 都只接受一个 Key；前者返回剩余秒数，后者返回剩余毫秒数。正数是剩余时间，`-1` 表示 Key 存在但未设置过期时间，`-2` 表示 Key 不存在。
+- `EXPIRETIME key` 返回预计过期时的 Unix 秒级时间戳；它是“什么时候过期”，而 `TTL` 是“还剩多久”。
+
+下面再使用用户资料 Key 作为示例：
 
 ~~~redis
 EXISTS user:1001:profile
@@ -143,7 +164,18 @@ EXPIREAT key unix_seconds [NX | XX | GT | LT]
 PERSIST key
 ~~~
 
-`key` 必须已经存在；`seconds`、`milliseconds` 和 `unix_seconds` 分别表示相对秒、相对毫秒、绝对 Unix 时间。`PERSIST` 没有时间参数，它移除 Key 的 TTL。下面的命令展示这些不同时间表示法：
+`key` 必须已经存在；`seconds`、`milliseconds` 和 `unix_seconds` 分别表示相对秒、相对毫秒、绝对 Unix 时间。`PERSIST` 没有时间参数，它移除 Key 的 TTL。
+
+方括号内四个条件选项不是一起叠加使用，而是从中选择至多一个：
+
+| 选项 | 只有在什么条件下才设置新 TTL |
+| --- | --- |
+| `NX` | Key 当前没有 TTL |
+| `XX` | Key 当前已经有 TTL |
+| `GT` | 新 TTL 比当前 TTL 更长 |
+| `LT` | 新 TTL 比当前 TTL 更短 |
+
+若给出的时间小于等于 0，Redis 会立即删除这个 Key，而不是保存一个“零秒 TTL”。这些命令返回 `1` 表示成功设置或移除 TTL，返回 `0` 表示 Key 不存在或条件选项不满足。下面的命令展示不同时间表示法：
 
 ~~~redis
 EXPIRE session:token-demo 1800
@@ -182,7 +214,7 @@ RENAMENX key newkey
 COPY source destination [DB destination_db] [REPLACE]
 ~~~
 
-`DEL` 和 `UNLINK` 都能接收多个 Key；`RENAME` 要求源 Key 存在且会覆盖目标 Key；`RENAMENX` 仅在目标不存在时成功；`COPY` 默认复制到当前逻辑数据库。下面使用配置和用户 Key 演示：
+`DEL key [key ...]` 与 `UNLINK key [key ...]` 中每个参数都是独立 Key，返回实际删除的数量；不存在的 Key 不计入结果。`RENAME key newkey` 的前一个参数是源 Key，后一个是新名称：源不存在会报错，目标存在会被覆盖。`RENAMENX` 的参数顺序相同，但目标已经存在时返回 `0`，不会覆盖。`COPY source destination ...` 也按“源、目标”顺序；`DB destination_db` 表示目标逻辑数据库编号，`REPLACE` 才允许覆盖已有目标 Key。
 
 ~~~redis
 DEL greeting
@@ -212,7 +244,7 @@ SCAN cursor [MATCH pattern] [COUNT count] [TYPE type]
 KEYS pattern
 ~~~
 
-`cursor` 由上一次 `SCAN` 返回，首次固定为 `0`；`MATCH` 使用 glob 模式过滤候选 Key；`COUNT` 只是每轮返回数量的提示。下面先从游标 `0` 开始：
+`cursor` 是扫描进度标记，不是偏移量或页码：第一次必须传 `0`，之后必须把响应中的新游标原样传回，直到新游标再次为 `0`。`MATCH pattern` 使用 glob 模式而非正则表达式，例如 `user:*` 匹配以 `user:` 开头的 Key；`COUNT count` 只是建议 Redis 每轮工作的数量，不保证恰好返回 count 个 Key；`TYPE type` 可把候选结果限定为 `string`、`hash` 等类型。
 
 ~~~redis
 SCAN 0 MATCH user:* COUNT 100
@@ -252,7 +284,9 @@ MSET key value [key value ...]
 MGET key [key ...]
 ~~~
 
-`SET` 的 `NX` 表示仅 Key 不存在时写入，`XX` 表示仅 Key 已存在时写入；`EX`、`PX` 可在写入时同时设置 TTL。`INCR`、`INCRBY`、`DECR` 要求 Value 能解析为整数。下面再以问候语、会话、计数器和配置为例：
+`SET key value ...` 的前两个参数分别是 Key 和完整值，值中有空格时在 redis-cli 中需要加引号。`NX` 和 `XX` 是互斥的写入条件；`EX seconds` 与 `PX milliseconds` 也是互斥的 TTL 表示。满足条件时 `SET` 返回 `OK`，条件不满足时返回空结果（nil），这样可以用一条命令实现“仅首次写入”的互斥锁雏形。
+
+`GET key` 只能读取 String，Key 不存在时返回 nil；若 Key 实际是 Hash 等其他类型，会返回 `WRONGTYPE`。`INCR key` 相当于把一个整数 String 加 1；不存在的 Key 从 0 开始，非整数内容则报错。`INCRBY key increment` 的 `increment` 可以为负数。`MSET key value [key value ...]` 必须保持“Key、值”成对出现，`MGET key [key ...]` 按传入 Key 的顺序返回对应值。
 
 ~~~redis
 SET greeting "hello redis"
@@ -286,7 +320,9 @@ HINCRBY key field increment
 HDEL key field [field ...]
 ~~~
 
-`key` 指向整个 Hash，`field` 是 Hash 内部字段；`HSET` 可以一次写入多组字段和值。`HGETALL` 会返回所有字段和值，因此只适用于字段数量可控的对象。下面以用户资料为例：
+`key` 指向整个 Hash，`field` 是 Hash 内部字段，`value` 是字段值。`HSET` 的参数必须是“Key + 若干 field/value 对”；它返回本次新建字段的数量，覆盖已有字段不计为新建。Hash 的 TTL 只能设置在整个 Key 上，不能单独给一个 `field` 设置 TTL。
+
+`HGET key field` 读取一个字段；`HMGET key field [field ...]` 依传入字段顺序返回多个值；`HGETALL key` 返回所有字段和值的交替列表，因此只适用于字段数量可控的对象。`HINCRBY` 只对某个字段中的整数做增减，字段不存在时按 0 处理。
 
 ~~~redis
 HSET user:1001:profile name "张三" city "上海" level 3
@@ -315,7 +351,9 @@ LRANGE key start stop
 LLEN key
 ~~~
 
-`LPUSH`、`RPUSH` 分别从左、右端写入；`LPOP`、`RPOP` 从对应端弹出；`LRANGE` 的索引从 `0` 开始，`-1` 表示最后一个元素。下面使用邮件任务队列演示：
+`LPUSH key element [element ...]` 与 `RPUSH` 的 `key` 是整个列表，后面的每个 `element` 都会写入；前者从左端插入，后者从右端插入。`LPOP key [count]` 中的 `count` 可省略：省略时返回一个元素，写出时返回最多 count 个元素。`RPOP` 的规则相同但从右端取。
+
+`LRANGE key start stop` 的 `start`、`stop` 是包含两端的下标，`0` 是第一个元素，`-1` 是最后一个元素。因此 `LRANGE queue 0 -1` 是读取全部元素，`LRANGE queue 0 9` 是读取前十个。读取范围不会删除元素。
 
 ~~~redis
 LPUSH queue:email task-1 task-2
@@ -344,7 +382,7 @@ SCARD key
 SINTER key [key ...]
 ~~~
 
-`SADD` 返回实际新增的成员数量；重复成员不会重复保存。`SINTER` 以多个 Set Key 为输入，返回交集。下面分别演示标签去重和角色交集：
+`SADD key member [member ...]` 的第一个参数是 Set Key，之后都是成员；重复成员不会重复保存，返回值是本次实际新增的数量。`SISMEMBER key member` 返回 `1` 或 `0`；`SREM` 返回实际移除的数量；`SCARD` 返回成员总数。`SINTER key [key ...]` 的所有参数都是 Set Key，不是成员，它返回这些集合共有的成员。
 
 ~~~redis
 SADD article:42:tags redis golang database redis
@@ -375,7 +413,9 @@ ZSCORE key member
 ZREMRANGEBYSCORE key min max
 ~~~
 
-`score` 是浮点数，`member` 在同一个 ZSet 中唯一；再次 `ZADD` 同一 member 会更新其分数。`ZRANGE` 按低分到高分读取，`ZREVRANGE` 按高分到低分读取。下面以排行榜为例：
+`ZADD key score member [score member ...]` 中，`key` 是排行榜，之后必须严格按“分数、成员”成对出现；顺序不能写反。`score` 必须是数字，`member` 在同一个 ZSet 中唯一，重复添加同一成员会更新分数。返回值默认是本次新增成员数，而不是分数被更新的数量。
+
+`ZRANGE key start stop [WITHSCORES]` 与 `ZREVRANGE` 的 `start`、`stop` 都是排名下标，不是分数范围；`WITHSCORES` 是可选输出开关，写出后返回结果会在每个成员后附带分数。`ZINCRBY key increment member` 用增量更新一个成员的分数并返回新分数；`ZRANK` 返回从低分开始的名次。
 
 ~~~redis
 ZADD leaderboard 98 alice 86 bob 100 carol
@@ -402,7 +442,7 @@ FLUSHDB [ASYNC | SYNC]
 FLUSHALL [ASYNC | SYNC]
 ~~~
 
-`DBSIZE` 没有参数，返回当前逻辑数据库的 Key 总数；`FLUSHDB` 只处理当前逻辑数据库；`FLUSHALL` 处理实例全部逻辑数据库。`ASYNC` 让实际内存回收异步执行，但不会降低“清空数据”的业务风险。
+`DBSIZE` 没有参数，返回当前逻辑数据库的 Key 总数。`FLUSHDB` 只处理当前逻辑数据库，`FLUSHALL` 处理实例全部逻辑数据库。方括号中的 `ASYNC \| SYNC` 表示二选一：`SYNC` 让删除和内存回收同步完成，`ASYNC` 先从 Key 空间移除数据、再异步回收内存；无论哪种方式，业务数据都会立刻不可再访问。
 
 本地测试示例：
 

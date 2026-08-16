@@ -22,6 +22,21 @@ MySQL 是关系型数据库管理系统。它用数据库、表、行、列组�
 
 本文聚焦本地开发需要的基础能力：启动服务、使用 `mysql` 客户端连接、创建数据库和表、执行增删改查、使用索引和事务、导入导出数据。复杂的索引设计、锁机制、执行计划和性能优化会在后续文章中继续展开。
 
+## 先学会读 SQL 语法
+
+后文的“语法”不是可以原样复制的命令，而是用来说明命令组成的模板。先读懂模板中的记号，才能把一段业务需求稳定地翻译成 SQL。
+
+| 写法 | 含义 | 书写时怎么处理 |
+| --- | --- | --- |
+| `SELECT`、`FROM`、`WHERE` | SQL 关键字 | 必须写；通常不区分大小写，教程统一用大写突出结构 |
+| `table_name`、`column_name`、`value` | 占位符 | 替换成真实的表名、列名和值，不能照抄 |
+| `[ ... ]` | 可选部分 | 方括号本身不写；只有需要该能力时才写其中内容 |
+| `a \| b` | 二选一 | 从两种写法中选择一种，竖线本身不写 |
+| `...` | 可重复部分 | 前面的元素可以继续重复，例如多个列名 |
+| `;` | 一条 SQL 的结束符 | 在客户端中建议保留，方便区分多条语句 |
+
+例如 `SELECT [DISTINCT] column_name FROM table_name;` 中，`SELECT` 与 `FROM` 是固定关键字；`DISTINCT` 可选；`column_name` 和 `table_name` 必须换成真实名称。因此查询文章标题应写成 `SELECT title FROM posts;`，而不是把 `column_name` 原样发送给数据库。
+
 ## 一、确认安装与服务状态
 
 ~~~bash
@@ -100,7 +115,13 @@ USE database_name;
 DROP DATABASE [IF EXISTS] database_name;
 ~~~
 
-`CREATE DATABASE` 创建数据库；`IF NOT EXISTS` 让数据库已经存在时不报错；`USE` 只切换当前客户端会话的默认数据库；`DROP DATABASE` 会删除整个数据库及其表，应只对明确可删除的目标使用。
+逐段阅读这段语法：
+
+- `database_name` 是新数据库的名称，例如 `blog_demo`；名称是标识符，不应写成字符串字面量 `'blog_demo'`。
+- `IF NOT EXISTS` 是可选保护项：数据库已存在时不抛出“已存在”错误。它不会校验已有数据库的字符集是否与本次声明一致。
+- `DEFAULT CHARACTER SET charset_name` 指定默认字符集；`DEFAULT COLLATE collation_name` 指定默认排序和比较规则。两项都省略时，MySQL 继承服务器或上层配置。
+- `USE database_name` 只影响当前连接。之后未写数据库前缀的 `posts` 会被解析为该数据库中的 `posts`；新的客户端连接仍需再次选择数据库或在连接命令中指定。
+- `DROP DATABASE` 的 `IF EXISTS` 与创建时的保护项类似，但命令本身仍会删除整个目标数据库及其中全部表。
 
 再执行本地示例：
 
@@ -128,7 +149,13 @@ GRANT privilege_list ON database_name.table_name TO 'user_name'@'host';
 SHOW GRANTS FOR 'user_name'@'host';
 ~~~
 
-`'user_name'@'host'` 是账户身份的一部分，不是单纯的用户名。`privilege_list` 应只包含应用需要的权限，`database_name.table_name` 则限定授权范围。
+逐段阅读这段语法：
+
+- `'user_name'@'host'` 是一个完整账户标识。前半段是用户名，后半段是允许以何种主机来源连接；两部分均为字符串，因此要带单引号。
+- `IDENTIFIED BY 'password'` 设置密码。密码是值而不是标识符，必须是单引号字符串；真实项目不应把密码直接写进版本库。
+- `privilege_list` 是逗号分隔的权限集合，例如 `SELECT, INSERT, UPDATE`。`ALL PRIVILEGES` 虽方便，但会扩大权限范围，不适合作为应用账户的默认选择。
+- `database_name.table_name` 定义授权对象：`blog_demo.posts` 只是一张表，`blog_demo.*` 表示该数据库的全部表，`*.*` 则是所有数据库。点号两侧是标识符，不加引号。
+- `TO` 后的账户必须和 `CREATE USER` 时的账户完全一致。`SHOW GRANTS FOR` 用于读取最终生效的授权，而不是重新授权。
 
 示例创建只服务于 `blog_demo` 的应用账户：
 
@@ -155,7 +182,9 @@ CREATE TABLE [IF NOT EXISTS] table_name (
 ) [table_option ...];
 ~~~
 
-列定义由“列名、数据类型、列约束”组成；`PRIMARY KEY`、`UNIQUE`、`NOT NULL`、`DEFAULT` 属于常见约束；`INDEX` 可以直接在建表时声明普通索引。
+这段定义从左向右读取。每一个 `column_name data_type ...` 是一列：先写列名，再写数据类型，最后按需要追加约束。比如 `title VARCHAR(200) NOT NULL` 表示名为 `title` 的列最多保存 200 个字符，且插入时不能为 `NULL`。逗号分隔各列或表级约束，最后一项后面不能再写逗号。
+
+`PRIMARY KEY`、`UNIQUE`、`NOT NULL`、`DEFAULT` 分别表示主键唯一、值唯一、不可为空和缺省值。它们既可以写在列定义末尾，也可以作为独立的表级约束；`INDEX index_name (column_name)` 是表级普通索引定义。`ENGINE=InnoDB` 与 `DEFAULT CHARSET=utf8mb4` 位于右括号后，是整张表的存储引擎和默认字符集选项。
 
 下面再创建一个最小文章表：
 
@@ -210,7 +239,11 @@ VALUES
   (value_1, value_2, ...);
 ~~~
 
-列列表和每行 `VALUES` 的值必须按相同顺序对应。省略列列表虽然可执行，但会依赖表字段顺序，建表演进后容易出错；应用 SQL 应始终显式写出目标列。
+从左到右读：`INSERT INTO` 表示写入；`table_name` 是目标表；括号中的 `column_1, column_2` 是本次要赋值的目标列；`VALUES` 后每对括号是一行数据；其中第 n 个值只会赋给第 n 个列。
+
+例如 `INSERT INTO posts (title, user_id) VALUES ('Go', 1001);` 中，`'Go'` 只赋给 `title`，`1001` 只赋给 `user_id`。不在列列表中的列不会“丢失”：若列有 `DEFAULT`，MySQL 使用默认值；若允许 `NULL`，则为 `NULL`；若既无默认值又不可为空，插入会失败。多行插入只是把多个同列顺序的值组放在同一条语句中。
+
+省略列列表虽然可执行，但会依赖表字段顺序，建表演进后容易出错；应用 SQL 应始终显式写出目标列。
 
 示例：
 
@@ -239,7 +272,22 @@ FROM table_reference
 [LIMIT row_count [OFFSET offset]];
 ~~~
 
-书写顺序必须遵守这个顺序。理解数据处理时，可先记住逻辑主线：
+每一部分承担不同职责：
+
+| 子句 | 回答的问题 | 关键写法 |
+| --- | --- | --- |
+| `SELECT select_expr` | 最终要返回什么 | 列名、表达式、聚合函数；可用 `AS alias` 起结果列别名 |
+| `FROM table_reference` | 数据从哪里来 | 表名、视图、子查询或其别名 |
+| `JOIN ... ON ...` | 如何把另一份数据接进来 | `ON` 写两侧行的匹配条件，不是普通筛选条件 |
+| `WHERE row_condition` | 哪些原始行可参与后续计算 | 普通列条件，如 `status = 'published'`；不能直接使用 `COUNT(*)` |
+| `GROUP BY group_expr` | 按什么维度汇总 | 每个不同分组键形成一组输出 |
+| `HAVING group_condition` | 哪些分组保留 | 聚合后的条件，如 `COUNT(*) >= 2` |
+| `ORDER BY sort_expr` | 结果怎样排列 | `ASC` 升序（默认），`DESC` 降序；可写多个排序键 |
+| `LIMIT row_count OFFSET offset` | 最多返回多少行、跳过多少行 | `LIMIT 20` 取 20 行，`OFFSET 40` 先跳过 40 行 |
+
+`select_expr` 不一定是原始列。`COUNT(*) AS total` 会计算行数并把结果列命名为 `total`；`price * quantity AS amount` 则是计算表达式。启用常见的 `ONLY_FULL_GROUP_BY` 模式时，`SELECT` 中未被聚合的列必须也出现在 `GROUP BY` 中，避免“同一组到底取哪一行的值”这种歧义。
+
+书写顺序必须遵守语法骨架；理解数据处理时，则可先记住逻辑主线：
 
 ~~~text
 FROM / JOIN 组合数据源
@@ -253,6 +301,8 @@ FROM / JOIN 组合数据源
 ~~~
 
 `WHERE` 过滤原始行，不能直接筛选 `COUNT()`、`SUM()` 等聚合结果；聚合后的条件应写在 `HAVING`。`ORDER BY` 默认升序，`DESC` 表示降序；分页必须配合稳定排序，避免不同请求返回的行顺序漂移。
+
+把需求“统计已发布文章，按作者分组，只保留至少两篇的作者，按篇数从多到少取前十名”翻译为 SQL 时，先确定数据源 `FROM posts`，再把“已发布”写为 `WHERE status = 'published'`，把“按作者”写为 `GROUP BY user_id`，把“至少两篇”写为 `HAVING COUNT(*) >= 2`，最后补 `ORDER BY total DESC LIMIT 10`。这个拆解比背一整条长 SQL 更可靠。
 
 基础查询和条件筛选示例：
 
@@ -304,6 +354,8 @@ LEFT JOIN right_table AS r ON l.key = r.key;
 
 `INNER JOIN` 只保留两边都匹配的行；`LEFT JOIN` 保留左表全部行，右表无匹配时右侧列为 `NULL`。连接条件通常使用主键与外键或具有相同业务含义的字段。
 
+这里 `left_table AS l` 的 `AS l` 是别名：后续 `l.key` 表示左表的某列，既能缩短书写，也能在两张表都有 `id` 这类同名列时消除歧义。`ON l.key = r.key` 是“哪两行构成一对”的规则；`WHERE` 则在连接完成后筛选结果。若在 `LEFT JOIN` 后把右表条件放入 `WHERE`，可能会过滤掉右侧为 `NULL` 的左表行，从而改变为近似内连接；需要保留左表行时，右表的匹配限制通常应写在 `ON` 中。
+
 假设存在 `users(id, name)` 表，查询文章及作者名称：
 
 ~~~sql
@@ -332,6 +384,8 @@ DELETE FROM table_name
 [LIMIT row_count];
 ~~~
 
+`UPDATE` 的 `table_name` 是要修改的表；`SET` 后每一项都是“列 = 新值或表达式”，例如 `views = views + 1` 是基于旧值计算新值；多个赋值用逗号分隔。`WHERE` 决定受影响的行，`ORDER BY` 和 `LIMIT` 只在需要控制有限行时使用。`DELETE FROM` 后没有列列表，因为它删除的是整行；其余范围控制规则相同。
+
 没有 `WHERE` 的 `UPDATE` 或 `DELETE` 会影响整张表。执行写操作前，先用相同 `WHERE` 写一条 `SELECT` 确认影响范围；需要多步一致性时，把写操作放入事务。
 
 ~~~sql
@@ -357,7 +411,9 @@ EXPLAIN SELECT ...;
 DROP INDEX index_name ON table_name;
 ~~~
 
-`CREATE INDEX` 创建普通索引，`UNIQUE` 则额外要求索引键唯一；`EXPLAIN` 不执行查询结果返回，而是展示优化器计划。应先从查询条件和排序方式推导索引，再用执行计划验证。
+`CREATE [UNIQUE] INDEX` 中的 `UNIQUE` 是可选项：不写时同一键值可重复，写出后重复写入会失败。`index_name` 是索引自身的名字，不是列名；`ON table_name` 指定索引属于哪张表；括号中的列按先后顺序构成索引键。复合索引 `(status, created_at)` 不等价于两个独立索引：它首先按 `status` 组织，再在相同 status 内按 `created_at` 组织。
+
+`EXPLAIN SELECT ...` 把完整的查询语句接在 `EXPLAIN` 后面；它不返回业务查询结果，而是展示优化器计划。`DROP INDEX index_name ON table_name` 要同时给出索引名和所属表。应先从查询条件和排序方式推导索引，再用执行计划验证。
 
 示例：
 
@@ -391,7 +447,9 @@ COMMIT;
 ROLLBACK;
 ~~~
 
-`COMMIT` 提交当前事务的全部修改；`ROLLBACK` 放弃尚未提交的修改。DDL 语句在 MySQL 中常会隐式提交事务，因此不应把建表、改表和普通业务写操作混在同一事务设计中。
+`START TRANSACTION` 没有表名或参数，它只是为当前连接开启一个事务边界；之后的 `INSERT`、`UPDATE`、`DELETE` 才是实际修改数据的语句。`COMMIT` 提交当前事务的全部修改；`ROLLBACK` 放弃尚未提交的修改。事务只影响同一连接，不能由另一个客户端连接来提交或回滚。
+
+DDL 语句在 MySQL 中常会隐式提交事务，因此不应把建表、改表和普通业务写操作混在同一事务设计中。
 
 示例：
 

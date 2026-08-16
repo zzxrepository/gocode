@@ -24,6 +24,21 @@ MongoDB 的灵活文档结构适合嵌套数据较多、字段会逐步演进，
 
 本文以 `mongosh` 为交互式命令行为主线，目标是建立数据库、集合、文档、CRUD、索引和聚合的基础能力；最后给出 Go 服务接入 MongoDB 的最小边界。复制集、分片、变更流、Atlas Search 和复杂事务属于后续专题。
 
+## 先学会读 `mongosh` 命令语法
+
+`mongosh` 使用 JavaScript 风格的对象和方法调用。后文的语法模板不是可以原样复制的文本，而是描述“在哪个对象上调用什么方法、每个参数是什么结构”。
+
+| 写法 | 含义 | 实际书写方式 |
+| --- | --- | --- |
+| `db.collection.method(...)` | 在当前数据库的一个集合上调用方法 | 把 `collection` 换为实际集合名，例如 `db.users.find(...)` |
+| `filter`、`document`、`options` | 参数占位符 | 替换为 JavaScript/BSON 对象，例如 `{ age: { $gte: 18 } }` |
+| `{ field: value }` | 文档或条件对象 | 冒号左边是字段名，右边是字段值或运算符对象 |
+| `[ ... ]` | 数组 | 方括号中的元素按顺序组成列表，例如批量文档或聚合阶段 |
+| `$operator` | MongoDB 操作符 | `$` 不是变量插值；它标识 `$gte`、`$set`、`$match` 这类数据库操作符 |
+| `"nested.field"` | 点号路径 | 用字符串指向嵌套对象中的字段，例如 `"profile.city"` |
+
+例如 `db.users.find({ age: { $gte: 18 } }, { name: 1, _id: 0 })` 有三个层次：`db.users` 是集合，`find` 是查询方法，第一个对象是筛选条件，第二个对象是投影。`age` 是字段，`$gte` 是“大于等于”操作符，`18` 是比较值；第二个对象表示只返回 `name`，并排除默认的 `_id`。
+
 ## 阅读结构
 
 ~~~mermaid
@@ -179,7 +194,9 @@ db.collection.insertOne(document, options)
 db.collection.insertMany([document1, document2, ...], options)
 ~~~
 
-`document` 是一个 BSON 文档；若没有提供 `_id`，MongoDB 会自动生成 `ObjectId`。`options` 可控制写关注（write concern）、有序批量写入等行为，入门阶段可省略。
+`db.collection` 的 `db` 是当前数据库对象，`collection` 是目标集合名称，`insertOne` 只接收一个待写入文档。文档由若干 `字段: 值` 对构成，逗号分隔；键是字段名，值可为字符串、数字、布尔值、数组、嵌套对象、日期等 BSON 类型。未提供 `_id` 时，服务端会自动生成 `ObjectId`；显式提供时必须保证唯一。
+
+`options` 是可选的控制参数，不写就是使用默认行为。`insertOne` 成功后返回确认状态和 `insertedId`；`insertMany` 的第一个参数则必须是文档数组，每个数组元素都是一条独立文档。它不是“一个包含多个字段的大对象”。
 
 下面再向 `users` 集合插入一条用户文档：
 
@@ -200,7 +217,7 @@ db.users.insertOne({
 
 ### 2. 批量插入
 
-`insertMany` 的第一个参数必须是文档数组；默认 `ordered: true`，遇到错误时会停止后续插入。批量导入若希望尽可能写入其余合法文档，可显式设置 `{ ordered: false }`，并单独处理返回的错误明细。
+`insertMany` 的第一个参数必须是文档数组；默认 `ordered: true`，遇到错误时会停止后续插入。写成 `{ ordered: false }` 时，`ordered` 是选项字段，`false` 是布尔值，表示遇到某条失败后继续尝试后续文档；调用仍会报告失败项，因此导入程序必须处理错误明细。
 
 ~~~javascript
 db.users.insertMany([
@@ -225,7 +242,9 @@ db.collection.find(filter, projection)
   .limit(count)
 ~~~
 
-`filter` 是筛选条件，空对象 `{}` 表示匹配全部文档；`projection` 决定返回字段；`sortSpec` 中 `1` 表示升序，`-1` 表示降序。`findOne` 返回一个文档或 `null`，`find` 返回可继续调用排序和分页方法的游标。
+`filter` 是“字段名到匹配规则”的对象，空对象 `{}` 表示匹配全部文档；`projection` 决定返回字段；`sortSpec` 中 `1` 表示升序，`-1` 表示降序。`findOne` 返回一个文档或 `null`，`find` 返回可继续调用排序和分页方法的游标。
+
+`find(filter, projection)` 的两个参数位置不能调换。第一个对象决定“找哪些文档”，第二个对象决定“每个命中文档带回哪些字段”。`sort`、`skip`、`limit` 是对 `find` 返回的游标继续调用的方法：`sort` 接收“字段到方向”的对象，`skip` 接收非负跳过数量，`limit` 接收最多返回数量。通常先排序，再跳过，再限制，才能得到稳定页面。
 
 示例：
 
@@ -249,6 +268,8 @@ db.users.find({ tags: "go" })
 { $and: [condition1, condition2] }
 { $or: [condition1, condition2] }
 ~~~
+
+`{ field: value }` 是等值条件；`{ field: { $operator: value } }` 把字段的规则写进一个操作符对象；`{ "nested.field": value }` 通过点号路径进入嵌套文档。`$and`、`$or` 的值必须是条件对象数组，而不是单个对象。
 
 投影字段为 `1` 表示包含、为 `0` 表示排除；除 `_id` 外，不能在同一投影中混用包含和排除。排序和限制属于游标操作，因此应在 `find` 后链式调用。
 
@@ -309,7 +330,11 @@ db.collection.updateMany(filter, update, options)
 db.collection.replaceOne(filter, replacement, options)
 ~~~
 
-`filter` 决定目标文档，`update` 通常由 `$set`、`$inc` 等更新操作符组成；`replaceOne` 则以完整 replacement 替换旧文档内容，使用时需格外谨慎。`options.upsert: true` 表示无匹配时插入。
+`filter` 决定目标文档，`update` 通常由 `$set`、`$inc` 等更新操作符组成；`replaceOne` 则以完整 `replacement` 替换旧文档内容，使用时需格外谨慎。第三个参数写成 `{ upsert: true }` 时，表示无匹配则插入。
+
+`updateOne` 只更新一条匹配文档，`updateMany` 更新所有匹配文档；两者的第一个参数都是过滤条件，第二个参数都是“怎么改”。例如 `$set: { "profile.city": "杭州" }` 只设置这个嵌套字段，不会替换整个 `profile` 对象；`$inc: { level: 1 }` 在旧数值上加 1。常规更新参数必须以 `$set` 等更新操作符开头；若想用普通对象整体替换，应明确调用 `replaceOne`。
+
+`replaceOne(filter, replacement, options)` 的 `replacement` 必须是一份完整的新文档：旧文档中没有出现在 replacement 里的字段会被移除，而 `_id` 仍必须保持兼容。因此，字段级修改优先使用更新操作符。
 
 示例：
 
@@ -362,7 +387,7 @@ db.collection.deleteMany(filter, options)
 db.collection.drop()
 ~~~
 
-`deleteOne` 只删除第一个匹配文档，`deleteMany` 删除全部匹配文档；`drop` 作用于整个集合，同时移除集合数据和索引。先写过滤条件，再执行删除命令。
+`deleteOne` 只删除第一条匹配文档，`deleteMany` 删除全部匹配文档；二者第一个参数 `filter` 的写法与 `find` 完全相同。`deleteMany({})` 的空条件表示“匹配所有文档”。`drop()` 没有过滤条件，因为它作用于整个集合，同时移除集合数据和索引。先用同一个 `filter` 执行 `find` 确认范围，再执行删除命令。
 
 示例：
 
@@ -394,7 +419,9 @@ db.collection.dropIndex(indexNameOrKeySpec)
 db.collection.find(filter).explain("executionStats")
 ~~~
 
-索引键中的 `1` 表示正向索引，`-1` 表示反向索引；`options` 可声明 `unique: true`、索引名等属性。`explain("executionStats")` 会实际执行查询并返回统计信息，适合验证索引是否与查询模式匹配。
+`createIndex` 的第一个对象是“索引键规格”：对象中每个字段都是索引键，字段出现的先后顺序就是复合索引的键顺序。`{ "profile.city": 1, age: -1 }` 表示先按城市、再按年龄建立索引；`1` 与 `-1` 分别是正向与反向索引方向。第二个 `options` 对象可写 `{ unique: true }` 或 `{ name: "idx_users_city_age" }`。
+
+`getIndexes()` 没有参数，返回集合索引定义；`dropIndex(indexNameOrKeySpec)` 接收索引名称字符串或同样的键规格；`find(filter).explain("executionStats")` 是先构造查询、再请求其执行计划。`executionStats` 会执行查询并返回统计信息，适合验证索引是否与查询模式匹配。
 
 示例：
 
@@ -437,6 +464,8 @@ db.collection.aggregate([
   { $stage2: { ... } }
 ], options)
 ~~~
+
+`aggregate` 的第一个参数是数组，数组中的每个元素都是一个阶段对象；数组顺序就是执行顺序，不能交换。阶段对象通常只有一个以 `$` 开头的键，例如 `{ $match: { status: "published" } }`：`$match` 是阶段名，其值是该阶段的配置对象。`options` 是可选的第二个参数。
 
 每一阶段接收上阶段输出的文档流并继续转换。常见阶段的输入输出关系如下：
 
@@ -481,6 +510,8 @@ db.articles.aggregate([
 | `$sort` | 对中间结果排序 |
 | `$project` | 控制输出字段，重命名或计算字段 |
 | `$limit` | 限制结果量 |
+
+`$group` 中的 `_id` 不是原文档的主键含义，而是“本次聚合用什么作为分组键”。`_id: "$authorId"` 中的 `"$authorId"` 是字段引用，意思是取每条输入文档的 `authorId` 值来分组；`articleCount: { $sum: 1 }` 中的 `1` 表示每个输入文档计一次；`totalViews: { $sum: "$views" }` 则累加每条文档的 `views` 字段。`$project` 的 `1` 表示保留字段，`0` 表示排除字段，`authorId: "$_id"` 则把前一阶段的分组键改名输出。
 
 聚合不是免成本的“数据库内循环”。`$match`、`$sort`、`$lookup` 等阶段是否能利用索引，会直接影响性能；应先减少参与管道的文档，再进行分组或复杂转换。
 
