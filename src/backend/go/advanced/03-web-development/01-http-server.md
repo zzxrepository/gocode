@@ -48,6 +48,26 @@ Go 标准库中的 `net/http` 包同时提供了 HTTP 客户端和 HTTP 服务�
 
 大多数 Go Web 框架，例如 Gin、Echo 和 Chi，底层都建立在 `net/http` 提供的接口和服务器模型之上。因此，在学习 Web 框架之前，理解 `net/http` 的基本设计非常重要。
 
+## 阅读结构
+
+内容按“HTTP 服务如何从网络连接走到业务 Handler”的因果顺序展开；客户端、代理和关闭流程在服务端主链建立之后介绍。
+
+| 部分 | 核心问题 | 关键对象 |
+| --- | --- | --- |
+| HTTP 基础与核心类型 | HTTP 请求有哪些输入输出，标准库提供哪些抽象 | `Request`、`ResponseWriter`、`Handler` |
+| Handler 与路由 | 函数如何成为 Handler，路由如何注册和匹配 | `HandlerFunc`、`ServeMux` |
+| Server 与连接处理 | 谁监听端口、接受连接并把请求交给 Handler | `Server`、`serverHandler`、`net.Listener` |
+| 请求与响应 | Handler 如何读取 URL、Header、表单和 JSON，如何写响应 | `Request`、`ResponseWriter` |
+| HTTP 客户端 | 如何发请求并复用连接 | `Client`、`Transport` |
+| 生产服务能力 | 超时、优雅关闭、反向代理和安全边界 | `Server`、`Shutdown`、`ReverseProxy` |
+
+服务端主链始终可以归结为：
+
+~~~text
+启动阶段：创建 Server、构造 Handler 链、注册 ServeMux 路由
+请求阶段：Listener -> Server -> serverHandler -> Handler / ServeMux -> ResponseWriter
+~~~
+
 ## HTTP 请求的基本过程
 
 HTTP 是一种应用层协议。一次典型的 HTTP 通信过程如下：
@@ -1709,6 +1729,57 @@ server := &http.Server{
 }
 ```
 
+### `Server` 结构体：配置入口与运行时所有者
+
+`http.Server` 是 HTTP 服务端的总配置和运行时管理者。它没有路由树字段，也不认识 Controller、Service 或数据库；它只在请求已被协议层解析后，通过 `Handler` 字段把 `Request` 和 `ResponseWriter` 交给应用层。
+
+Go 1.26.5 的 `Server` 很大，以下源码按职责保留关键字段：
+
+~~~go
+type Server struct {
+	Addr    string
+	Handler Handler
+	// Addr 决定监听地址；Handler 决定每个请求最终调用谁。
+	// Handler 为 nil 时，标准库使用 DefaultServeMux。
+
+	DisableGeneralOptionsHandler bool
+	// 控制 OPTIONS * 这一特殊协议请求是否绕过默认处理。
+
+	TLSConfig    *tls.Config
+	Protocols    *Protocols
+	TLSNextProto map[string]func(*Server, *tls.Conn, Handler)
+	// TLS、ALPN、HTTP/1、HTTP/2 的协议配置。
+
+	ReadTimeout, ReadHeaderTimeout time.Duration
+	WriteTimeout, IdleTimeout      time.Duration
+	MaxHeaderBytes                  int
+	// HTTP 报文读取、响应写入和 Keep-Alive 等网络边界。
+
+	ConnState   func(net.Conn, ConnState)
+	ErrorLog    *log.Logger
+	BaseContext func(net.Listener) context.Context
+	ConnContext func(context.Context, net.Conn) context.Context
+	// 连接观测、错误日志以及 Listener/连接级 Context 钩子。
+
+	inShutdown atomic.Bool
+	listeners  map[*net.Listener]struct{}
+	activeConn map[*conn]struct{}
+	// 未导出运行时状态，供 Serve、Close、Shutdown 协调资源。
+}
+~~~
+
+字段可以归为五类：
+
+| 类别 | 代表字段 | 作用 |
+| --- | --- | --- |
+| 服务入口 | `Addr`、`Handler` | 在哪里监听、请求交给谁 |
+| 协议 | `TLSConfig`、`Protocols`、`TLSNextProto` | TLS、ALPN、HTTP/1 与 HTTP/2 |
+| 网络边界 | 超时字段、`MaxHeaderBytes` | 约束连接和 HTTP 读写 |
+| 钩子 | `ErrorLog`、`ConnState`、`BaseContext`、`ConnContext` | 监控、日志和上下文 |
+| 内部状态 | `inShutdown`、`listeners`、`activeConn` | 服务关闭与连接生命周期 |
+
+应用代码主要配置服务入口和网络边界。最后一类字段不导出：它们不是遗漏的业务配置，而是标准库保证 `Serve`、`Close`、`Shutdown` 能协同工作的内部状态。
+
 常用字段如下。
 
 | 字段                | 作用                                    |
@@ -1741,10 +1812,33 @@ IdleTimeout
 | `ErrorLog`     | 设置服务端错误日志                   |
 | `BaseContext`  | 为监听器创建基础 Context             |
 | `ConnContext`  | 为每个连接设置 Context               |
-| `ConnState`    | 观察连接的新建、活跃、空闲和关闭状态 |
 | `TLSNextProto` | 自定义 TLS 协议协商行为              |
 
 这些配置通常用于基础设施、中间件、连接统计或底层协议扩展。普通业务服务不需要把 `http.Server` 的每一个字段都手动填一遍，保持不需要字段的零值即可。
+
+### `Server` 方法族的关系
+
+`Server` 的方法围绕同一个 Listener 集合和活动连接集合协作，并不是互不关联的 API：
+
+| 方法 | 输入 | 作用 | 下一步 |
+| --- | --- | --- | --- |
+| `ListenAndServe` | 使用 `Server.Addr` | 创建 TCP Listener | 调用 `Serve` |
+| `Serve` | 调用方传入的 `net.Listener` | Accept 连接并创建内部 `conn` | 每条连接进入 `c.serve` |
+| `ListenAndServeTLS` / `ServeTLS` | 证书或 TLS Listener | 加入 TLS 与 ALPN 协商 | 最终仍进入 Handler 分发 |
+| `Shutdown` | `context.Context` | 停止新连接、关闭空闲连接、等待活跃连接 | 依赖 `listeners`、`activeConn` |
+| `Close` | 无 | 立即关闭 Listener 和活动连接 | 不等待活跃请求完成 |
+
+~~~text
+ListenAndServe
+  -> net.Listen("tcp", Server.Addr)
+  -> Server.Serve(listener)
+       -> listener.Accept()
+       -> go conn.serve(...)
+            -> serverHandler{server}.ServeHTTP(...)
+                 -> Server.Handler.ServeHTTP(...)
+~~~
+
+`ListenAndServe` 是 TCP 监听的便捷入口；`Serve` 支持调用方自带 Listener，例如 Unix Socket、测试 Listener 或已经完成 TLS 包装的 Listener。`Shutdown` 执行后 Server 进入关闭状态，不能用同一实例再次启动。
 
 ### Server、Listener 与 ServeMux 的职责边界
 
@@ -1849,7 +1943,25 @@ func (s *Server) Serve(l net.Listener) error {
 
 #### Server 最终如何选择 Handler
 
-Server.Handler 的类型是 http.Handler，因此它可以接收 ServeMux、自定义 Handler、HandlerFunc，或被中间件包装后的 Handler。标准库内部的 serverHandler 做最终分发：
+Server.Handler 的类型是 http.Handler，因此它可以接收 ServeMux、自定义 Handler、HandlerFunc，或被中间件包装后的 Handler。标准库内部的 serverHandler 是连接层到应用 Handler 的小型适配器：
+
+~~~go
+type serverHandler struct {
+	srv *Server
+	// 保存当前连接所属的 Server 指针，而不是复制一份 Server。
+}
+~~~
+
+HTTP/1.1 连接完成请求解析后，conn.serve 的主循环调用：
+
+~~~go
+serverHandler{c.server}.ServeHTTP(w, w.req)
+// c.server: 当前连接归属的 *Server
+// w:        当前请求对应的 ResponseWriter
+// w.req:    已完成解析的 *Request
+~~~
+
+serverHandler 不保存路由表，也不解析 URL。它只读取 srv.Handler，必要时回退到 DefaultServeMux，然后调用所选 Handler 的 ServeHTTP：
 
 ~~~go
 func (sh serverHandler) ServeHTTP(rw ResponseWriter, req *Request) {
