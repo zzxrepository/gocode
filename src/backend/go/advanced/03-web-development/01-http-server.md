@@ -375,7 +375,7 @@ func main() {
 }
 ```
 
-`http.HandlerFunc` 本质上是一个适配器类型。下面是 Go 1.22.10 标准库 [`server.go`](https://go.googlesource.com/go/+/go1.22.10/src/net/http/server.go#2167) 中的原始实现：
+`http.HandlerFunc` 本质上是一个适配器类型。下面是 Go 1.26.5 标准库 [`server.go`](https://cs.opensource.google/go/go/+/go1.26.5:src/net/http/server.go;l=2282) 中的原始实现：
 
 ```go
 type HandlerFunc func(
@@ -492,41 +492,229 @@ if r.Method != http.MethodGet {
 
 需要注意，路由模式中的 `GET` 同时可以匹配 `HEAD` 请求；其他请求方法则进行精确匹配。Go 1.21 或更早版本不能使用方法模式和 `{id}` 路径参数，需要在处理器内部手动检查 `r.Method` 并解析路径。
 
-### 从 `ServeMux` 源码看路由边界
+### 从 `ServeMux` 源码理解“注册”和“分发”是两件事
 
-Go 1.22 的 `ServeMux` 在**注册路由时**会解析模式，并检查是否存在无法确定优先级的冲突；因此，冲突通常在程序启动时就会触发 `panic`，而不是等到某个请求到来才随机选择 Handler。请求到来后，它按“更具体的模式优先”选择处理器：
-
-- `GET /posts/latest` 比 `GET /posts/{id}` 更具体，因此会优先匹配；
-- `GET /posts/{id}` 比 `/posts/{id}` 更具体，因为它额外限制了请求方法；
-- 两个模式有重叠但谁都不比谁更具体时，注册阶段会报冲突，避免依赖注册顺序。
-
-请求分派的核心源码也很短。下列片段来自 Go 1.22.10 的 [`ServeMux.ServeHTTP`](https://go.googlesource.com/go/+/go1.22.10/src/net/http/server.go#2674)，省略了对特殊请求 `OPTIONS *` 的处理：
-
-```go
-var h Handler
-if use121 {
-	h, _ = mux.mux121.findHandler(r)
-} else {
-	h, _, r.pat, r.matches = mux.findHandler(r)
-}
-h.ServeHTTP(w, r)
-```
-
-`findHandler` 负责找出匹配结果，随后标准库只做一件事：调用该处理器的 `ServeHTTP`。这里的 `use121` 是 Go 1.22 为兼容旧路由行为保留的内部开关，不是业务代码需要设置的选项。
-
-源码中与这件事直接相关的调用链可以概括为：
+`ServeMux` 同时承担两个职责，但发生在不同阶段：程序启动时保存路由；每个请求到来时查找路由并调用 Handler。把这两个阶段分开，是理解标准库 HTTP 编程的关键。
 
 ```text
-mux.HandleFunc(pattern, handler)
-        ↓
-parsePattern(pattern)     // 解析方法、主机、字面路径和通配符
-        ↓
-检查冲突并注册到路由索引
-        ↓
-请求到来时按“最具体优先”查找 Handler
+启动阶段：NewServeMux -> Handle / HandleFunc -> 解析并保存 pattern
+
+请求阶段：Server 收到请求 -> ServeMux.ServeHTTP -> 查找 Handler -> Handler.ServeHTTP
 ```
 
-不需要记住路由树的数据结构。实际开发只要据此避开两类问题：不要注册语义重叠且优先级不明确的路由；不要期待“后注册的路由覆盖先注册的路由”。
+下面的源码片段以 Go 1.26.5 的 `net/http` 为准。不同小版本的私有字段和辅助函数可能调整，但 `Handler`、`ServeMux`、`Server` 组成的公开模型保持稳定。
+
+#### `NewServeMux` 创建的是什么
+
+`NewServeMux` 不会监听端口，也不会启动 goroutine；它只创建一个项目私有的路由器。Go 1.26.5 的核心结构如下：
+
+```go
+type ServeMux struct {
+	mu sync.RWMutex
+	// 注册路由时使用写锁，请求匹配时使用读锁。
+
+	tree routingNode
+	// Go 1.22+ 路由规则使用的匹配树。
+
+	index routingIndex
+	// 检查 pattern 冲突时使用的索引。
+
+	mux121 serveMux121
+	// 仅在启用 Go 1.21 兼容模式时使用的旧路由表。
+}
+
+func NewServeMux() *ServeMux {
+	return &ServeMux{}
+}
+```
+
+因此，下面两行是两个层面的操作：
+
+```go
+mux := http.NewServeMux()       // 内存中创建路由表
+server := &http.Server{Handler: mux} // 指定收到请求后使用该路由表
+```
+
+直到 `server.ListenAndServe()` 调用 `net.Listen`，程序才真正开始监听网络端口。
+
+#### `Handle` 与 `HandleFunc`：第二个参数为何不同
+
+`ServeMux` 的两个注册方法，第一个参数都是 pattern，差异只在第二个参数：
+
+```go
+func (mux *ServeMux) Handle(pattern string, handler Handler)
+func (mux *ServeMux) HandleFunc(pattern string, handler func(ResponseWriter, *Request))
+```
+
+| 调用形式 | 接收的对象 | 适用场景 |
+| --- | --- | --- |
+| `mux.Handle` | 已实现 `http.Handler` 的对象 | 自定义 Handler、文件服务、中间件包装后的处理器 |
+| `mux.HandleFunc` | 普通函数 `func(http.ResponseWriter, *http.Request)` | 直接注册函数或 Controller 方法值 |
+
+Go 1.26.5 的实现表明，它们最终都会走统一的注册入口：
+
+```go
+func (mux *ServeMux) Handle(pattern string, handler Handler) {
+	if use121 {
+		mux.mux121.handle(pattern, handler)
+		return
+	}
+	mux.register(pattern, handler)
+}
+
+func (mux *ServeMux) HandleFunc(pattern string, handler func(ResponseWriter, *Request)) {
+	if use121 {
+		mux.mux121.handleFunc(pattern, handler)
+		return
+	}
+	mux.register(pattern, HandlerFunc(handler))
+	// 这里把普通函数适配成实现了 Handler 的 HandlerFunc。
+}
+```
+
+例如，直接处理函数适合 `HandleFunc`：
+
+```go
+mux.HandleFunc("GET /users/{id}", getUserHandler)
+```
+
+认证中间件的返回值已经是 `http.Handler`，所以应使用 `Handle`：
+
+```go
+protected := authenticate(getUserHandler)
+// protected 的类型是 http.Handler。
+mux.Handle("GET /users/{id}", protected)
+```
+
+这里的 `HandlerFunc` 与前文的函数适配器正好连起来：`HandleFunc` 不是另一套路由机制，只是替开发者完成了 `HandlerFunc(handler)` 这一步。
+
+包级 `http.Handle`、`http.HandleFunc` 的逻辑相同，只是注册目标固定为全局对象：
+
+```go
+func HandleFunc(pattern string, handler func(ResponseWriter, *Request)) {
+	DefaultServeMux.register(pattern, HandlerFunc(handler))
+}
+```
+
+实际源码同样保留 `use121` 分支；省略它后可以清楚看出本质：包级函数等价于 `http.DefaultServeMux.HandleFunc(...)`。显式创建 `mux := http.NewServeMux()` 则把路由表限制在当前服务实例内。
+
+#### 注册时做什么：解析、冲突检查、写入路由表
+
+新路由规则下，`Handle` 与 `HandleFunc` 都会进入：
+
+```go
+func (mux *ServeMux) register(pattern string, handler Handler) {
+	if err := mux.registerErr(pattern, handler); err != nil {
+		panic(err)
+	}
+}
+```
+
+`registerErr` 会解析 Method、Host、路径段和通配符，检查 `nil` Handler、非法 pattern 与歧义冲突；校验通过后才写入 `tree` 和 `index`。完整过程可以概括为：
+
+```text
+mux.HandleFunc("GET /users/{id}", getUserHandler)
+        ↓
+HandlerFunc(getUserHandler)       将普通函数变成 Handler
+        ↓
+registerErr                        解析 "GET"、"/users"、"{id}"
+        ↓
+检查语法与路由冲突
+        ↓
+tree.addPattern / index.add        保存到新路由表
+```
+
+Go 1.22+ 的 `ServeMux` 在**注册路由时**检查冲突，因此错误通常会在服务启动阶段以 `panic` 暴露，而不是等到某个请求到来才随机选择 Handler。匹配规则是“更具体的 pattern 优先”：
+
+- `GET /posts/latest` 比 `GET /posts/{id}` 更具体；
+- `GET /posts/{id}` 比 `/posts/{id}` 更具体，因为它额外限制了请求方法；
+- 两个 pattern 有重叠但谁都不比谁更具体时，不能同时注册。
+
+这也是标准库路由与某些“后注册覆盖先注册”路由器的重要区别：不要依赖注册顺序覆盖已有路由。
+
+#### `use121`：为什么所有方法都有新旧分支
+
+Go 1.22 修改了 `ServeMux` 的 pattern 语法和匹配规则。为了让旧程序可临时保持 Go 1.21 行为，标准库保留了旧实现 `servemux121.go`。其中的开关在 `net/http` 包初始化时一次性确定：
+
+```go
+var httpmuxgo121 = godebug.New("httpmuxgo121")
+var use121 bool
+
+func init() {
+	if httpmuxgo121.Value() == "1" {
+		use121 = true
+		httpmuxgo121.IncNonDefault()
+	}
+}
+```
+
+`httpmuxgo121.Value()` 读取的是 GODEBUG 设置。最常见的兼容启动方式是：
+
+```bash
+GODEBUG=httpmuxgo121=1 go run .
+```
+
+开关选择过程如下：
+
+```text
+go.mod 的 Go 版本、godebug / //go:debug 指令生成默认设置
+                         ↓
+环境变量 GODEBUG 可显式覆盖默认设置
+                         ↓
+net/http 包的 init 读取 httpmuxgo121.Value() 一次
+                         ↓
+          "1" -> use121=true  -> 使用 Go 1.21 兼容路由表 mux121
+          其他 -> use121=false -> 使用 Go 1.22+ 路由树 tree/index
+```
+
+它不是“调用 `Handle` 时再判断一次环境变量”的动态配置。`init` 已经把结果保存为 `use121`，所以注册和匹配必然使用同一套数据结构；运行中再调用 `os.Setenv` 不会切换实现。使用 `"GET /users/{id}"`、`r.PathValue("id")` 的项目应保持新实现，即不设置 `httpmuxgo121=1`。
+
+#### 请求到来后：`Handler` 只查找，`ServeHTTP` 查找后执行
+
+`ServeMux.Handler` 用于查找但不执行：
+
+```go
+func (mux *ServeMux) Handler(r *Request) (h Handler, pattern string) {
+	if use121 {
+		return mux.mux121.findHandler(r)
+	}
+	h, p, _, _ := mux.findHandler(r)
+	return h, p
+}
+```
+
+它刻意不修改 `r`，因此不会填充命名路径变量；调用它之后，`r.PathValue("id")` 仍然是空字符串。
+
+HTTP Server 实际调用的是 `ServeMux.ServeHTTP`。省略 `RequestURI == "*"` 的特殊请求处理后，Go 1.26.5 的核心逻辑为：
+
+```go
+func (mux *ServeMux) ServeHTTP(w ResponseWriter, r *Request) {
+	var h Handler
+	if use121 {
+		h, _ = mux.mux121.findHandler(r)
+	} else {
+		h, r.Pattern, r.pat, r.matches = mux.findHandler(r)
+		// 保存匹配的 pattern 与路径变量，供 PathValue 使用。
+	}
+	h.ServeHTTP(w, r)
+}
+```
+
+这段代码展示了路由器最终的职责边界：`findHandler` 负责按 Method、Host、路径选择 Handler；`ServeHTTP` 再把请求交给它。对 `GET /users/1001`，路径参数在调用 `getUserHandler` 前已经被保存，所以 Handler 内的 `r.PathValue("id")` 才会得到 `"1001"`。
+
+```text
+请求：GET /users/1001
+        ↓
+ServeMux.findHandler
+        ↓
+HandlerFunc(getUserHandler) + id="1001"
+        ↓
+getUserHandler.ServeHTTP
+        ↓
+getUserHandler(w, r) 内调用 r.PathValue("id")
+```
+
+当路径存在但方法不匹配时，`findHandler` 会选择标准库的 `405 Method Not Allowed` Handler，并生成 `Allow` 头；没有任何路径匹配时则选择 `404 Not Found` Handler。这些结果同样会作为普通 `Handler` 被 `ServeHTTP` 调用。
 
 ---
 
@@ -1567,43 +1755,179 @@ IdleTimeout
 
 这些配置通常用于基础设施、中间件、连接统计或底层协议扩展。普通业务服务不需要把 `http.Server` 的每一个字段都手动填一遍，保持不需要字段的零值即可。
 
-### 从 `Server.Serve` 源码看服务端在做什么
+### Server、Listener 与 ServeMux 的职责边界
 
-`http.ListenAndServe(":8080", handler)` 可以拆成两步理解：先通过 `net.Listen` 创建 TCP 监听器，再调用 `Server.Serve(listener)`。`Serve` 的核心职责是持续执行 `Accept` 接收连接；每接到一个连接，就交给服务逻辑读取 HTTP 请求并调用已配置的 Handler。
+ServeMux 只处理“已经解析完成的 HTTP 请求应由谁处理”；它不会打开端口、不会接受 TCP 连接。网络监听、连接生命周期、HTTP 报文解析和超时控制都属于 http.Server。
 
-请求已经被解析为 `Request` 后，服务端如何交给你注册的处理器？Go 1.22.10 的 [`serverHandler.ServeHTTP`](https://go.googlesource.com/go/+/go1.22.10/src/net/http/server.go#3133) 给出了核心答案：
+~~~text
+http.Server   网络与协议层：监听、连接、读写、超时、优雅关闭
+http.ServeMux 应用分发层：按 Method、Host、Path 找到 Handler
+http.Handler  请求处理边界：接收 Request，使用 ResponseWriter 写响应
+~~~
 
-```go
+这三个对象在一次请求中以固定顺序协作：
+
+~~~text
+net.Listener.Accept
+        ↓
+http.Server 解析 HTTP 报文
+        ↓
+server.Handler.ServeHTTP
+        ↓
+ServeMux.ServeHTTP
+        ↓
+路由级中间件与业务 Handler
+~~~
+
+#### ListenAndServe 先创建 Listener，再进入 Serve
+
+包级函数 http.ListenAndServe 只是一个便捷封装。它先创建 Server，再调用同名方法：
+
+~~~go
+func ListenAndServe(addr string, handler Handler) error {
+	server := &Server{Addr: addr, Handler: handler}
+	return server.ListenAndServe()
+}
+~~~
+
+显式创建 Server 后调用 ListenAndServe，Go 1.26.5 的核心逻辑如下：
+
+~~~go
+func (s *Server) ListenAndServe() error {
+	if s.shuttingDown() {
+		return ErrServerClosed
+	}
+
+	addr := s.Addr
+	if addr == "" {
+		addr = ":http"
+		// 服务名 http 通常对应 TCP 80 端口。
+	}
+
+	ln, err := net.Listen("tcp", addr)
+	// 绑定地址并创建 TCP 监听器；端口被占用时在这里返回错误。
+	if err != nil {
+		return err
+	}
+
+	return s.Serve(ln)
+	// 将监听器交给 Server 的连接管理与 HTTP 协议处理逻辑。
+}
+~~~
+
+所以 ListenAndServe 不是一个“ListenAndServe 对象”，而是会阻塞当前 goroutine 的启动方法。要使用 Unix Socket 或已经创建好的 Listener 时，可以直接调用 Server.Serve：
+
+~~~go
+ln, err := net.Listen("tcp", ":8080")
+if err != nil {
+	return err
+}
+return server.Serve(ln)
+~~~
+
+#### Serve 的 Accept 循环：并发首先发生在连接层
+
+Server.Serve 的完整实现还处理临时网络错误退避、HTTP/2 初始化、连接状态上报与优雅关闭。主干逻辑可以抽象为：
+
+~~~go
+func (s *Server) Serve(l net.Listener) error {
+	for {
+		rw, err := l.Accept()
+		// 阻塞等待新的 TCP 连接。
+		if err != nil {
+			if s.shuttingDown() {
+				return ErrServerClosed
+			}
+			if ne, ok := err.(net.Error); ok && ne.Temporary() {
+				// 完整源码会对临时错误退避后重试。
+				continue
+			}
+			return err
+		}
+
+		c := s.newConn(rw)
+		go c.serve(connCtx)
+		// 每条 TCP 连接交给独立 goroutine。
+	}
+}
+~~~
+
+并发的第一个单位是**连接**，而不是 Handler 函数。HTTP/1.1 Keep-Alive 可以让一条 TCP 连接顺序承载多个请求；HTTP/2 允许一条连接承载多个并发 stream。因此，业务代码不能把一次请求的状态放进全局变量，也不能假定一个连接只会有一个请求。
+
+连接 goroutine 会读取请求行、Header 与 Body，构造 *http.Request 和 ResponseWriter，然后调用 Server 配置的 Handler。ReadHeaderTimeout、ReadTimeout、WriteTimeout、IdleTimeout 与 MaxHeaderBytes 都在这个网络和协议边界发挥作用；它们不等同于数据库查询或下游 RPC 的业务超时。
+
+#### Server 最终如何选择 Handler
+
+Server.Handler 的类型是 http.Handler，因此它可以接收 ServeMux、自定义 Handler、HandlerFunc，或被中间件包装后的 Handler。标准库内部的 serverHandler 做最终分发：
+
+~~~go
 func (sh serverHandler) ServeHTTP(rw ResponseWriter, req *Request) {
 	handler := sh.srv.Handler
 	if handler == nil {
 		handler = DefaultServeMux
+		// 未显式设置 Handler 时，才使用全局路由器。
 	}
+
 	if !sh.srv.DisableGeneralOptionsHandler &&
 		req.RequestURI == "*" && req.Method == "OPTIONS" {
 		handler = globalOptionsHandler{}
+		// HTTP OPTIONS * 的特殊协议处理。
 	}
+
 	handler.ServeHTTP(rw, req)
 }
-```
+~~~
 
-所以 `Server.Handler` 为 `nil` 时会落到全局 `DefaultServeMux`；而你把 `mux` 传给 `ListenAndServe` 或写入 `Server.Handler` 时，最终都会落到同一个 `handler.ServeHTTP(rw, req)` 调用点。
+因此下面的配置最终会调用 mux.ServeHTTP：
 
-```text
-监听端口
-   ↓ Accept
-接收一个 TCP/TLS 连接
-   ↓ 解析请求
-构造 Request 和 ResponseWriter
-   ↓
-调用 ServeMux / Handler
-   ↓
-完成响应，决定连接关闭还是进入 keep-alive 空闲状态
-```
+~~~go
+server := &http.Server{
+	Addr:    ":8080",
+	Handler: mux,
+}
+~~~
 
-这解释了 `http.Server` 的配置为什么集中在读超时、写超时、空闲超时和请求头大小：它们约束的是**网络连接与协议读写**，并不替你限制数据库查询、下游 RPC 或业务循环。后者仍应使用 `r.Context()` 或业务自己的超时控制。
+若使用中间件，Server 调用的是最外层 Handler；中间件再决定何时调用内层 Handler：
 
----
+~~~go
+handler := logging(recovery(mux))
+// 实际对象关系：logging(recovery(mux))
+
+server := &http.Server{
+	Addr:    ":8080",
+	Handler: handler,
+}
+~~~
+
+中间件并不是 net/http 的特殊机制，其本质是 func(http.Handler) http.Handler 的嵌套。认证中间件不调用 next.ServeHTTP 时，路由器已经找到的具体业务 Handler 就不会执行。
+
+#### 一条请求的完整调用路径
+
+~~~text
+1. 客户端建立或复用 TCP/TLS 连接，发送 HTTP 字节流。
+2. net.Listener.Accept 接收连接；Server 为连接运行 c.serve。
+3. c.serve 解析请求，构造 *http.Request 与 ResponseWriter。
+4. serverHandler 取得 server.Handler；nil 时回退到 DefaultServeMux。
+5. 外层中间件执行，例如 Logger -> Recovery。
+6. ServeMux.ServeHTTP 按 Method、Host、Path 查找 Handler。
+7. 路由级中间件执行，例如 Auth；成功后调用业务 Handler。
+8. 业务 Handler 调用 Service、Repository，并通过 ResponseWriter 写响应。
+9. 调用栈返回；Server 按协议关闭或复用连接。
+~~~
+
+~~~mermaid
+flowchart TD
+    A[客户端 HTTP 请求] --> B[net.Listener Accept]
+    B --> C[http.Server / c.serve]
+    C --> D[serverHandler]
+    D --> E[外层中间件 Handler]
+    E --> F[ServeMux.ServeHTTP]
+    F --> G[路由级中间件]
+    G --> H[业务 Handler]
+    H --> I[ResponseWriter 写入响应]
+~~~
+
+业务代码需要把 Request.Context 向数据库、缓存和下游 HTTP 调用继续传递，并为这些操作设置各自的超时；Server 的网络超时不会自动取消所有业务操作。
 
 ## 优雅关闭 HTTP 服务
 
@@ -2107,17 +2431,15 @@ result, err := userService.FindUser(
 
 ## 总结
 
-Go 的 `net/http` 包采用一套统一而简洁的设计：
+Go 的 `net/http` 包采用一套统一而简洁的设计。先在启动阶段注册路由并构造 Handler 链，再在请求阶段由 Server 完成网络处理与请求分发：
 
-```text
-Server
-  ↓
-ServeMux
-  ↓
-Handler
-  ↓
-具体处理函数
-```
+~~~text
+启动阶段
+NewServeMux -> Handle / HandleFunc -> 路由表与中间件 Handler 链
+
+请求阶段
+net.Listener -> http.Server -> serverHandler -> ServeMux -> Handler -> ResponseWriter
+~~~
 
 服务端开发的核心是：
 
