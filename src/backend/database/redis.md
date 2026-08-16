@@ -103,6 +103,17 @@ String、Hash、List、Set、Sorted Set 的操作命令不同，但每个 Redis 
 
 ### 1. 查看 Key 是否存在、类型和生存时间
 
+命令语法：
+
+~~~text
+EXISTS key [key ...]
+TYPE key
+TTL key | PTTL key
+EXPIRETIME key
+~~~
+
+`EXISTS` 可以一次检查多个 Key，并返回存在数量；`TYPE` 不读取完整 Value；`TTL` 与 `PTTL` 分别以秒、毫秒返回剩余生存时间。下面再使用用户资料 Key 作为示例：
+
 ~~~redis
 EXISTS user:1001:profile
 TYPE user:1001:profile
@@ -122,6 +133,17 @@ EXPIRETIME user:1001:profile
 `TTL` 和 `PTTL` 的特殊返回值相同：正数表示剩余时间，`-1` 表示 Key 存在但永不过期，`-2` 表示 Key 不存在。
 
 ### 2. 设置、更新和取消过期时间
+
+命令语法：
+
+~~~text
+EXPIRE key seconds [NX | XX | GT | LT]
+PEXPIRE key milliseconds [NX | XX | GT | LT]
+EXPIREAT key unix_seconds [NX | XX | GT | LT]
+PERSIST key
+~~~
+
+`key` 必须已经存在；`seconds`、`milliseconds` 和 `unix_seconds` 分别表示相对秒、相对毫秒、绝对 Unix 时间。`PERSIST` 没有时间参数，它移除 Key 的 TTL。下面的命令展示这些不同时间表示法：
 
 ~~~redis
 EXPIRE session:token-demo 1800
@@ -150,6 +172,18 @@ EXPIRE session:token-demo 3600 XX
 
 ### 3. 删除、改名与复制 Key
 
+命令语法：
+
+~~~text
+DEL key [key ...]
+UNLINK key [key ...]
+RENAME key newkey
+RENAMENX key newkey
+COPY source destination [DB destination_db] [REPLACE]
+~~~
+
+`DEL` 和 `UNLINK` 都能接收多个 Key；`RENAME` 要求源 Key 存在且会覆盖目标 Key；`RENAMENX` 仅在目标不存在时成功；`COPY` 默认复制到当前逻辑数据库。下面使用配置和用户 Key 演示：
+
 ~~~redis
 DEL greeting
 UNLINK user:1001:profile
@@ -170,6 +204,15 @@ COPY source:key target:key
 改名或复制不等于修改业务数据模型。尤其是 `RENAME` 会覆盖已有目标 Key，执行前应确认命名空间与目标是否安全。
 
 ### 4. 遍历 Key 空间：使用 `SCAN`，谨慎使用 `KEYS`
+
+命令语法：
+
+~~~text
+SCAN cursor [MATCH pattern] [COUNT count] [TYPE type]
+KEYS pattern
+~~~
+
+`cursor` 由上一次 `SCAN` 返回，首次固定为 `0`；`MATCH` 使用 glob 模式过滤候选 Key；`COUNT` 只是每轮返回数量的提示。下面先从游标 `0` 开始：
 
 ~~~redis
 SCAN 0 MATCH user:* COUNT 100
@@ -199,6 +242,18 @@ KEYS *
 
 String 可保存文本、整数、JSON 字符串或序列化后的对象。计数器特别适合使用 String。
 
+常用命令语法：
+
+~~~text
+SET key value [NX | XX] [EX seconds | PX milliseconds]
+GET key
+INCR key | INCRBY key increment | DECR key
+MSET key value [key value ...]
+MGET key [key ...]
+~~~
+
+`SET` 的 `NX` 表示仅 Key 不存在时写入，`XX` 表示仅 Key 已存在时写入；`EX`、`PX` 可在写入时同时设置 TTL。`INCR`、`INCRBY`、`DECR` 要求 Value 能解析为整数。下面再以问候语、会话、计数器和配置为例：
+
 ~~~redis
 SET greeting "hello redis"
 GET greeting
@@ -220,6 +275,19 @@ MGET config:theme config:lang
 
 Hash 适合保存对象的少量字段，例如用户资料、商品简要信息。它避免把每个字段都拆成独立 Key。
 
+常用命令语法：
+
+~~~text
+HSET key field value [field value ...]
+HGET key field
+HMGET key field [field ...]
+HGETALL key
+HINCRBY key field increment
+HDEL key field [field ...]
+~~~
+
+`key` 指向整个 Hash，`field` 是 Hash 内部字段；`HSET` 可以一次写入多组字段和值。`HGETALL` 会返回所有字段和值，因此只适用于字段数量可控的对象。下面以用户资料为例：
+
 ~~~redis
 HSET user:1001:profile name "张三" city "上海" level 3
 HGET user:1001:profile name
@@ -237,6 +305,18 @@ HLEN user:1001:profile
 
 List 是双端链表，可从左或右推入、弹出。常见用途是简单队列、任务缓冲和最近访问记录。
 
+常用命令语法：
+
+~~~text
+LPUSH key element [element ...]
+RPUSH key element [element ...]
+LPOP key [count] | RPOP key [count]
+LRANGE key start stop
+LLEN key
+~~~
+
+`LPUSH`、`RPUSH` 分别从左、右端写入；`LPOP`、`RPOP` 从对应端弹出；`LRANGE` 的索引从 `0` 开始，`-1` 表示最后一个元素。下面使用邮件任务队列演示：
+
 ~~~redis
 LPUSH queue:email task-1 task-2
 RPUSH queue:email task-3
@@ -252,6 +332,19 @@ LLEN queue:email
 ## 七、Set：无序且不重复的成员
 
 Set 自动去重，适合标签、权限、在线用户和集合关系判断。
+
+常用命令语法：
+
+~~~text
+SADD key member [member ...]
+SMEMBERS key
+SISMEMBER key member
+SREM key member [member ...]
+SCARD key
+SINTER key [key ...]
+~~~
+
+`SADD` 返回实际新增的成员数量；重复成员不会重复保存。`SINTER` 以多个 Set Key 为输入，返回交集。下面分别演示标签去重和角色交集：
 
 ~~~redis
 SADD article:42:tags redis golang database redis
@@ -271,6 +364,19 @@ SINTER user:1001:roles user:1002:roles
 
 Sorted Set（ZSet）中的成员不重复，每个成员关联一个浮点数分数。Redis 按分数排序，因此它很适合排行榜、优先级队列和按时间范围筛选。
 
+常用命令语法：
+
+~~~text
+ZADD key score member [score member ...]
+ZRANGE key start stop [WITHSCORES]
+ZREVRANGE key start stop [WITHSCORES]
+ZINCRBY key increment member
+ZSCORE key member
+ZREMRANGEBYSCORE key min max
+~~~
+
+`score` 是浮点数，`member` 在同一个 ZSet 中唯一；再次 `ZADD` 同一 member 会更新其分数。`ZRANGE` 按低分到高分读取，`ZREVRANGE` 按高分到低分读取。下面以排行榜为例：
+
 ~~~redis
 ZADD leaderboard 98 alice 86 bob 100 carol
 ZREVRANGE leaderboard 0 2 WITHSCORES
@@ -287,6 +393,18 @@ ZREMRANGEBYSCORE leaderboard -inf 60
 ## 九、数据库级清理与日常排查
 
 Key 的删除与扫描属于通用命令；下面的命令作用于当前逻辑数据库或整个实例，风险更高。
+
+命令语法：
+
+~~~text
+DBSIZE
+FLUSHDB [ASYNC | SYNC]
+FLUSHALL [ASYNC | SYNC]
+~~~
+
+`DBSIZE` 没有参数，返回当前逻辑数据库的 Key 总数；`FLUSHDB` 只处理当前逻辑数据库；`FLUSHALL` 处理实例全部逻辑数据库。`ASYNC` 让实际内存回收异步执行，但不会降低“清空数据”的业务风险。
+
+本地测试示例：
 
 ~~~redis
 DBSIZE

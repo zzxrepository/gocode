@@ -89,6 +89,21 @@ mysql_secure_installation
 
 ### 1. 创建和选择数据库
 
+先认识这一组 DDL 语法：
+
+~~~sql
+CREATE DATABASE [IF NOT EXISTS] database_name
+  [DEFAULT CHARACTER SET charset_name]
+  [DEFAULT COLLATE collation_name];
+
+USE database_name;
+DROP DATABASE [IF EXISTS] database_name;
+~~~
+
+`CREATE DATABASE` 创建数据库；`IF NOT EXISTS` 让数据库已经存在时不报错；`USE` 只切换当前客户端会话的默认数据库；`DROP DATABASE` 会删除整个数据库及其表，应只对明确可删除的目标使用。
+
+再执行本地示例：
+
 ~~~sql
 SHOW DATABASES;
 
@@ -105,6 +120,18 @@ DROP DATABASE IF EXISTS scratch_demo;
 
 ### 2. 创建应用账户并授权
 
+账户、权限命令的常用语法如下：
+
+~~~sql
+CREATE USER 'user_name'@'host' IDENTIFIED BY 'password';
+GRANT privilege_list ON database_name.table_name TO 'user_name'@'host';
+SHOW GRANTS FOR 'user_name'@'host';
+~~~
+
+`'user_name'@'host'` 是账户身份的一部分，不是单纯的用户名。`privilege_list` 应只包含应用需要的权限，`database_name.table_name` 则限定授权范围。
+
+示例创建只服务于 `blog_demo` 的应用账户：
+
 ~~~sql
 CREATE USER 'blog'@'127.0.0.1' IDENTIFIED BY 'change-this-local-password';
 GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX
@@ -118,7 +145,19 @@ SHOW GRANTS FOR 'blog'@'127.0.0.1';
 
 ## 四、建表与表结构查看
 
-下面创建一个最小文章表：
+`CREATE TABLE` 的最小语法为：
+
+~~~sql
+CREATE TABLE [IF NOT EXISTS] table_name (
+  column_name data_type [column_constraint ...],
+  ...,
+  [table_constraint ...]
+) [table_option ...];
+~~~
+
+列定义由“列名、数据类型、列约束”组成；`PRIMARY KEY`、`UNIQUE`、`NOT NULL`、`DEFAULT` 属于常见约束；`INDEX` 可以直接在建表时声明普通索引。
+
+下面再创建一个最小文章表：
 
 ~~~sql
 USE blog_demo;
@@ -155,9 +194,25 @@ SHOW INDEX FROM posts;
 | 时间 | `DATETIME` 或 `TIMESTAMP` |
 | 布尔标记 | `TINYINT(1)` |
 
-## 五、CRUD：插入、查询、更新、删除
+## 五、CRUD：先掌握语法，再执行示例
 
-### 1. 插入
+### 1. `INSERT`：先写列，再写值
+
+单行与多行插入的通用语法：
+
+~~~sql
+INSERT INTO table_name (column_1, column_2, ...)
+VALUES (value_1, value_2, ...);
+
+INSERT INTO table_name (column_1, column_2, ...)
+VALUES
+  (value_1, value_2, ...),
+  (value_1, value_2, ...);
+~~~
+
+列列表和每行 `VALUES` 的值必须按相同顺序对应。省略列列表虽然可执行，但会依赖表字段顺序，建表演进后容易出错；应用 SQL 应始终显式写出目标列。
+
+示例：
 
 ~~~sql
 INSERT INTO posts (title, content, user_id, status)
@@ -169,7 +224,37 @@ VALUES
   ('Redis 入门', '缓存基础', 1002);
 ~~~
 
-### 2. 查询
+### 2. `SELECT`：筛选、分组、排序与分页
+
+一个查询可以由多个子句组成，常用语法骨架如下：
+
+~~~sql
+SELECT [DISTINCT] select_expr [, select_expr ...]
+FROM table_reference
+[JOIN table_reference ON join_condition]
+[WHERE row_condition]
+[GROUP BY group_expr [, group_expr ...]]
+[HAVING group_condition]
+[ORDER BY sort_expr [ASC | DESC] [, sort_expr ...]]
+[LIMIT row_count [OFFSET offset]];
+~~~
+
+书写顺序必须遵守这个顺序。理解数据处理时，可先记住逻辑主线：
+
+~~~text
+FROM / JOIN 组合数据源
+    → WHERE 过滤行
+    → GROUP BY 形成分组
+    → 聚合函数计算每组结果
+    → HAVING 过滤分组
+    → SELECT 选择输出列
+    → ORDER BY 排序
+    → LIMIT 截取结果
+~~~
+
+`WHERE` 过滤原始行，不能直接筛选 `COUNT()`、`SUM()` 等聚合结果；聚合后的条件应写在 `HAVING`。`ORDER BY` 默认升序，`DESC` 表示降序；分页必须配合稳定排序，避免不同请求返回的行顺序漂移。
+
+基础查询和条件筛选示例：
 
 ~~~sql
 SELECT id, title, user_id, status
@@ -179,17 +264,75 @@ ORDER BY id DESC;
 SELECT id, title
 FROM posts
 WHERE user_id = 1001 AND status = 'published'
-ORDER BY created_at DESC
+ORDER BY created_at DESC, id DESC
 LIMIT 20 OFFSET 0;
-
-SELECT status, COUNT(*) AS total
-FROM posts
-GROUP BY status;
 ~~~
 
-`WHERE` 用于筛选，`ORDER BY` 决定排序，`LIMIT` 限制返回数量。分页查询必须有稳定排序；数据量较大时，深度 `OFFSET` 分页会越来越慢，可改用基于最后一条 ID 或时间的游标分页。
+聚合、分组和分组后过滤示例：
 
-### 3. 更新与删除
+~~~sql
+SELECT status, COUNT(*) AS total
+FROM posts
+GROUP BY status
+HAVING COUNT(*) >= 1
+ORDER BY total DESC, status ASC;
+~~~
+
+深度 `OFFSET` 分页会越来越慢。数据量较大时，可将最后一条记录的有序字段作为游标：
+
+~~~sql
+SELECT id, title, created_at
+FROM posts
+WHERE created_at < '2026-08-16 12:00:00'
+ORDER BY created_at DESC, id DESC
+LIMIT 20;
+~~~
+
+### 3. `JOIN`：按关联条件组合多张表
+
+连接查询的基础语法：
+
+~~~sql
+SELECT select_expr
+FROM left_table AS l
+[INNER] JOIN right_table AS r ON l.key = r.key;
+
+SELECT select_expr
+FROM left_table AS l
+LEFT JOIN right_table AS r ON l.key = r.key;
+~~~
+
+`INNER JOIN` 只保留两边都匹配的行；`LEFT JOIN` 保留左表全部行，右表无匹配时右侧列为 `NULL`。连接条件通常使用主键与外键或具有相同业务含义的字段。
+
+假设存在 `users(id, name)` 表，查询文章及作者名称：
+
+~~~sql
+SELECT p.id, p.title, p.status, u.name AS author_name
+FROM posts AS p
+JOIN users AS u ON u.id = p.user_id
+WHERE p.status = 'published'
+ORDER BY p.created_at DESC, p.id DESC
+LIMIT 20;
+~~~
+
+### 4. `UPDATE` 与 `DELETE`：先限定范围，再修改数据
+
+常用语法：
+
+~~~sql
+UPDATE table_name
+SET column_1 = expression_1 [, column_2 = expression_2 ...]
+[WHERE row_condition]
+[ORDER BY sort_expr]
+[LIMIT row_count];
+
+DELETE FROM table_name
+[WHERE row_condition]
+[ORDER BY sort_expr]
+[LIMIT row_count];
+~~~
+
+没有 `WHERE` 的 `UPDATE` 或 `DELETE` 会影响整张表。执行写操作前，先用相同 `WHERE` 写一条 `SELECT` 确认影响范围；需要多步一致性时，把写操作放入事务。
 
 ~~~sql
 UPDATE posts
@@ -200,11 +343,23 @@ DELETE FROM posts
 WHERE id = 3;
 ~~~
 
-执行 `UPDATE` 和 `DELETE` 前，先用同样的 `WHERE` 写一条 `SELECT` 确认影响范围。没有 `WHERE` 的更新或删除会影响整张表。
-
 ## 六、索引的最小知识
 
 索引是帮助数据库更快定位行的数据结构，但会增加写入和存储成本。主键天然有索引；经常作为筛选、连接或排序条件的列才值得考虑增加索引。
+
+常用索引与执行计划语法：
+
+~~~sql
+CREATE [UNIQUE] INDEX index_name
+  ON table_name (column_name [ASC | DESC], ...);
+
+EXPLAIN SELECT ...;
+DROP INDEX index_name ON table_name;
+~~~
+
+`CREATE INDEX` 创建普通索引，`UNIQUE` 则额外要求索引键唯一；`EXPLAIN` 不执行查询结果返回，而是展示优化器计划。应先从查询条件和排序方式推导索引，再用执行计划验证。
+
+示例：
 
 ~~~sql
 CREATE INDEX idx_posts_status_created_at
@@ -225,6 +380,20 @@ DROP INDEX idx_posts_status_created_at ON posts;
 ## 七、事务：让多条写操作一起成功或失败
 
 InnoDB 支持事务。转账、下单、库存扣减等多个写操作具有一致性要求时，应放入同一事务：
+
+事务控制语法：
+
+~~~sql
+START TRANSACTION;
+-- 一条或多条 DML：INSERT / UPDATE / DELETE
+COMMIT;
+
+ROLLBACK;
+~~~
+
+`COMMIT` 提交当前事务的全部修改；`ROLLBACK` 放弃尚未提交的修改。DDL 语句在 MySQL 中常会隐式提交事务，因此不应把建表、改表和普通业务写操作混在同一事务设计中。
+
+示例：
 
 ~~~sql
 START TRANSACTION;
@@ -303,3 +472,9 @@ SHOW TABLE STATUS LIKE 'posts';
 MySQL 入门的关键步骤是：确认服务运行，使用 `mysql -u root` 或指定主机端口连接，创建 UTF-8 的数据库与最小权限账户，掌握建表和 CRUD，再用事务保护需要一致性的多步写入。
 
 实际项目中，把 SQL 变更放进 migrations，使用独立应用账户，并通过参数化查询传值。这样就能在保持基础简单的同时，为后续的索引、事务、锁和性能优化打下可靠基础。
+
+## 参考资料
+
+- [MySQL 8.4：SELECT Statement](https://dev.mysql.com/doc/refman/8.4/en/select.html)
+- [MySQL 8.4：INSERT Statement](https://dev.mysql.com/doc/refman/8.4/en/insert.html)
+- [MySQL 8.4：UPDATE Statement](https://dev.mysql.com/doc/refman/8.4/en/update.html)

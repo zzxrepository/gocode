@@ -70,7 +70,16 @@ mongosh "mongodb://127.0.0.1:27017"
 
 ### 2. Shell 中的数据库与集合命令
 
-进入 `mongosh` 后，可以使用：
+`mongosh` 的数据库选择与查看命令语法如下：
+
+~~~javascript
+show dbs
+use databaseName
+db
+show collections
+~~~
+
+`use` 后跟数据库名称，不需要引号；`show dbs` 和 `show collections` 是 Shell 辅助命令，而 `db` 表示当前数据库对象。下面以 `tutorial_db` 为例：
 
 ~~~javascript
 show dbs
@@ -163,6 +172,17 @@ db.users.findOne({ _id: ObjectId("64f000000000000000000001") })
 
 ### 1. 插入一条文档
 
+插入命令的语法为：
+
+~~~javascript
+db.collection.insertOne(document, options)
+db.collection.insertMany([document1, document2, ...], options)
+~~~
+
+`document` 是一个 BSON 文档；若没有提供 `_id`，MongoDB 会自动生成 `ObjectId`。`options` 可控制写关注（write concern）、有序批量写入等行为，入门阶段可省略。
+
+下面再向 `users` 集合插入一条用户文档：
+
 ~~~javascript
 use tutorial_db
 
@@ -180,6 +200,8 @@ db.users.insertOne({
 
 ### 2. 批量插入
 
+`insertMany` 的第一个参数必须是文档数组；默认 `ordered: true`，遇到错误时会停止后续插入。批量导入若希望尽可能写入其余合法文档，可显式设置 `{ ordered: false }`，并单独处理返回的错误明细。
+
 ~~~javascript
 db.users.insertMany([
   { name: "李四", email: "lisi@example.com", age: 25, tags: ["go"] },
@@ -193,6 +215,20 @@ db.users.insertMany([
 
 ### 1. `findOne` 与 `find`
 
+查询命令的语法为：
+
+~~~javascript
+db.collection.findOne(filter, options)
+db.collection.find(filter, projection)
+  .sort(sortSpec)
+  .skip(offset)
+  .limit(count)
+~~~
+
+`filter` 是筛选条件，空对象 `{}` 表示匹配全部文档；`projection` 决定返回字段；`sortSpec` 中 `1` 表示升序，`-1` 表示降序。`findOne` 返回一个文档或 `null`，`find` 返回可继续调用排序和分页方法的游标。
+
+示例：
+
 ~~~javascript
 db.users.findOne({ email: "zhangsan@example.com" })
 
@@ -203,6 +239,20 @@ db.users.find({ tags: "go" })
 `findOne` 返回第一个匹配文档或 `null`；`find` 返回游标（cursor），Shell 会分批读取结果。数组字段使用等值条件时，只要数组包含该值即可匹配，因此 `{ tags: "go" }` 能匹配 `["go", "mongodb"]`。
 
 ### 2. 筛选、投影、排序和分页
+
+筛选文档使用“字段名到条件表达式”的对象。常用形式为：
+
+~~~javascript
+{ field: value }
+{ field: { $operator: value } }
+{ "nested.field": value }
+{ $and: [condition1, condition2] }
+{ $or: [condition1, condition2] }
+~~~
+
+投影字段为 `1` 表示包含、为 `0` 表示排除；除 `_id` 外，不能在同一投影中混用包含和排除。排序和限制属于游标操作，因此应在 `find` 后链式调用。
+
+示例：
 
 ~~~javascript
 db.users
@@ -250,6 +300,19 @@ db.users
 
 更新操作由**过滤条件**和**更新表达式**组成。不要把普通对象直接作为第二个参数传给 `updateOne`，除非明确要使用替换语义；常规局部更新应使用 `$set`、`$inc`、`$push` 等更新操作符。
 
+更新命令的语法为：
+
+~~~javascript
+db.collection.updateOne(filter, update, options)
+db.collection.updateMany(filter, update, options)
+
+db.collection.replaceOne(filter, replacement, options)
+~~~
+
+`filter` 决定目标文档，`update` 通常由 `$set`、`$inc` 等更新操作符组成；`replaceOne` 则以完整 replacement 替换旧文档内容，使用时需格外谨慎。`options.upsert: true` 表示无匹配时插入。
+
+示例：
+
 ~~~javascript
 db.users.updateOne(
   { email: "zhangsan@example.com" },
@@ -291,6 +354,18 @@ db.settings.updateOne(
 
 ## 六、删除文档：Delete
 
+删除命令的语法为：
+
+~~~javascript
+db.collection.deleteOne(filter, options)
+db.collection.deleteMany(filter, options)
+db.collection.drop()
+~~~
+
+`deleteOne` 只删除第一个匹配文档，`deleteMany` 删除全部匹配文档；`drop` 作用于整个集合，同时移除集合数据和索引。先写过滤条件，再执行删除命令。
+
+示例：
+
 ~~~javascript
 db.users.deleteOne({ email: "wangwu@example.com" })
 
@@ -308,6 +383,20 @@ db.users.drop()
 ## 七、索引：让查询条件与排序可以扩展
 
 MongoDB 会自动为 `_id` 创建唯一索引。其他高频筛选、排序、关联查询字段通常需要应用显式建立索引。
+
+索引命令的语法为：
+
+~~~javascript
+db.collection.createIndex({ field1: 1, field2: -1 }, options)
+db.collection.getIndexes()
+db.collection.dropIndex(indexNameOrKeySpec)
+
+db.collection.find(filter).explain("executionStats")
+~~~
+
+索引键中的 `1` 表示正向索引，`-1` 表示反向索引；`options` 可声明 `unique: true`、索引名等属性。`explain("executionStats")` 会实际执行查询并返回统计信息，适合验证索引是否与查询模式匹配。
+
+示例：
 
 ~~~javascript
 db.users.createIndex({ email: 1 }, { unique: true })
@@ -340,7 +429,16 @@ db.users
 
 ## 八、聚合管道：在数据库中完成分组和转换
 
-`aggregate` 接收一个由阶段组成的数组。每一阶段接收上阶段输出的文档流并继续转换：
+`aggregate` 接收一个由阶段组成的数组。语法为：
+
+~~~javascript
+db.collection.aggregate([
+  { $stage1: { ... } },
+  { $stage2: { ... } }
+], options)
+~~~
+
+每一阶段接收上阶段输出的文档流并继续转换。常见阶段的输入输出关系如下：
 
 ~~~mermaid
 flowchart LR
@@ -429,7 +527,17 @@ MongoDB 的关键设计决策不是“是否建表”，而是相关数据应嵌
 
 ### 3. 用集合校验维持写入契约
 
-MongoDB 不要求预先声明固定表结构，但可以为关键集合设置校验：
+MongoDB 不要求预先声明固定表结构，但可以为关键集合设置校验。集合创建的语法为：
+
+~~~javascript
+db.createCollection("collectionName", {
+  validator: {
+    $jsonSchema: { ... }
+  }
+})
+~~~
+
+`validator` 指定写入校验规则，`$jsonSchema` 使用 BSON 类型和字段约束描述文档契约。以下示例再为 `articles` 集合声明必填字段：
 
 ~~~javascript
 db.createCollection("articles", {
