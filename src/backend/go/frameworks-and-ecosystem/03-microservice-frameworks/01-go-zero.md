@@ -1,8 +1,8 @@
 ---
-permalink: /backend/go/frameworks-and-ecosystem/03-microservice-frameworks/02-go-zero/
-title: 02. go-zero：从 API 契约到 REST 与 zRPC 服务
-shortTitle: 02. go-zero
-order: 2
+permalink: /backend/go/frameworks-and-ecosystem/03-microservice-frameworks/01-go-zero/
+title: 01. go-zero：从 API 契约到 REST 与 zRPC 服务
+shortTitle: 01. go-zero
+order: 1
 category:
   - Go
   - Golang 框架与生态

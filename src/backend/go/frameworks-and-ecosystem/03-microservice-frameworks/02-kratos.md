@@ -1,8 +1,8 @@
 ---
-permalink: /backend/go/frameworks-and-ecosystem/03-microservice-frameworks/01-kratos/
-title: 01. Kratos：从应用生命周期到分层微服务
-shortTitle: 01. Kratos
-order: 1
+permalink: /backend/go/frameworks-and-ecosystem/03-microservice-frameworks/02-kratos/
+title: 02. Kratos：从应用生命周期到分层微服务
+shortTitle: 02. Kratos
+order: 2
 category:
   - Go
   - Golang 框架与生态
@@ -21,7 +21,7 @@ tag:
 
 ## 前言
 
-Kratos 是一套 Go 微服务框架。它的设计重点不是提供一个包罗万象的“业务框架”，而是围绕应用生命周期、传输层、依赖注入、配置、日志、服务发现、错误模型和中间件提供一组可组合的基础组件。HTTP、gRPC、数据库、注册中心和配置来源都可以替换；框架通过接口和选项把它们连接起来。
+Kratos 是一套面向 Go 的微服务框架。它的设计重点不是提供一个包罗万象的“业务框架”，而是围绕应用生命周期、传输层、依赖注入、配置、日志、服务发现、错误模型和中间件提供一组可组合的基础组件。HTTP、gRPC、数据库、注册中心和配置来源都可以替换；框架通过接口和选项把它们连接起来。
 
 因此，理解 Kratos 的关键不是记住 `kratos.New` 的参数，而是看清三层关系：`kratos.App` 管理整个进程的启动、注册和退出；`transport/http.Server`、`transport/grpc.Server` 管理一种网络协议；业务代码通过明确的依赖方向与这些传输层隔离。本文以仓库配套项目 [01-kratos-demo](https://github.com/zzxrepository/gocode-examples/tree/main/go/01-kratos-demo) 为参照，源码分析以项目使用的 **Kratos v2.8.4** 为准。
 
