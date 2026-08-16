@@ -409,28 +409,148 @@ func (f HandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 下面的代码没有显式创建路由器：
 
-```go
+~~~go
 http.HandleFunc("/index", indexHandler)
 log.Fatal(http.ListenAndServe(":8080", nil))
-```
+~~~
 
-这里发生了两件事：
+它仍然能完成路由分发，是因为 `net/http` 包维护了一个进程级共享的默认路由器：`http.DefaultServeMux`。这里有两件需要区分的事：
 
-1. `http.HandleFunc` 将路由注册到全局的 `http.DefaultServeMux`；
-2. `ListenAndServe` 的第二个参数为 `nil`，因此使用 `DefaultServeMux`。
+1. `http.HandleFunc` 是包级注册函数，它把路由注册到全局的 `DefaultServeMux`；
+2. `ListenAndServe` 的第二个参数是 `nil` 时，`http.Server` 会在**处理请求时**回退到 `DefaultServeMux`。
 
-官方文档明确说明，当 `ListenAndServe` 的处理器参数为 `nil` 时，会使用 `DefaultServeMux`。`DefaultServeMux` 很方便，但真实项目通常推荐显式创建：
+#### `DefaultServeMux` 是一个全局 `ServeMux`
 
-```go
+Go 1.26.5 的 `net/http/server.go` 中定义：
+
+~~~go
+// DefaultServeMux is the default ServeMux used by Serve.
+var DefaultServeMux = &defaultServeMux
+
+var defaultServeMux ServeMux
+~~~
+
+`defaultServeMux` 是一个实际的 `ServeMux` 结构体；`DefaultServeMux` 则是指向它的全局指针。它不是另一种路由算法，也不是 HTTP Server 为每个请求临时创建的对象，而是整个进程共享的一张路由表。
+
+~~~text
+net/http 的包级全局状态
+
+defaultServeMux   一个 ServeMux 结构体，保存路由规则
+       ↑
+DefaultServeMux   指向它的 *ServeMux
+       ↑
+http.Handle / http.HandleFunc
+~~~
+
+#### 包级 `http.HandleFunc` 如何写入默认路由器
+
+包级 `http.HandleFunc` 并不自己保存路由。Go 1.26.5 的实现为：
+
+~~~go
+func HandleFunc(pattern string, handler func(ResponseWriter, *Request)) {
+	if use121 {
+		DefaultServeMux.mux121.handleFunc(pattern, handler)
+	} else {
+		DefaultServeMux.register(pattern, HandlerFunc(handler))
+	}
+}
+~~~
+
+`use121` 是 Go 1.21 路由兼容模式的开关，后文会说明它如何选择新旧路由实现。无论走哪个分支，包级函数的注册目标始终是 `DefaultServeMux`。忽略兼容分支后，上述代码可以理解为：
+
+~~~go
+DefaultServeMux.register("/index", HandlerFunc(indexHandler))
+~~~
+
+其中 `HandlerFunc` 把普通函数适配为 `http.Handler`。因此，下面两种写法在注册目标上等价：
+
+~~~go
+http.HandleFunc("/index", indexHandler)
+
+http.DefaultServeMux.HandleFunc("/index", indexHandler)
+~~~
+
+第一种只是省略了全局对象名称。
+
+#### `nil` 在何时回退到 `DefaultServeMux`
+
+`http.ListenAndServe` 的实现只是创建 `http.Server` 并调用同名方法：
+
+~~~go
+func ListenAndServe(addr string, handler Handler) error {
+	server := &Server{Addr: addr, Handler: handler}
+	return server.ListenAndServe()
+}
+~~~
+
+所以：
+
+~~~go
+http.ListenAndServe(":8080", nil)
+~~~
+
+等价于：
+
+~~~go
+server := &http.Server{
+	Addr:    ":8080",
+	Handler: nil,
+}
+
+server.ListenAndServe()
+~~~
+
+这一步只保存 `Handler: nil`，尚未选择路由器。真正的回退发生在 Server 已接收并解析请求之后。标准库内部的 `serverHandler` 从 `Server.Handler` 取出应用 Handler；若该字段为 `nil`，才选择 `DefaultServeMux`：
+
+~~~go
+func (sh serverHandler) ServeHTTP(rw ResponseWriter, req *Request) {
+	handler := sh.srv.Handler
+	if handler == nil {
+		handler = DefaultServeMux
+	}
+
+	// 实际源码还会单独处理 OPTIONS * 这一特殊协议请求。
+	handler.ServeHTTP(rw, req)
+}
+~~~
+
+完整分发过程如下：
+
+~~~mermaid
+flowchart TD
+    A[http.HandleFunc 注册 /index] --> B[DefaultServeMux 保存 HandlerFunc]
+    C[http.ListenAndServe :8080, nil] --> D[http.Server Handler 为 nil]
+    E[客户端请求 GET /index] --> F[serverHandler.ServeHTTP]
+    D --> F
+    F --> G{Server.Handler 是否为 nil}
+    G -->|是| H[DefaultServeMux.ServeHTTP]
+    G -->|否| I[显式 Handler.ServeHTTP]
+    H --> J[匹配 /index]
+    J --> K[indexHandler]
+~~~
+
+因此，`nil` 的含义不是“不处理请求”，而是“当前 Server 没有显式指定 Handler，使用全局默认路由器”。
+
+#### 显式 `ServeMux` 与默认 `ServeMux`
+
+真实项目通常优先显式创建路由器：
+
+~~~go
 mux := http.NewServeMux()
-```
+mux.HandleFunc("/index", indexHandler)
 
-这样可以：
+log.Fatal(http.ListenAndServe(":8080", mux))
+~~~
 
-- 避免全局路由互相影响；
-- 更容易编写测试；
-- 更容易创建多个独立 HTTP 服务；
-- 更容易控制中间件和依赖关系。
+此时 `serverHandler` 发现 `Server.Handler` 非 `nil`，会直接调用 `mux.ServeHTTP`，不会触及 `DefaultServeMux`。
+
+| 写法 | 路由注册目标 | Server 最终使用的 Handler |
+| --- | --- | --- |
+| `http.HandleFunc` + `ListenAndServe(..., nil)` | 全局 `DefaultServeMux` | `DefaultServeMux` |
+| `mux.HandleFunc` + `ListenAndServe(..., mux)` | 显式创建的 `mux` | `mux` |
+| `http.Server{Handler: handler}` | 由应用决定 | 显式传入的 `handler` |
+
+显式 `ServeMux` 避免了全局路由互相影响，更容易编写测试、创建多个独立 HTTP 服务，并清楚表达服务依赖边界。
 
 ---
 
@@ -507,11 +627,32 @@ if r.Method != http.MethodGet {
 
 `ServeMux` 同时承担两个职责，但发生在不同阶段：程序启动时保存路由；每个请求到来时查找路由并调用 Handler。把这两个阶段分开，是理解标准库 HTTP 编程的关键。
 
-```text
+~~~text
 启动阶段：NewServeMux -> Handle / HandleFunc -> 解析并保存 pattern
 
 请求阶段：Server 收到请求 -> ServeMux.ServeHTTP -> 查找 Handler -> Handler.ServeHTTP
-```
+~~~
+
+注册期与请求期操作的是同一个 `ServeMux`，但方向相反：前者把 pattern 写入路由表，后者从路由表取出 Handler。下面的图把两条路径并列展示：
+
+~~~mermaid
+flowchart LR
+    subgraph Register[启动期：注册路由]
+        A[Handle / HandleFunc] --> B[HandlerFunc 适配]
+        B --> C[registerErr 解析并检查冲突]
+        C --> D[tree.addPattern]
+        C --> E[index.addPattern]
+    end
+
+    subgraph Dispatch[请求期：分发请求]
+        F[Server 收到 Request] --> G[ServeMux.ServeHTTP]
+        G --> H[findHandler 查询 tree]
+        H --> I[得到 Handler 与路径参数]
+        I --> J[Handler.ServeHTTP]
+    end
+
+    D -.保存路由和 Handler.-> H
+~~~
 
 下面的源码片段以 Go 1.26.5 的 `net/http` 为准。不同小版本的私有字段和辅助函数可能调整，但 `Handler`、`ServeMux`、`Server` 组成的公开模型保持稳定。
 
@@ -2142,6 +2283,21 @@ flowchart TD
 2. 关闭空闲连接；
 3. 等待正在处理的请求完成；
 4. 超过指定时间后返回超时错误。
+
+优雅关闭不是立刻调用 `os.Exit`，而是让“接收新请求”和“完成已有请求”分开处理：
+
+~~~mermaid
+flowchart TD
+    A[服务正在监听] --> B{收到 SIGINT / SIGTERM?}
+    B -->|否| A
+    B -->|是| C[创建带超时的 shutdownContext]
+    C --> D[Server.Shutdown]
+    D --> E[停止接受新连接]
+    E --> F[关闭空闲连接]
+    F --> G{活动请求是否在期限内结束?}
+    G -->|是| H[Shutdown 返回 nil，进程退出]
+    G -->|否| I[Shutdown 返回 context deadline exceeded]
+~~~
 
 完整示例：
 
