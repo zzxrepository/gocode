@@ -358,10 +358,7 @@ type UserHandler struct {
 如果处理器不需要保存复杂状态，每次都定义结构体会显得繁琐。此时可以直接使用函数：
 
 ```go
-func indexHandler(
-	w http.ResponseWriter,
-	r *http.Request,
-) {
+func indexHandler(w http.ResponseWriter, r *http.Request) {
 	_, _ = fmt.Fprintln(w, "index")
 }
 
@@ -378,16 +375,10 @@ func main() {
 `http.HandlerFunc` 本质上是一个适配器类型。下面是 Go 1.26.5 标准库 [`server.go`](https://cs.opensource.google/go/go/+/go1.26.5:src/net/http/server.go;l=2282) 中的原始实现：
 
 ```go
-type HandlerFunc func(
-	http.ResponseWriter,
-	*http.Request,
-)
+type HandlerFunc func(http.ResponseWriter, *http.Request)
 
 // ServeHTTP 只是把接口调用转回原来的函数调用。
-func (f HandlerFunc) ServeHTTP(
-	w http.ResponseWriter,
-	r *http.Request,
-) {
+func (f HandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f(w, r)
 }
 ```
@@ -2098,20 +2089,13 @@ import (
 // trustProxy 表示当前服务是否位于可信反向代理之后。
 // 只有代理层已经清理并重新生成转发请求头时，
 // 才能信任 X-Forwarded-For 和 X-Real-IP。
-func clientIP(
-	r *http.Request,
-	trustProxy bool,
-) string {
+func clientIP(r *http.Request, trustProxy bool) string {
 	if trustProxy {
 		// 优先读取 X-Forwarded-For。
-		if forwardedFor := r.Header.Get(
-			"X-Forwarded-For",
-		); forwardedFor != "" {
+		if forwardedFor := r.Header.Get("X-Forwarded-For"); forwardedFor != "" {
 			// X-Forwarded-For 可能包含多个 IP，
 			// 通常取第一个。
-			firstIP := strings.TrimSpace(
-				strings.Split(forwardedFor, ",")[0],
-			)
+			firstIP := strings.TrimSpace(strings.Split(forwardedFor, ",")[0])
 
 			if net.ParseIP(firstIP) != nil {
 				return firstIP
@@ -2119,9 +2103,7 @@ func clientIP(
 		}
 
 		// 部分代理使用 X-Real-IP。
-		if realIP := strings.TrimSpace(
-			r.Header.Get("X-Real-IP"),
-		); net.ParseIP(realIP) != nil {
+		if realIP := strings.TrimSpace(r.Header.Get("X-Real-IP")); net.ParseIP(realIP) != nil {
 			return realIP
 		}
 	}
@@ -2139,22 +2121,11 @@ func clientIP(
 返回 JSON：
 
 ```go
-func ipHandler(
-	w http.ResponseWriter,
-	r *http.Request,
-) {
+func ipHandler(w http.ResponseWriter, r *http.Request) {
 	ip := clientIP(r, true)
 
-	w.Header().Set(
-		"Content-Type",
-		"application/json; charset=utf-8",
-	)
-
-	_ = json.NewEncoder(w).Encode(
-		map[string]string{
-			"ip": ip,
-		},
-	)
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_ = json.NewEncoder(w).Encode(map[string]string{"ip": ip})
 }
 ```
 
