@@ -630,9 +630,11 @@ HandlerFunc(getUserHandler)       将普通函数变成 Handler
         ↓
 registerErr                        解析 "GET"、"/users"、"{id}"
         ↓
-检查语法与路由冲突
+index.possiblyConflictingPatterns  找到可能冲突的旧 pattern 并精确检查
         ↓
-tree.addPattern / index.add        保存到新路由表
+tree.addPattern                    写入请求匹配树和 Handler
+        ↓
+index.addPattern                   为后续路由注册建立冲突检查索引
 ```
 
 Go 1.22+ 的 `ServeMux` 在**注册路由时**检查冲突，因此错误通常会在服务启动阶段以 `panic` 暴露，而不是等到某个请求到来才随机选择 Handler。匹配规则是“更具体的 pattern 优先”：
@@ -642,6 +644,99 @@ Go 1.22+ 的 `ServeMux` 在**注册路由时**检查冲突，因此错误通常�
 - 两个 pattern 有重叠但谁都不比谁更具体时，不能同时注册。
 
 这也是标准库路由与某些“后注册覆盖先注册”路由器的重要区别：不要依赖注册顺序覆盖已有路由。
+
+#### **tree**：请求匹配时使用的决策树
+
+**tree** 的类型是 **routingNode**。它不是简单的 Go map：每一条 pattern 会被解析为 Method、Host 和多个路径段，再依次写入树节点。节点既可以是中间分支，也可以是保存 pattern 和 Handler 的叶子：
+
+~~~go
+type routingNode struct {
+	pattern *pattern
+	handler Handler
+	// 只有叶子节点保存完整 pattern 与注册时的 Handler。
+
+	children   mapping[string, *routingNode]
+	// 字面量分支，例如 "GET"、"users"、"latest"。
+
+	emptyChild *routingNode
+	// 单段通配符分支，例如 {id}。
+
+	multiChild *routingNode
+	// 多段通配符分支，例如 {path...}。
+}
+~~~
+
+注册 GET /users/{id} 后，标准库先得到：
+
+~~~text
+method:   "GET"
+host:     ""
+segments: ["users"（字面量）, "id"（单段通配符）]
+~~~
+
+**tree.addPattern** 按 **Host → Method → Path Segment** 写入。省略无关节点后，树是：
+
+~~~text
+tree 根节点
+└── host: ""
+    └── method: "GET"
+        └── "users"
+            └── emptyChild       // {id}
+                └── leaf
+                    ├── pattern: GET /users/{id}
+                    └── handler: HandlerFunc(getUserHandler)
+~~~
+
+请求 GET /users/1001 依次匹配空 Host、GET、users；最后的 1001 进入 emptyChild，同时被收集为通配符值。随后 ServeMux.ServeHTTP 将该值写入 Request 的内部匹配信息，所以 r.PathValue("id") 才会返回 "1001"。
+
+匹配一个路径段时，标准库依次尝试：字面量分支、单段通配符分支、多段通配符分支。这正好实现“更具体优先”。同时注册 GET /users/me 与 GET /users/{id} 时，"me" 保存为字面量 child，{id} 保存为 emptyChild；请求 /users/me 会先命中前者。
+
+#### **children**：小集合用 slice，大集合再转换为 map
+
+字面量子节点的 **children** 并不永远直接使用 Go map。它的类型是标准库内部泛型 **mapping[string, *routingNode]**：
+
+~~~go
+type mapping[K comparable, V any] struct {
+	s []entry[K, V] // 键较少时顺序存储和查找
+	m map[K]V       // 键较多时哈希查找
+}
+
+var maxSlice = 8
+~~~
+
+子节点不超过 8 个时，mapping.add 追加 slice，mapping.find 顺序查找；加入第 9 个键时，已有 slice 会转换为 map。路由树的大量节点只有少数几个分支，例如 API 根节点下可能只有 users、posts 和 health。这种情况下 slice 避免单独分配 map；分支较多时再转换为 map，降低查找成本。这是小型和大型路由表共用同一实现的自适应优化。
+
+#### **index**：注册时使用的冲突检查索引
+
+**index** 不参与请求匹配，也不保存 Handler。它的作用是：注册新 pattern 时，快速找出可能冲突的旧 pattern，避免每次都扫描全部路由。
+
+~~~go
+type routingIndex struct {
+	segments map[routingIndexKey][]*pattern
+	multis   []*pattern
+}
+
+type routingIndexKey struct {
+	pos int    // 路径段下标，从 0 开始
+	s   string // 字面量；空字符串表示单段通配符
+}
+~~~
+
+GET /users/{id} 会产生：
+
+~~~text
+{pos: 0, s: "users"} -> [GET /users/{id}]
+{pos: 1, s: ""}      -> [GET /users/{id}]  // {id}
+~~~
+
+之后注册 GET /users/me 时，index 可以从第 0 段 "users" 找到候选，再由 conflictsWith 做精确判断。/users/me 比 /users/{id} 更具体，所以允许共存。以多段通配符结尾的 pattern，例如 /files/{path...}，放进 multis：它可能覆盖的范围很大，不能安全地用单个路径段排除冲突。
+
+因此，两套结构的职责严格分开：
+
+| 结构 | 保存内容 | 使用时机 | 是否保存 Handler |
+| --- | --- | --- | --- |
+| tree | Host、Method、路径段形成的决策树 | 每个请求到来时 | 是，叶子节点保存 |
+| index | 路径段位置到 pattern 候选集合的索引 | 每次注册路由时 | 否，只保存 pattern 指针 |
 
 #### `use121`：为什么所有方法都有新旧分支
 
