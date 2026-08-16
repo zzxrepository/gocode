@@ -18,11 +18,14 @@ tag:
 
 # AI 应用开发
 
-AI 应用开发覆盖从模型调用到可用产品的完整链路。建议按“组件抽象 → 工作流编排 → Agent 运行时”的顺序阅读：
+AI 应用开发覆盖从模型调用到可用产品的完整链路。建议先建立模型输入与运行环境的认识，再学习具体框架：
 
-1. 模型调用与提示词：理解模型接口、消息与输入组织方式。
-2. RAG 与 MCP：理解知识检索、外部工具和上下文协作。
-3. LangChain：使用 Python 的组件抽象组织模型、提示词、工具与 Agent。
-4. LangGraph：用显式状态图实现可控、可恢复的 Agent 工作流。
-5. Eino：在 Go 中用组件、`compose` 与 ADK 构建大模型应用。
-6. AI Agent：建立 Agent、AI Agent 与 LLM Agent 的概念边界。
+1. 提示词工程（Prompt Engineering）：把任务、约束和输出契约表达清楚。
+2. 上下文工程（Context Engineering）：在有限上下文窗口中组织事实、记忆、检索和工具结果。
+3. 驾驭工程（Harness Engineering）：用工具、状态、验证、权限和反馈回路使 Agent 稳定运行。
+4. DeepSeek Harness：了解以插件为核心的开源 Agent Harness，以及开发者预览版的使用边界。
+5. RAG：为知识密集型任务建立可更新、可追溯的检索增强链路。
+6. MCP：用开放协议把模型应用和外部工具、资源、提示模板连接起来。
+7. OpenClaw：搭建自托管、多渠道的个人 Agent Gateway。
+8. LangChain、LangGraph 与 Eino：分别用 Python、图运行时和 Go 组件体系落地上述能力。
+9. AI Agent：建立 Agent、AI Agent 与 LLM Agent 的概念边界。

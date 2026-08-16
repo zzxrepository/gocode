@@ -1,7 +1,7 @@
 ---
 title: LangChain：构建 Python 大模型应用
 shortTitle: LangChain
-order: 3
+order: 8
 category:
   - AI 应用开发
 tag:

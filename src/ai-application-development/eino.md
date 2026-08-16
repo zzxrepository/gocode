@@ -1,7 +1,7 @@
 ---
 title: Eino：Go 大模型应用与 Agent 开发框架
 shortTitle: Eino
-order: 5
+order: 10
 category:
   - AI 应用开发
 tag:

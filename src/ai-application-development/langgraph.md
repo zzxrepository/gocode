@@ -1,7 +1,7 @@
 ---
 title: LangGraph：构建可控、可恢复的 Agent 工作流
 shortTitle: LangGraph
-order: 4
+order: 9
 category:
   - AI 应用开发
 tag:
