@@ -25,10 +25,10 @@ Go 没有唯一正确的项目目录模板。语言和工具链只规定了模�
 
 配套可运行代码：
 
-- [标准库 HTTP 示例](https://github.com/zzxrepository/gocode-examples/tree/fbe1bef0ecac4a9b3c27ab68f89c91de4833fb26/go/01-http-demo)
-- [Gin 单体服务示例](https://github.com/zzxrepository/gocode-examples/tree/fbe1bef0ecac4a9b3c27ab68f89c91de4833fb26/go/01-gin-demo)
-- [Kratos 微服务示例](https://github.com/zzxrepository/gocode-examples/tree/fbe1bef0ecac4a9b3c27ab68f89c91de4833fb26/go/01-kratos-demo)
-- [go-zero 微服务示例](https://github.com/zzxrepository/gocode-examples/tree/fbe1bef0ecac4a9b3c27ab68f89c91de4833fb26/go/01-go-zero-demo)
+- [标准库 HTTP 示例](https://github.com/zzxrepository/gocode-examples/tree/5a896c35107f31961ddad1b343cd3db2cc3c805a/go/01-http-demo)
+- [Gin 单体服务示例](https://github.com/zzxrepository/gocode-examples/tree/5a896c35107f31961ddad1b343cd3db2cc3c805a/go/01-gin-demo)
+- [Kratos 微服务示例](https://github.com/zzxrepository/gocode-examples/tree/5a896c35107f31961ddad1b343cd3db2cc3c805a/go/01-kratos-demo)
+- [go-zero 微服务示例](https://github.com/zzxrepository/gocode-examples/tree/5a896c35107f31961ddad1b343cd3db2cc3c805a/go/01-go-zero-demo)
 
 这些链接固定到具体提交；正文关注稳定的职责关系，而不依赖某个框架的内部实现。
 

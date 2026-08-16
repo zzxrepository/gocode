@@ -21,7 +21,7 @@ tag:
 
 HTTP 编程关注的是让程序通过 HTTP 协议接收请求、返回响应，或调用其他 HTTP 服务。Go 标准库的 `net/http` 同时提供服务端和客户端能力，是学习 Go Web 开发的基础。
 
-配套代码：[gocode-examples/go/01-http-demo](https://github.com/zzxrepository/gocode-examples/tree/fbe1bef0ecac4a9b3c27ab68f89c91de4833fb26/go/01-http-demo)。该链接固定到源码提交，便于将文中的 `net/http` 调用链与可运行项目对应起来。
+配套代码：[gocode-examples/go/01-http-demo](https://github.com/zzxrepository/gocode-examples/tree/5a896c35107f31961ddad1b343cd3db2cc3c805a/go/01-http-demo)。该链接固定到源码提交，便于将文中的 `net/http` 调用链与可运行项目对应起来。
 
 `net/http` 在 **Go 1.0** 的标准库中就已经存在。Go 1.0 的迁移说明将旧导入路径 `http` 调整为今天使用的 `net/http`；因此，`http.Server`、`http.Client`、`http.Handler` 等核心模型并不是 Go 1.22 才出现的能力。
 

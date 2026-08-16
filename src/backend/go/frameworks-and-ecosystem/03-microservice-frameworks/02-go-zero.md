@@ -23,7 +23,7 @@ go-zero 是 Go 微服务框架，强调通过 `goctl` 生成 API 与 RPC 的重�
 
 本文使用一个小型三服务示例。它保留 Gateway REST、User zRPC、Post zRPC 三个边界，并使用 MySQL 保存用户和文章、Redis 保存登录会话；教程不展开存储的基础用法，而将重点放在框架调用链。
 
-配套代码：[gocode-examples/go/01-go-zero-demo](https://github.com/zzxrepository/gocode-examples/tree/fbe1bef0ecac4a9b3c27ab68f89c91de4833fb26/go/01-go-zero-demo)。
+配套代码：[gocode-examples/go/01-go-zero-demo](https://github.com/zzxrepository/gocode-examples/tree/5a896c35107f31961ddad1b343cd3db2cc3c805a/go/01-go-zero-demo)。
 
 ## 一、目标架构
 

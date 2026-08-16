@@ -23,7 +23,7 @@ Kratos 是面向 Go 微服务场景的框架。它并不要求应用放弃标准
 
 学习 Kratos 的第一目标不是记住脚手架目录，而是建立一条清晰的请求链：外部 HTTP 网关接收请求，调用内部 gRPC 服务，服务在自己的边界内完成用例。本文对应的示例会保持业务很小，避免数据库、注册中心和可观测性配置掩盖传输层的关键关系。
 
-配套代码：[gocode-examples/go/01-kratos-demo](https://github.com/zzxrepository/gocode-examples/tree/fbe1bef0ecac4a9b3c27ab68f89c91de4833fb26/go/01-kratos-demo)。
+配套代码：[gocode-examples/go/01-kratos-demo](https://github.com/zzxrepository/gocode-examples/tree/5a896c35107f31961ddad1b343cd3db2cc3c805a/go/01-kratos-demo)。
 
 ## 一、Kratos 在服务中的位置
 

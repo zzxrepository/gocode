@@ -26,7 +26,7 @@ Gin 是 Go 生态中广泛使用的 HTTP Web 框架。它建立在标准库 `net
 
 本文以仓库中的 Gin Blog Demo 为工程参照，源码部分以该项目实际依赖的 **Gin v1.10.0** 为准。版本是重要前提：框架的公开 API 通常稳定，但内部字段、优化策略和辅助函数会随版本演进。阅读其他版本的源码时，应以相同职责和调用关系为主，而不要机械依赖行号。
 
-配套代码位于 [gocode-examples/go/01-gin-demo](https://github.com/zzxrepository/gocode-examples/tree/fbe1bef0ecac4a9b3c27ab68f89c91de4833fb26/go/01-gin-demo)。链接固定到源码提交，避免后续示例演进影响阅读。
+配套代码位于 [gocode-examples/go/01-gin-demo](https://github.com/zzxrepository/gocode-examples/tree/5a896c35107f31961ddad1b343cd3db2cc3c805a/go/01-gin-demo)。链接固定到源码提交，避免后续示例演进影响阅读。
 
 ## 阅读结构
 
