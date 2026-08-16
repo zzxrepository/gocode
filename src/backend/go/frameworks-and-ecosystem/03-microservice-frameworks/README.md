@@ -14,9 +14,13 @@ category:
 tag:
   - Go
   - 微服务
+  - Kratos
   - go-zero
 ---
 
 # 03. 微服务框架
 
-这里整理 Go 微服务框架及其配套能力。后续会以 go-zero 为例，介绍服务拆分、RPC、服务发现、配置、鉴权和可观测性。
+这里整理 Go 微服务框架及其配套能力。文章以同一套“REST Gateway + 内部 gRPC 服务”的小型博客系统为对照，分别讨论 Kratos 与 go-zero 的传输层、契约、代码生成、配置和治理扩展。
+
+- [Kratos：用传输层建立 Go 微服务](./01-kratos.md)
+- [go-zero：从 API DSL 到 zRPC 服务](./02-go-zero.md)

@@ -16,4 +16,6 @@ tag:
 
 # go-zero
 
-这里将整理 go-zero 的服务拆分、API、RPC、配置与工程化实践。
+Go 微服务框架的完整正文统一维护在「Go → 框架与生态 → 微服务框架」，避免与通用微服务栏目重复：
+
+- [go-zero：从 API DSL 到 zRPC 服务](/backend/go/frameworks-and-ecosystem/03-microservice-frameworks/02-go-zero/)

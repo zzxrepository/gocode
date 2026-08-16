@@ -14,6 +14,7 @@ tag:
   - 微服务
   - 分布式系统
   - Spring Boot
+  - Kratos
   - go-zero
   - 云原生
 ---
@@ -23,7 +24,8 @@ tag:
 这一部分连接语言基础与生产实践，包含 Java 和 Go 两条微服务路线，以及分布式、云原生的通用能力。
 
 - [Spring / Spring Boot](./spring-spring-boot.md)：Java 服务端开发的主流框架路线。
-- [go-zero](./go-zero.md)：Go 微服务框架与工程化实践。
+- [Kratos](./kratos.md)：跳转到 Go 框架栏目中的 Kratos 教程。
+- [go-zero](./go-zero.md)：跳转到 Go 框架栏目中的 go-zero 教程。
 - [分布式系统](./distributed-systems.md)：服务治理、一致性、缓存与消息队列。
 - [云原生](./cloud-native.md)：Docker、Kubernetes、可观测性与持续交付。
 

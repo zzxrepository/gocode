@@ -26,6 +26,8 @@ Gin 是 Go 生态中广泛使用的 HTTP Web 框架。它建立在标准库 `net
 
 本文以仓库中的 Gin Blog Demo 为工程参照，源码部分以该项目实际依赖的 **Gin v1.10.0** 为准。版本是重要前提：框架的公开 API 通常稳定，但内部字段、优化策略和辅助函数会随版本演进。阅读其他版本的源码时，应以相同职责和调用关系为主，而不要机械依赖行号。
 
+配套代码位于 [gocode-examples/go/01-gin-demo](https://github.com/zzxrepository/gocode-examples/tree/fbe1bef0ecac4a9b3c27ab68f89c91de4833fb26/go/01-gin-demo)。链接固定到源码提交，避免后续示例演进影响阅读。
+
 ## 阅读结构
 
 本文按“使用者先建立能力，再理解实现者如何支撑这些能力”的顺序展开：
@@ -36,9 +38,8 @@ flowchart LR
     B --> C[路由、参数、响应]
     C --> D[绑定、校验与错误处理]
     D --> E[中间件与 Context]
-    E --> F[工程分层与测试]
-    F --> G[Engine、RouterGroup、路由树源码]
-    G --> H[生产启动与安全配置]
+    E --> F[Engine、RouterGroup、路由树源码]
+    F --> G[生产启动与安全配置]
 ~~~
 
 | 层次 | 重点 | 阅读后应能回答的问题 |
@@ -47,7 +48,7 @@ flowchart LR
 | 运行层 | Engine 与 `net/http` | Gin 如何接入标准库 HTTP 服务？ |
 | 路由层 | RouterGroup、路由树 | 路由如何注册、如何匹配、参数如何取出？ |
 | 请求层 | Context、处理器链 | 中间件为什么能形成“洋葱模型”？ |
-| 工程层 | 分层、测试、启动配置 | 如何把示例代码演变成可维护的服务？ |
+| 工程层 | 启动、配置、测试边界 | 如何把 Gin 放在服务的 HTTP 边缘？ |
 
 ## 一、Gin 在 HTTP 服务中的位置
 
@@ -605,9 +606,11 @@ engine.Use(gin.Logger(), gin.Recovery())
 
 `Recovery` 是最后一道保护网。参数校验失败、资源不存在、权限不足等都是可预期分支，应由 Controller 或服务层显式返回；用 panic 表达普通业务分支会破坏控制流，也使错误语义变差。
 
-## 六、从工程代码组织 Gin 服务
+## 六、Context 的生命周期与并发边界
 
-### 1. Router、Controller、Service 与 Repository 的职责
+Gin 的路由和中间件如何嵌入 Router、Controller、Service、Repository 等分层，是框架之外的工程组织问题；它同时适用于 `net/http`、Gin、gRPC 和消息消费程序，详见[《Go 项目结构与 Web 服务分层》](/backend/go/advanced/04-engineering-practice/01-go-project-structure-and-layered-architecture/)。本节只讨论 Gin 的请求对象与并发边界。
+
+<!--
 
 Gin 只要求把一个 `HandlerFunc` 注册到路由上，并不规定项目分层。中小型服务常见的一种依赖方向如下：
 
@@ -670,7 +673,7 @@ func NewServer(articleService *ArticleService, authService *AuthService) *Server
 
 中间件必须在目标路由或目标分组创建前注册。原因将在源码部分揭示：Gin 在注册路由时就把分组已有中间件和路由处理器合并成最终处理器链；后续再修改父组，并不会回写已注册路由的链。
 
-### 3. Context 的生命周期与并发边界
+-->
 
 `*gin.Context` 只属于当前 HTTP 请求。Gin 通过 `sync.Pool` 复用它，以减少高并发下的分配和 GC 压力。请求结束后，它可能立刻被重置并交给另一个请求使用。
 
