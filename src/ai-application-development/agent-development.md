@@ -1,8 +1,7 @@
 ---
 title: 什么是 AI Agent
 shortTitle: 什么是 AI Agent
-order: 5
-icon: robot
+order: 6
 category:
   - AI 应用开发
 tag:
