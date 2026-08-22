@@ -21,854 +21,1592 @@ tag:
 
 ## 前言
 
-Go 访问 MySQL 时，最容易形成一个错误印象：导入驱动、调用 `Query`，数据库访问就结束了。实际上，一次可靠的数据访问同时包含四件事：正确表达 SQL、管理连接、处理资源与错误、在需要时保证多个写入的一致性。
+MySQL 是一种常用的关系型数据库。在 Go 中，可以通过标准库 `database/sql` 配合 MySQL 驱动操作数据库，也可以使用 `sqlx` 对标准库提供的功能进行扩展。
 
-下面使用一个完整的商品下单场景说明这些问题。用户购买两件商品时，程序必须完成：读取并锁定库存、扣减库存、创建订单、写入订单项。它们不能只成功一部分；并发请求也不能把库存扣成负数。
+本节使用以下两个第三方库：
 
-配套代码位于 [gocode-examples/go/01-database-sql-demo](https://github.com/zzxrepository/gocode-examples/tree/2d147d72f1ca7144eb001c18e8bbe75c3b18578f/go/01-database-sql-demo)。链接固定到源码提交，文中的函数、表结构和命令均可在该项目中直接运行和核对。
+- `github.com/go-sql-driver/mysql`：MySQL 驱动；
+- `github.com/jmoiron/sqlx`：对标准库 `database/sql` 的扩展封装，可以更方便地将查询结果映射到结构体。
 
-`database/sql` 是 Go 标准库的通用数据访问与连接池模型；`go-sql-driver/mysql` 是实现 MySQL 协议的驱动；`sqlx` 则是在 `database/sql` 之上减少映射和参数绑定样板代码的工具。三者是叠加关系，而不是三种互相替代的方案。
+### 13.1.1 准备数据库和数据表
 
-## 阅读结构
+首先创建名为 `test` 的数据库，并在其中创建 `person` 和 `place` 两张表。
 
-内容按照实际开发中的因果顺序展开：先建立 SQL 和数据模型，再使用标准库完成读写；在已经理解 API 的基础上解释事务、连接池和驱动调用链；最后再引入 `sqlx`，这样能清楚知道它简化了什么、没有替代什么。
+```sql
+CREATE DATABASE IF NOT EXISTS test;
 
-| 部分 | 要解决的问题 | 核心对象 |
-| --- | --- | --- |
-| 数据模型与 SQL | 数据如何保存，CRUD 分别是什么 | `products`、`orders`、`order_items` |
-| 三层关系 | 标准库、驱动、sqlx 各负责什么 | `database/sql`、MySQL driver、`sqlx` |
-| 建立连接 | 如何创建一个可复用的连接池 | `sql.Open`、`PingContext`、`*sql.DB` |
-| 标准库 CRUD | 如何插入、查询、更新、删除 | `ExecContext`、`QueryRowContext`、`Rows` |
-| 事务下单 | 如何避免部分写入与超卖 | `Tx`、`FOR UPDATE`、`Commit` |
-| 底层机制 | 连接从哪里来、何时归还 | `sql.Register`、`Connector`、`DB.conn` |
-| sqlx | 如何减少结构体扫描和长参数列表 | `GetContext`、`NamedExecContext`、`sqlx.In` |
+USE test;
 
-下单的业务主线如下：
+CREATE TABLE `person` (
+    `user_id` INT(11) NOT NULL AUTO_INCREMENT,
+    `username` VARCHAR(260) DEFAULT NULL,
+    `sex` VARCHAR(260) DEFAULT NULL,
+    `email` VARCHAR(260) DEFAULT NULL,
+    PRIMARY KEY (`user_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8;
 
-~~~text
-创建商品
-  → 查询并更新商品
-  → 开始事务
-  → 锁定商品库存
-  → 扣减库存
-  → 创建订单
-  → 写入订单项
-  → 提交事务
+CREATE TABLE `place` (
+    `country` VARCHAR(200),
+    `city` VARCHAR(200),
+    `telcode` INT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+```
 
-任一步失败 → 回滚事务 → 已完成的库存和订单写入全部撤销
-~~~
+其中：
 
-## 从数据模型开始：SQL 在解决什么问题
+- `CREATE DATABASE` 用于创建数据库；
+- `USE test` 表示切换到 `test` 数据库；
+- `CREATE TABLE` 用于创建数据表；
+- `PRIMARY KEY` 用于指定主键；
+- `AUTO_INCREMENT` 表示该字段的值由 MySQL 自动递增；
+- `DEFAULT NULL` 表示该字段允许为空，并且默认值为 `NULL`；
+- `ENGINE=InnoDB` 表示使用 InnoDB 存储引擎。
 
-关系型数据库把业务事实保存为行和表。表不是 Go 结构体的简单镜像：主键、唯一索引、外键和存储引擎都在表达业务约束。示例的表结构如下：
+创建完成后，可以使用 `DESC` 命令查看数据表结构。
 
-~~~sql
--- 金额使用“分”保存为整数，避免浮点金额累积误差。
-CREATE TABLE products (
-    id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    sku         VARCHAR(64) NOT NULL,
-    name        VARCHAR(128) NOT NULL,
-    price_cents BIGINT UNSIGNED NOT NULL,
-    stock       BIGINT UNSIGNED NOT NULL,
-    created_at  DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    PRIMARY KEY (id),
-    UNIQUE KEY uk_products_sku (sku)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```sql
+mysql> DESC person;
++----------+--------------+------+-----+---------+----------------+
+| Field    | Type         | Null | Key | Default | Extra          |
++----------+--------------+------+-----+---------+----------------+
+| user_id  | int(11)      | NO   | PRI | NULL    | auto_increment |
+| username | varchar(260) | YES  |     | NULL    |                |
+| sex      | varchar(260) | YES  |     | NULL    |                |
+| email    | varchar(260) | YES  |     | NULL    |                |
++----------+--------------+------+-----+---------+----------------+
+4 rows in set (0.00 sec)
+mysql> DESC place;
++---------+--------------+------+-----+---------+-------+
+| Field   | Type         | Null | Key | Default | Extra |
++---------+--------------+------+-----+---------+-------+
+| country | varchar(200) | YES  |     | NULL    |       |
+| city    | varchar(200) | YES  |     | NULL    |       |
+| telcode | int(11)      | YES  |     | NULL    |       |
++---------+--------------+------+-----+---------+-------+
+3 rows in set (0.01 sec)
+```
 
-CREATE TABLE orders (
-    id                 BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    customer_id        BIGINT UNSIGNED NOT NULL,
-    status             VARCHAR(32) NOT NULL,
-    total_amount_cents BIGINT UNSIGNED NOT NULL,
-    created_at         DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    PRIMARY KEY (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+### 13.1.2 安装 MySQL 驱动和 sqlx
 
-CREATE TABLE order_items (
-    id               BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    order_id         BIGINT UNSIGNED NOT NULL,
-    product_id       BIGINT UNSIGNED NOT NULL,
-    quantity         BIGINT UNSIGNED NOT NULL,
-    unit_price_cents BIGINT UNSIGNED NOT NULL,
-    PRIMARY KEY (id),
-    KEY idx_order_items_order_id (order_id),
-    CONSTRAINT fk_order_items_order
-        FOREIGN KEY (order_id) REFERENCES orders(id),
-    CONSTRAINT fk_order_items_product
-        FOREIGN KEY (product_id) REFERENCES products(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-~~~
+进入 Go 项目目录，执行以下命令安装依赖：
 
-几个字段的作用不是装饰：
+```bash
+go get github.com/go-sql-driver/mysql
+go get github.com/jmoiron/sqlx
+```
 
-- `AUTO_INCREMENT` 让 MySQL 为每次插入生成主键，Go 可通过 `LastInsertId` 取得它；
-- SKU 的唯一索引拒绝重复商品；
-- 订单项保存 `unit_price_cents`，商品后来调价不会修改历史成交价；
-- `InnoDB` 提供事务、外键和行锁；
-- 商品的主键索引使 `WHERE id = ? FOR UPDATE` 能精准锁定目标记录。
+其中，MySQL 驱动通常采用匿名导入方式：
 
-SQL 常被按用途分为四类：
+```go
+import _ "github.com/go-sql-driver/mysql"
+```
 
-| 类别 | 代表语句 | 在案例中的用途 |
-| --- | --- | --- |
-| DDL | `CREATE`、`ALTER`、`DROP` | 定义表、索引和约束 |
-| DML | `INSERT`、`UPDATE`、`DELETE` | 创建商品、扣减库存、删除临时商品 |
-| DQL | `SELECT` | 查询商品与锁定库存 |
-| TCL | `COMMIT`、`ROLLBACK` | 提交或撤销一组写入 |
+匿名导入的作用是执行驱动包中的初始化代码，使其向 `database/sql` 注册名为 `mysql` 的数据库驱动。
 
-CRUD 是最常见的 DML/DQL 组合：Create 对应 `INSERT`，Read 对应 `SELECT`，Update 对应 `UPDATE`，Delete 对应 `DELETE`。真正的困难不在于记住这四个关键字，而在于明确 SQL 的数据边界和错误边界。
+如果没有导入 MySQL 驱动，即使代码中使用了：
 
-### 参数化查询是 SQL 的安全边界
+```go
+sqlx.Open("mysql", dsn)
+```
 
-MySQL 驱动使用 `?` 表示一个**值**。SQL 模板与参数值分开传递，驱动会按类型编码参数，因此输入不会变成 SQL 语法：
+程序也无法识别名为 `mysql` 的数据库驱动。
 
-~~~go
-// 正确：sku 是数据，不会被当作 SQL 片段执行。
-row := db.QueryRowContext(ctx, `
-	SELECT id, sku, name, price_cents, stock, created_at
-	FROM products
-	WHERE sku = ?`, sku)
+### 13.1.3 连接 MySQL
 
-// 错误：sku 成为 SQL 文本的一部分，外部输入可能改变 WHERE 条件。
-query := "SELECT id, sku FROM products WHERE sku = '" + sku + "'"
-~~~
+使用 `sqlx.Open()` 可以创建一个数据库对象：
 
-下面几种写法都不是参数化查询，即使使用了 `fmt.Sprintf`：
+```go
+database, err := sqlx.Open(
+    "mysql",
+    "root:password@tcp(127.0.0.1:3306)/test",
+)
+```
 
-~~~go
-query := "SELECT * FROM products WHERE sku = '" + sku + "'"
-query := fmt.Sprintf("SELECT * FROM products WHERE sku = '%s'", sku)
-query := "DELETE FROM products WHERE id = " + requestID
-~~~
+第一个参数：
 
-占位符只能代表值，不能代表表名、列名、排序方向或 SQL 表达式。动态排序必须先从白名单选择 SQL 结构，分页大小仍然通过参数绑定：
+```go
+"mysql"
+```
 
-~~~go
-columns := map[string]string{
-	"created_at": "created_at",
-	"price":      "price_cents",
-	"stock":      "stock",
+表示使用 MySQL 驱动。
+
+第二个参数是数据源名称，也称为 DSN，其基本格式如下：
+
+```text
+用户名:密码@tcp(数据库地址:端口)/数据库名
+```
+
+例如：
+
+```text
+root:root@tcp(127.0.0.1:3306)/test
+```
+
+各部分含义如下：
+
+| 内容        | 说明                 |
+| ----------- | -------------------- |
+| `root`      | MySQL 用户名         |
+| `root`      | MySQL 密码           |
+| `tcp`       | 使用 TCP 协议连接    |
+| `127.0.0.1` | MySQL 服务器地址     |
+| `3306`      | MySQL 默认端口       |
+| `test`      | 需要访问的数据库名称 |
+
+需要注意，`sqlx.Open()` 主要负责初始化数据库对象和连接池，并不一定会立即与数据库建立实际连接。
+
+因此，可以继续调用 `Ping()` 检查数据库是否能够正常连接。
+
+```go
+if err := db.Ping(); err != nil {
+    fmt.Println("connect mysql failed:", err)
+    return
 }
-column, ok := columns[requestSort]
-if !ok {
-	column = "created_at" // 不认识的输入回退到固定列。
-}
+```
 
-directions := map[string]string{"asc": "ASC", "desc": "DESC"}
-direction, ok := directions[requestDirection]
-if !ok {
-	direction = "DESC"
-}
+下面定义后续示例共同使用的结构体和数据库连接函数：
 
-// 只有白名单中的列名和方向参与字符串格式化；pageSize 始终作为值绑定。
-query := fmt.Sprintf(`
-	SELECT id, sku, name, price_cents, stock, created_at
-	FROM products
-	ORDER BY %s %s
-	LIMIT ?`, column, direction)
-rows, err := db.QueryContext(ctx, query, pageSize)
-~~~
-
-输入校验、参数化查询和数据库最小权限分别解决不同问题：输入校验保证数量、分页等符合业务规则；参数化查询保证输入不能改变 SQL 结构；最小权限限制即使应用出错后可造成的影响。三者都不能省略。
-
-## 运行贯穿全文的 Demo
-
-项目提供两个命令入口：一个只使用 `database/sql`，另一个使用 `sqlx` 表达同一条业务链。它们使用同一个 MySQL 容器和同一套表结构。
-
-~~~text
-01-database-sql-demo/
-├── cmd/database-sql-demo/main.go  标准库入口
-├── cmd/sqlx-demo/main.go          sqlx 入口
-├── internal/store/mysql.go        驱动配置与连接池
-├── internal/store/product.go      标准库 CRUD
-├── internal/store/order.go        标准库事务下单
-├── internal/store/sqlx.go         sqlx CRUD 与事务下单
-├── scripts/docker-compose.yml     MySQL 8.4 容器
-└── scripts/schema.sql             初始化表结构
-~~~
-
-在示例目录运行：
-
-~~~bash
-cd /Users/mmzhang/notes/GoTutorials/gocode-examples/go/01-database-sql-demo
-
-# 首次启动会执行 scripts/schema.sql。
-make docker-up
-
-# 标准库与 sqlx 版本分别运行。
-make run
-make run-sqlx
-
-# 测试输入校验，并检查所有包能编译。
-make test
-~~~
-
-标准库入口会创建商品、读取和更新它、列出商品、下单、删除一条没有订单引用的临时商品，最后打印连接池状态。输出中的 ID 会随数据库状态变化：
-
-~~~text
-创建商品: id=1 stock=10
-查询商品: sku=keyboard-sql-... name=database/sql 机械键盘
-更新商品名称: changed=true
-当前商品数: 1
-下单成功: order_id=1; 下单后库存=8
-删除临时商品: deleted=true
-连接池: open=1 idle=1 in_use=0 wait_count=0
-~~~
-
-示例默认连接 `root:rootpass@tcp(127.0.0.1:3307)/go_store`。连接其他数据库时通过 `MYSQL_USER`、`MYSQL_PASSWORD`、`MYSQL_ADDRESS` 和 `MYSQL_DATABASE` 设置环境变量；生产密码应来自受控配置系统或密钥管理系统，不能写入源码。
-
-## 三层数据访问栈：谁负责什么
-
-一次数据库调用经过的层次如下：
-
-~~~text
-业务代码
-  │  SQL 模板、参数、Context
-  ▼
-database/sql
-  │  *sql.DB 连接池、*sql.Tx 事务、Rows 生命周期、driver 接口
-  ▼
-go-sql-driver/mysql
-  │  DSN、认证、TCP、MySQL 协议、? 占位符、类型转换
-  ▼
-MySQL Server
-
-sqlx（可选）
-  └─ 在 database/sql 之上包装 *sql.DB / *sql.Tx，增加结构体映射和绑定辅助
-~~~
-
-`database/sql` 定义通用抽象，但不内置 MySQL 协议实现；MySQL 驱动实现标准库的驱动接口；`sqlx` 既不会取代驱动，也不会生成 ORM 风格的 SQL。它仍然把查询委托给 `database/sql` 和驱动。
-
-因此有两个结论：
-
-1. 使用 `sqlx` 仍然必须导入 MySQL 驱动；
-2. `sqlx` 不会替你管理连接池、关闭结果集、设计事务、加索引或决定锁策略。
-
-## 建立连接：`sql.DB` 是连接池，不是一条连接
-
-先安装依赖：
-
-~~~bash
-go get github.com/go-sql-driver/mysql@v1.10.0
-go get github.com/jmoiron/sqlx@v1.4.0
-~~~
-
-只需触发驱动注册时，使用空白导入：
-
-~~~go
-import _ "github.com/go-sql-driver/mysql" // 执行驱动包初始化，注册名为 mysql 的驱动。
-~~~
-
-Demo 需要调用 `mysql.NewConfig` 组装 DSN，因此使用普通导入。普通导入同样会执行包初始化。完整的连接创建函数如下：
-
-~~~go
-package store
+```go
+package main
 
 import (
-	"context"
-	"database/sql"
-	"fmt"
-	"time"
+    "fmt"
 
-	mysql "github.com/go-sql-driver/mysql" // 使用 Config，同时完成驱动注册。
+    _ "github.com/go-sql-driver/mysql"
+    "github.com/jmoiron/sqlx"
 )
 
-// MySQLConfig 把连接信息集中在启动阶段，业务 SQL 无需关心 DSN 格式。
-type MySQLConfig struct {
-	User     string
-	Password string
-	Address  string // 例如 127.0.0.1:3307。
-	Database string
+type Person struct {
+    UserID   int    `db:"user_id"`
+    Username string `db:"username"`
+    Sex      string `db:"sex"`
+    Email    string `db:"email"`
 }
 
-// OpenMySQL 创建并验证整个进程可复用的 database/sql 连接池。
-func OpenMySQL(ctx context.Context, cfg MySQLConfig) (*sql.DB, error) {
-	driverCfg := mysql.NewConfig()
-	driverCfg.User = cfg.User
-	driverCfg.Passwd = cfg.Password
-	driverCfg.Net = "tcp"
-	driverCfg.Addr = cfg.Address
-	driverCfg.DBName = cfg.Database
-
-	// 让 DATETIME 扫描为 time.Time；否则驱动通常返回 []byte 或 string。
-	driverCfg.ParseTime = true
-	driverCfg.Loc = time.Local
-
-	// 这是底层网络 I/O 的超时，和每个业务请求的 Context 超时不同。
-	driverCfg.Timeout = 3 * time.Second
-	driverCfg.ReadTimeout = 5 * time.Second
-	driverCfg.WriteTimeout = 5 * time.Second
-
-	// sql.Open 返回的是池句柄，通常尚未真正建立 TCP 连接。
-	db, err := sql.Open("mysql", driverCfg.FormatDSN())
-	if err != nil {
-		return nil, fmt.Errorf("open MySQL handle: %w", err)
-	}
-
-	// 下列设置由 database/sql 管理，不属于 MySQL 驱动。
-	db.SetMaxOpenConns(20)                 // 最多 20 条打开或正在创建的连接。
-	db.SetMaxIdleConns(20)                 // 最多保留 20 条空闲连接。
-	db.SetConnMaxLifetime(3 * time.Minute) // 连接可复用的最长生命周期。
-	db.SetConnMaxIdleTime(time.Minute)     // 空闲过久的连接可以被清理。
-
-	// PingContext 会借用或建立物理连接，验证网络、地址、认证和数据库名。
-	if err := db.PingContext(ctx); err != nil {
-		_ = db.Close() // 初始化失败时释放已创建的池资源。
-		return nil, fmt.Errorf("ping MySQL: %w", err)
-	}
-	return db, nil
+type Place struct {
+    Country string `db:"country"`
+    City    string `db:"city"`
+    TelCode int    `db:"telcode"`
 }
-~~~
 
-`sql.Open("mysql", dsn)` 中的 `mysql` 是驱动注册名。它只创建 `*sql.DB` 及其池状态，通常不会立刻拨号，所以启动阶段要配合有超时的 `PingContext`。创建成功后，`*sql.DB` 应作为长生命周期依赖复用：
+func openDB() (*sqlx.DB, error) {
+    db, err := sqlx.Open(
+        "mysql",
+        "root:root@tcp(127.0.0.1:3306)/test",
+    )
+    if err != nil {
+        return nil, err
+    }
 
-~~~go
-ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-defer cancel() // 启动时也不能无限等待数据库。
+    if err := db.Ping(); err != nil {
+        db.Close()
+        return nil, err
+    }
 
-db, err := store.OpenMySQL(ctx, cfg)
+    return db, nil
+}
+
+func main() {
+    db, err := openDB()
+    if err != nil {
+        fmt.Println("open mysql failed:", err)
+        return
+    }
+    defer db.Close()
+
+    fmt.Println("mysql connection success")
+}
+```
+
+结构体字段后的 `db` 标签用于指定结构体字段与数据库字段之间的映射关系。
+
+例如：
+
+```go
+UserID int `db:"user_id"`
+```
+
+表示数据库查询结果中的 `user_id` 字段会被映射到结构体的 `UserID` 字段。
+
+如果数据库字段名和结构体字段名无法由 `sqlx` 自动对应，就应当通过 `db` 标签明确指定映射关系。
+
+另外，`*sqlx.DB` 并不表示一条固定的数据库连接，而是一个数据库连接池。Go 程序通常只需要创建并复用一个数据库对象，不应在每次执行 SQL 时重复创建连接池。
+
+### 13.1.4 SQL 基础与 SQL 注入
+
+在使用 Go 操作 MySQL 之前，需要先了解基本的 SQL 语法，以及程序执行 SQL 时可能出现的 SQL 注入问题。
+
+#### 1. SQL 语句的基本分类
+
+SQL 是操作关系型数据库的语言。常见 SQL 语句可以分为以下几类：
+
+| 分类         | 常见语句                     | 作用                         |
+| ------------ | ---------------------------- | ---------------------------- |
+| 数据定义语言 | `CREATE`、`ALTER`、`DROP`    | 创建、修改或者删除数据库对象 |
+| 数据操作语言 | `INSERT`、`UPDATE`、`DELETE` | 插入、修改或者删除数据       |
+| 数据查询语言 | `SELECT`                     | 查询数据                     |
+| 事务控制语言 | `COMMIT`、`ROLLBACK`         | 提交或者回滚事务             |
+
+本节主要使用以下四种语句：
+
+```sql
+INSERT
+SELECT
+UPDATE
+DELETE
+```
+
+它们通常被合称为 CRUD 操作：
+
+- Create：新增数据，对应 `INSERT`；
+- Read：读取数据，对应 `SELECT`；
+- Update：修改数据，对应 `UPDATE`；
+- Delete：删除数据，对应 `DELETE`。
+
+#### 2. SQL 语句的基本组成
+
+以一条查询语句为例：
+
+```sql
+SELECT user_id, username, email
+FROM person
+WHERE user_id = 1
+ORDER BY user_id DESC
+LIMIT 10;
+```
+
+其中：
+
+- `SELECT` 指定需要查询的字段；
+- `FROM` 指定查询的数据表；
+- `WHERE` 指定筛选条件；
+- `ORDER BY` 指定排序方式；
+- `DESC` 表示降序排列；
+- `LIMIT` 限制返回的数据条数。
+
+SQL 关键字通常不区分大小写，但为了便于阅读，本教程使用大写形式书写 SQL 关键字。
+
+#### 3. 什么是 SQL 注入
+
+SQL 注入是指程序直接将外部输入拼接到 SQL 字符串中，导致输入内容被数据库当作 SQL 语法的一部分执行。
+
+下面是一种不安全的查询方式：
+
+```go
+username := userInput
+
+query := "SELECT user_id, username, sex, email " +
+    "FROM person WHERE username = '" + username + "'"
+
+err := db.Select(&people, query)
+```
+
+如果用户正常输入：
+
+```text
+stu001
+```
+
+最终生成的 SQL 为：
+
+```sql
+SELECT user_id, username, sex, email
+FROM person
+WHERE username = 'stu001';
+```
+
+但是，如果用户输入：
+
+```text
+' OR 1=1 -- 
+```
+
+拼接后的 SQL 可能变成：
+
+```sql
+SELECT user_id, username, sex, email
+FROM person
+WHERE username = '' OR 1=1 -- ';
+```
+
+其中：
+
+```sql
+OR 1=1
+```
+
+始终成立，而 `--` 会将后面的内容作为注释处理。
+
+这样一来，原本只查询一个用户的语句，就可能返回表中的全部用户。
+
+SQL 注入还可能造成：
+
+- 未授权读取数据；
+- 修改或者删除数据；
+- 绕过登录验证；
+- 泄露敏感信息；
+- 破坏数据库结构。
+
+具体危害取决于数据库账号拥有的权限、数据库配置以及程序执行 SQL 的方式。
+
+#### 4. 错误做法：直接拼接 SQL
+
+以下写法都存在 SQL 注入风险：
+
+```go
+query := "SELECT * FROM person WHERE username = '" + username + "'"
+query := fmt.Sprintf(
+    "SELECT * FROM person WHERE username = '%s'",
+    username,
+)
+query := "DELETE FROM person WHERE user_id = " + userID
+```
+
+即使使用 `fmt.Sprintf()`，本质上仍然是在将输入内容拼接到 SQL 字符串中，并不能防止 SQL 注入。
+
+#### 5. 正确做法：参数化查询
+
+MySQL 驱动使用 `?` 作为参数占位符。
+
+```go
+var people []Person
+
+err := db.Select(
+    &people,
+    `
+    SELECT user_id, username, sex, email
+    FROM person
+    WHERE username = ?
+    `,
+    username,
+)
+```
+
+这里的 SQL 语句和参数值是分开传递的：
+
+```go
+db.Select(
+    &people,
+    "SELECT ... WHERE username = ?",
+    username,
+)
+```
+
+数据库驱动会将 `username` 当作普通数据处理，而不会将其解释为 SQL 语法。
+
+即使用户输入：
+
+```text
+' OR 1=1 -- 
+```
+
+数据库也只会将这段内容作为需要匹配的用户名，而不会执行其中的 `OR 1=1`。
+
+占位符周围不应手动添加引号。
+
+错误写法：
+
+```go
+db.Select(
+    &people,
+    "SELECT * FROM person WHERE username = '?'",
+    username,
+)
+```
+
+正确写法：
+
+```go
+db.Select(
+    &people,
+    "SELECT * FROM person WHERE username = ?",
+    username,
+)
+```
+
+字符串引号和类型转换应交给数据库驱动处理。
+
+参数化查询适用于所有常见的 CRUD 操作：
+
+```go
+db.Exec(
+    "INSERT INTO person(username, sex, email) VALUES (?, ?, ?)",
+    username,
+    sex,
+    email,
+)
+db.Select(
+    &people,
+    "SELECT * FROM person WHERE user_id = ?",
+    userID,
+)
+db.Exec(
+    "UPDATE person SET username = ? WHERE user_id = ?",
+    username,
+    userID,
+)
+db.Exec(
+    "DELETE FROM person WHERE user_id = ?",
+    userID,
+)
+```
+
+只要数据值来自变量、请求参数、表单、URL、JSON 或者其他外部输入，就应当通过参数传递，而不是直接拼接到 SQL 中。
+
+#### 6. 预处理语句
+
+如果同一条 SQL 需要重复执行，可以显式创建预处理语句：
+
+```go
+stmt, err := db.Preparex(
+    `
+    INSERT INTO person(username, sex, email)
+    VALUES (?, ?, ?)
+    `,
+)
 if err != nil {
-	return err
+    fmt.Println("prepare failed:", err)
+    return
 }
-defer db.Close() // 只在进程退出时关闭整个池。
-~~~
+defer stmt.Close()
 
-每个 HTTP 请求都 `sql.Open` 和 `Close` 是常见错误：它会不断创建连接池、降低复用率，并很容易耗尽 MySQL 的连接数。请求处理函数应传入 `r.Context()`，在它的基础上设置合理的业务超时。
-
-## 使用 `database/sql` 完成 CRUD
-
-标准库的 API 很少，但每种返回值都对应不同的资源语义：
-
-| 操作 | 方法 | 返回值与必须处理的边界 |
-| --- | --- | --- |
-| `INSERT`、`UPDATE`、`DELETE` | `ExecContext` | `sql.Result`、执行错误 |
-| 一行或零行 | `QueryRowContext` | 在 `Scan` 时处理 `sql.ErrNoRows` |
-| 多行 | `QueryContext` | `*sql.Rows`，必须关闭并检查 `Rows.Err` |
-| 多个相关写入 | `BeginTx` | `*sql.Tx`，必须 `Commit` 或 `Rollback` |
-
-### 写入：`ExecContext` 与 `LastInsertId`
-
-商品数据模型和创建函数位于 `internal/store/product.go`：
-
-~~~go
-type Product struct {
-	ID         int64
-	SKU        string
-	Name       string
-	PriceCents int64
-	Stock      int64
-	CreatedAt  time.Time
-}
-
-type CreateProductInput struct {
-	SKU        string
-	Name       string
-	PriceCents int64
-	Stock      int64
-}
-
-func validateProductInput(input CreateProductInput) error {
-	if input.SKU == "" || input.Name == "" || input.PriceCents < 0 || input.Stock < 0 {
-		return ErrInvalidProduct // 在执行 SQL 前拒绝明显不合理的业务输入。
-	}
-	return nil
-}
-
-// CreateProduct 写入商品，并读取数据库最终保存的完整记录。
-func CreateProduct(ctx context.Context, db *sql.DB, input CreateProductInput) (Product, error) {
-	if err := validateProductInput(input); err != nil {
-		return Product{}, err
-	}
-
-	// ? 与每个参数严格按位置对应。没有任何外部输入参与拼接 SQL 文本。
-	result, err := db.ExecContext(ctx, `
-		INSERT INTO products (sku, name, price_cents, stock)
-		VALUES (?, ?, ?, ?)`,
-		input.SKU, input.Name, input.PriceCents, input.Stock,
-	)
-	if err != nil {
-		return Product{}, fmt.Errorf("insert product: %w", err)
-	}
-
-	id, err := result.LastInsertId() // 取得本次 INSERT 的 AUTO_INCREMENT 主键。
-	if err != nil {
-		return Product{}, fmt.Errorf("read inserted product ID: %w", err)
-	}
-	return GetProduct(ctx, db, id) // 再读一次，获得 created_at 等数据库生成的值。
-}
-~~~
-
-`LastInsertId` 在这个 MySQL 自增主键场景可用，但不是所有数据库、所有主键生成策略都有相同语义。编写跨数据库代码前需要查看目标驱动的文档。
-
-### 查询一行：错误在 `Scan` 时出现
-
-`QueryRowContext` 返回的是延迟读取的 `Row`。它不会在调用处返回错误，SQL 错误、网络错误和“没有记录”都会在 `Scan` 时出现：
-
-~~~go
-// GetProduct 查询一条商品记录；缺少记录转换为明确的领域错误。
-func GetProduct(ctx context.Context, db *sql.DB, id int64) (Product, error) {
-	var product Product
-
-	// SELECT 列与 Scan 目标必须同数量、同顺序且类型可转换。
-	err := db.QueryRowContext(ctx, `
-		SELECT id, sku, name, price_cents, stock, created_at
-		FROM products
-		WHERE id = ?`, id,
-	).Scan(
-		&product.ID,
-		&product.SKU,
-		&product.Name,
-		&product.PriceCents,
-		&product.Stock,
-		&product.CreatedAt,
-	)
-	if errors.Is(err, sql.ErrNoRows) {
-		return Product{}, ErrProductNotFound
-	}
-	if err != nil {
-		return Product{}, fmt.Errorf("get product %d: %w", id, err)
-	}
-	return product, nil
-}
-~~~
-
-这里不使用 `SELECT *`。明确列名能稳定扫描顺序，也避免表新增字段后不知不觉改变读取接口。`QueryRowContext` 不暴露需要手动关闭的 `Rows`，因此不需要对它调用 `Close`。
-
-### 查询多行：`Rows.Close` 与 `Rows.Err` 缺一不可
-
-多行查询的 `Rows` 可能仍在从网络读取结果集，并持有连接池中的物理连接。循环只读到一半就返回时，`Close` 才能让连接尽快回到池中；`Rows.Err` 才能报告 `Next` 阶段发生的错误：
-
-~~~go
-// ListProducts 展示 *sql.Rows 的完整生命周期。
-func ListProducts(ctx context.Context, db *sql.DB) ([]Product, error) {
-	rows, err := db.QueryContext(ctx, `
-		SELECT id, sku, name, price_cents, stock, created_at
-		FROM products
-		ORDER BY id`)
-	if err != nil {
-		return nil, fmt.Errorf("query products: %w", err)
-	}
-	defer rows.Close() // 所有 return 路径都释放结果集与关联连接。
-
-	products := make([]Product, 0)
-	for rows.Next() {
-		var product Product
-		if err := rows.Scan(
-			&product.ID,
-			&product.SKU,
-			&product.Name,
-			&product.PriceCents,
-			&product.Stock,
-			&product.CreatedAt,
-		); err != nil {
-			return nil, fmt.Errorf("scan product row: %w", err)
-		}
-		products = append(products, product)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate product rows: %w", err)
-	}
-	return products, nil
-}
-~~~
-
-如果数据库列允许 `NULL`，不能直接把它扫描进不可空的 `string`、`int64` 或 `time.Time`。使用 `sql.NullString`、`sql.NullInt64` 或 `sql.NullTime` 表示“存在值”与“数据库为 NULL”的区别：
-
-~~~go
-var deletedAt sql.NullTime
-err := db.QueryRowContext(ctx, `
-	SELECT deleted_at FROM products WHERE id = ?`, productID,
-).Scan(&deletedAt)
+_, err = stmt.Exec(
+    "stu001",
+    "man",
+    "stu01@qq.com",
+)
 if err != nil {
-	return err
+    fmt.Println("insert failed:", err)
+    return
+}
+```
+
+预处理语句通常包含占位符，但不包含具体参数值。创建完成后，可以使用不同的参数重复执行。
+
+需要注意，防止 SQL 注入并不要求每次都显式调用 `Prepare()`。
+
+下面这种参数化写法本身就是正确的：
+
+```go
+db.Exec(
+    "DELETE FROM person WHERE user_id = ?",
+    userID,
+)
+```
+
+关键在于 SQL 模板和参数值必须分开传递。显式预处理更适合需要重复执行同一条 SQL 的场景。
+
+#### 7. 占位符不能代替表名和字段名
+
+占位符只能表示数据值，不能表示：
+
+- SQL 关键字；
+- 表名；
+- 字段名；
+- 排序方向；
+- 完整的 SQL 表达式。
+
+下面的写法是错误的：
+
+```go
+db.Select(
+    &people,
+    "SELECT * FROM ? WHERE user_id = ?",
+    tableName,
+    userID,
+)
+```
+
+下面的写法同样不可行：
+
+```go
+db.Select(
+    &people,
+    "SELECT * FROM person ORDER BY ?",
+    sortField,
+)
+```
+
+因为表名、字段名和排序方式属于 SQL 语句结构，而不是普通的数据值。
+
+如果确实需要动态指定排序字段，应当使用白名单：
+
+```go
+allowedSortFields := map[string]string{
+    "id":       "user_id",
+    "username": "username",
+    "email":    "email",
 }
 
-if deletedAt.Valid {
-	log.Printf("已删除时间：%s", deletedAt.Time)
-} else {
-	log.Print("商品尚未删除") // Valid 为 false，才代表 SQL NULL。
-}
-~~~
-
-### 更新与删除：正确理解受影响行数
-
-更新和删除也是 `ExecContext`。任何面向单条资源的修改都必须携带预期的 `WHERE` 条件；遗漏条件会修改或删除整张表。
-
-~~~go
-// UpdateProductName 返回本次是否真的修改了字段值。
-func UpdateProductName(ctx context.Context, db *sql.DB, id int64, name string) (bool, error) {
-	if id <= 0 || name == "" {
-		return false, ErrInvalidProduct
-	}
-
-	result, err := db.ExecContext(ctx, `
-		UPDATE products
-		SET name = ?
-		WHERE id = ?`, name, id)
-	if err != nil {
-		return false, fmt.Errorf("update product %d: %w", id, err)
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return false, fmt.Errorf("read product update result: %w", err)
-	}
-
-	// MySQL 默认把“新旧值相同”也报告为 0 行，false 不能单独说明商品不存在。
-	return affected > 0, nil
+sortField, ok := allowedSortFields[userInput]
+if !ok {
+    sortField = "user_id"
 }
 
-// DeleteProduct 只删除没有被订单项引用的商品。
-func DeleteProduct(ctx context.Context, db *sql.DB, id int64) (bool, error) {
-	if id <= 0 {
-		return false, ErrInvalidProduct
-	}
+query := fmt.Sprintf(
+    `
+    SELECT user_id, username, sex, email
+    FROM person
+    ORDER BY %s
+    `,
+    sortField,
+)
 
-	result, err := db.ExecContext(ctx, `DELETE FROM products WHERE id = ?`, id)
-	if err != nil {
-		return false, fmt.Errorf("delete product %d: %w", id, err)
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return false, fmt.Errorf("read product delete result: %w", err)
-	}
-	return affected == 1, nil
+err := db.Select(&people, query)
+```
+
+虽然这里使用了 `fmt.Sprintf()`，但是被拼接的内容不是未经检查的原始输入，而是从程序预先定义的白名单中取得的安全字段名。
+
+排序方向也应使用白名单：
+
+```go
+sortDirection := "ASC"
+
+if userDirection == "desc" {
+    sortDirection = "DESC"
 }
-~~~
+```
 
-`order_items` 的外键会拒绝删除已经出现在订单中的商品。这是数据库约束保护历史数据的例子。实际系统中的商品下架通常设计为状态字段或软删除，而不是物理删除。
+不能直接这样处理：
 
-## 用下单事务理解一致性与并发
+```go
+query := "SELECT * FROM person ORDER BY user_id " + userDirection
+```
 
-假设库存为 1，两个请求同时执行“先读库存，再扣库存”。若没有事务和锁，两个请求都可能读到 1，随后都创建订单，这就是超卖。
+#### 8. SQL 注入的其他防护措施
 
-~~~text
-事务 A                                 事务 B
-SELECT ... FOR UPDATE，读取 stock=1    SELECT ... FOR UPDATE，等待 A 的锁
-UPDATE products，stock 减 1
-INSERT orders / order_items
-COMMIT
-                                       读取 stock=0，返回库存不足
-~~~
+参数化查询是防止 SQL 注入的主要措施。此外，还应当配合以下措施：
 
-`PlaceOrder` 把相关写入放入一个事务。代码中的每个注释对应一个容易被忽略的边界：
+1. 对外部输入进行类型和格式校验；
+2. 数据库账号只授予程序真正需要的权限；
+3. 不要在错误响应中向用户暴露完整 SQL 和数据库信息；
+4. 动态字段名、表名和排序方式必须使用白名单；
+5. 不要将过滤或者替换特殊字符作为主要防护手段；
+6. 批量查询、动态条件和 `IN` 查询也应使用安全的参数绑定方式。
 
-~~~go
-// PlaceOrder 原子地锁库存、扣库存、创建订单和订单明细。
-func PlaceOrder(ctx context.Context, db *sql.DB, input PlaceOrderInput) (int64, error) {
-	if err := validateOrderInput(input); err != nil {
-		return 0, err
-	}
+例如，用户编号应先解析成整数：
 
-	// 事务在 Commit 或 Rollback 前独占池中的一条连接。
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return 0, fmt.Errorf("begin order transaction: %w", err)
-	}
-	// 提交后的 Rollback 会返回 sql.ErrTxDone；这里忽略即可。
-	// defer 使任何中途 return 都撤销已经完成的写入。
-	defer func() { _ = tx.Rollback() }()
-
-	var priceCents, stock int64
-	err = tx.QueryRowContext(ctx, `
-		SELECT price_cents, stock
-		FROM products
-		WHERE id = ?
-		FOR UPDATE`, input.ProductID,
-	).Scan(&priceCents, &stock)
-	if errors.Is(err, sql.ErrNoRows) {
-		return 0, ErrProductNotFound
-	}
-	if err != nil {
-		return 0, fmt.Errorf("lock product %d: %w", input.ProductID, err)
-	}
-	if stock < input.Quantity {
-		return 0, ErrInsufficientStock
-	}
-	if priceCents > math.MaxInt64/input.Quantity {
-		return 0, ErrInvalidOrder // 防止总价相乘时 int64 溢出。
-	}
-
-	// 事务内所有原子操作都必须经 tx 执行，不能误用外层 db。
-	// stock >= ? 是第二道保护，受影响行数必须为 1。
-	result, err := tx.ExecContext(ctx, `
-		UPDATE products
-		SET stock = stock - ?
-		WHERE id = ? AND stock >= ?`,
-		input.Quantity, input.ProductID, input.Quantity,
-	)
-	if err != nil {
-		return 0, fmt.Errorf("decrease product stock: %w", err)
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return 0, fmt.Errorf("read stock update result: %w", err)
-	}
-	if affected != 1 {
-		return 0, ErrInsufficientStock
-	}
-
-	total := priceCents * input.Quantity
-	orderResult, err := tx.ExecContext(ctx, `
-		INSERT INTO orders (customer_id, status, total_amount_cents)
-		VALUES (?, ?, ?)`, input.CustomerID, "created", total)
-	if err != nil {
-		return 0, fmt.Errorf("insert order: %w", err)
-	}
-	orderID, err := orderResult.LastInsertId()
-	if err != nil {
-		return 0, fmt.Errorf("read inserted order ID: %w", err)
-	}
-
-	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO order_items (order_id, product_id, quantity, unit_price_cents)
-		VALUES (?, ?, ?, ?)`,
-		orderID, input.ProductID, input.Quantity, priceCents,
-	); err != nil {
-		return 0, fmt.Errorf("insert order item: %w", err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return 0, fmt.Errorf("commit order transaction: %w", err)
-	}
-	return orderID, nil
+```go
+userID, err := strconv.Atoi(input)
+if err != nil {
+    fmt.Println("invalid user id")
+    return
 }
-~~~
+```
 
-这里需要同时理解事务与并发控制：
+即使已经完成类型校验，执行 SQL 时仍然应当使用占位符：
 
-1. `BeginTx` 让 `tx` 固定使用一条物理连接；`Commit` 和 `Rollback` 会把它归还给池。
-2. `FOR UPDATE` 只有在事务中才有意义，并依赖 InnoDB 的行锁能力；等值主键条件使锁范围尽可能小。
-3. `UPDATE ... WHERE stock >= ?` 把库存条件与扣减放在同一条 SQL 中。即使未来修改了读取逻辑，这道条件仍能防止扣成负数。
-4. 在事务中误用 `db.ExecContext` 会从连接池借用另一条连接，该语句不属于当前事务。
-5. 事务要尽量短。持锁期间不要调用第三方 HTTP、等待用户输入或执行无关慢查询。
+```go
+db.Get(
+    &person,
+    "SELECT * FROM person WHERE user_id = ?",
+    userID,
+)
+```
 
-若 `Commit` 因网络问题返回错误，客户端可能无法知道服务器是否已经提交。支付、下单等重要操作还应使用业务幂等键和对账机制，不能简单重试整段事务。
+输入校验负责判断数据是否合法，参数化查询负责防止输入内容改变 SQL 结构，两者作用不同，不能相互替代。
 
-## 使用过 API 后，再理解底层调用链
+### 13.1.5 Insert 插入数据
 
-### 驱动注册：`sql.Open` 为什么认识 `mysql`
+`INSERT` 用于向数据表中插入新的记录。
 
-MySQL 驱动在包初始化时向标准库注册驱动名。驱动源码的核心逻辑可以概括为：
+#### 1. INSERT 基本语法
 
-~~~go
+```sql
+INSERT INTO 表名 (字段一, 字段二, 字段三)
+VALUES (值一, 值二, 值三);
+```
+
+例如：
+
+```sql
+INSERT INTO person (username, sex, email)
+VALUES ('stu001', 'man', 'stu01@qq.com');
+```
+
+其中：
+
+- `INSERT INTO person` 表示向 `person` 表中插入数据；
+- 括号中的内容表示需要写入的字段；
+- `VALUES` 后面的内容表示各字段对应的值；
+- 字段和值必须按照位置一一对应。
+
+`person` 表中的 `user_id` 字段使用了 `AUTO_INCREMENT`，因此插入数据时可以不提供 `user_id`，MySQL 会自动生成其值。
+
+也可以一次插入多条数据：
+
+```sql
+INSERT INTO person (username, sex, email)
+VALUES
+    ('stu001', 'man', 'stu01@qq.com'),
+    ('stu002', 'woman', 'stu02@qq.com');
+```
+
+#### 2. 使用 Go 插入数据
+
+`INSERT` 不会返回查询结果集，因此可以使用 `Exec()` 方法执行。
+
+```go
+package main
+
+import (
+    "fmt"
+
+    _ "github.com/go-sql-driver/mysql"
+    "github.com/jmoiron/sqlx"
+)
+
+func main() {
+    db, err := sqlx.Open(
+        "mysql",
+        "root:root@tcp(127.0.0.1:3306)/test",
+    )
+    if err != nil {
+        fmt.Println("open mysql failed:", err)
+        return
+    }
+    defer db.Close()
+
+    if err := db.Ping(); err != nil {
+        fmt.Println("connect mysql failed:", err)
+        return
+    }
+
+    result, err := db.Exec(
+        `
+        INSERT INTO person(username, sex, email)
+        VALUES (?, ?, ?)
+        `,
+        "stu001",
+        "man",
+        "stu01@qq.com",
+    )
+    if err != nil {
+        fmt.Println("insert failed:", err)
+        return
+    }
+
+    id, err := result.LastInsertId()
+    if err != nil {
+        fmt.Println("get last insert id failed:", err)
+        return
+    }
+
+    fmt.Println("insert success:", id)
+}
+```
+
+SQL 语句中的问号 `?` 是参数占位符：
+
+```sql
+INSERT INTO person(username, sex, email)
+VALUES (?, ?, ?);
+```
+
+实际参数按照顺序传递给 `Exec()`：
+
+```go
+"stu001",
+"man",
+"stu01@qq.com",
+```
+
+第一个参数对应第一个 `?`，第二个参数对应第二个 `?`，以此类推。
+
+这种参数化查询方式可以：
+
+- 避免手动处理字符串引号；
+- 自动处理不同的数据类型；
+- 防止输入内容被解释成 SQL 语法；
+- 降低 SQL 注入风险。
+
+不应当使用字符串拼接构造插入语句：
+
+```go
+sql := "INSERT INTO person(username) VALUES ('" + username + "')"
+```
+
+应当改为：
+
+```go
+_, err := db.Exec(
+    "INSERT INTO person(username) VALUES (?)",
+    username,
+)
+```
+
+#### 3. Exec 和 sql.Result
+
+`Exec()` 的返回值类型为：
+
+```go
+sql.Result
+```
+
+可以通过 `LastInsertId()` 获取数据库生成的自增主键：
+
+```go
+id, err := result.LastInsertId()
+```
+
+也可以通过 `RowsAffected()` 获取受影响的行数：
+
+```go
+rows, err := result.RowsAffected()
+```
+
+示例输出：
+
+```text
+insert success: 2
+```
+
+这里的 `2` 表示新插入记录的 `user_id`。
+
+### 13.1.6 Select 查询数据
+
+`SELECT` 用于从数据表中读取数据。
+
+#### 1. SELECT 基本语法
+
+查询指定字段：
+
+```sql
+SELECT 字段一, 字段二
+FROM 表名;
+```
+
+例如：
+
+```sql
+SELECT user_id, username, email
+FROM person;
+```
+
+也可以使用 `*` 查询所有字段：
+
+```sql
+SELECT *
+FROM person;
+```
+
+在实际项目中，一般建议明确写出需要的字段，而不是长期依赖 `SELECT *`。这样可以使查询结果更加清晰，并减少不必要的数据传输。
+
+#### 2. WHERE 查询条件
+
+使用 `WHERE` 可以筛选符合条件的记录：
+
+```sql
+SELECT user_id, username, email
+FROM person
+WHERE user_id = 1;
+```
+
+常见条件运算符包括：
+
+| 运算符       | 说明               |
+| ------------ | ------------------ |
+| `=`          | 等于               |
+| `<>` 或 `!=` | 不等于             |
+| `>`          | 大于               |
+| `<`          | 小于               |
+| `>=`         | 大于等于           |
+| `<=`         | 小于等于           |
+| `AND`        | 多个条件同时成立   |
+| `OR`         | 多个条件满足其一   |
+| `LIKE`       | 模糊匹配           |
+| `IN`         | 匹配指定集合中的值 |
+
+例如：
+
+```sql
+SELECT user_id, username
+FROM person
+WHERE sex = 'man' AND user_id > 1;
+```
+
+#### 3. 排序和限制数量
+
+常见查询语法如下：
+
+```sql
+SELECT 字段
+FROM 表名
+WHERE 查询条件
+ORDER BY 排序字段 ASC 或 DESC
+LIMIT 返回数量;
+```
+
+例如：
+
+```sql
+SELECT user_id, username, email
+FROM person
+WHERE sex = 'man'
+ORDER BY user_id DESC
+LIMIT 10;
+```
+
+其中：
+
+- `WHERE` 用于筛选数据；
+- `ORDER BY` 用于排序；
+- `ASC` 表示升序；
+- `DESC` 表示降序；
+- `LIMIT` 用于限制返回的数据条数。
+
+#### 4. 使用 Go 查询多条数据
+
+`sqlx` 提供了 `Select()` 方法，可以查询多条数据并将结果直接映射到结构体切片中。
+
+```go
+package main
+
+import (
+    "fmt"
+
+    _ "github.com/go-sql-driver/mysql"
+    "github.com/jmoiron/sqlx"
+)
+
+type Person struct {
+    UserID   int    `db:"user_id"`
+    Username string `db:"username"`
+    Sex      string `db:"sex"`
+    Email    string `db:"email"`
+}
+
+func main() {
+    db, err := sqlx.Open(
+        "mysql",
+        "root:root@tcp(127.0.0.1:3306)/test",
+    )
+    if err != nil {
+        fmt.Println("open mysql failed:", err)
+        return
+    }
+    defer db.Close()
+
+    if err := db.Ping(); err != nil {
+        fmt.Println("connect mysql failed:", err)
+        return
+    }
+
+    var people []Person
+
+    err = db.Select(
+        &people,
+        `
+        SELECT user_id, username, sex, email
+        FROM person
+        WHERE user_id = ?
+        `,
+        1,
+    )
+    if err != nil {
+        fmt.Println("select failed:", err)
+        return
+    }
+
+    fmt.Println("select success:", people)
+}
+```
+
+查询条件中的值应当作为独立参数传递：
+
+```go
+err := db.Select(
+    &people,
+    `
+    SELECT user_id, username, sex, email
+    FROM person
+    WHERE user_id = ?
+    `,
+    userID,
+)
+```
+
+不应直接拼接：
+
+```go
+query := "SELECT * FROM person WHERE user_id = " + userID
+```
+
+示例输出：
+
+```text
+select success: [{1 stu001 man stu01@qq.com}]
+```
+
+`Select()` 的第一个参数必须是用于接收结果的切片指针：
+
+```go
+var people []Person
+
+db.Select(&people, ...)
+```
+
+这里不能传入：
+
+```go
+db.Select(people, ...)
+```
+
+因为 `sqlx` 需要通过指针修改切片中的内容。
+
+#### 5. 使用 Get 查询单条数据
+
+如果只需要查询一条记录，可以使用 `Get()`：
+
+```go
+var person Person
+
+err := db.Get(
+    &person,
+    `
+    SELECT user_id, username, sex, email
+    FROM person
+    WHERE user_id = ?
+    `,
+    1,
+)
+if err != nil {
+    fmt.Println("get person failed:", err)
+    return
+}
+
+fmt.Println(person)
+```
+
+`Select()` 和 `Get()` 的主要区别如下：
+
+| 方法       | 接收对象                   | 适用场景     |
+| ---------- | -------------------------- | ------------ |
+| `Select()` | 切片指针                   | 查询多条数据 |
+| `Get()`    | 结构体指针或者基本类型指针 | 查询单条数据 |
+
+查询语句会返回数据行，因此底层通常通过 `Query()`、`QueryRow()` 或对应的 `Context` 方法执行。
+
+### 13.1.7 Update 更新数据
+
+`UPDATE` 用于修改数据表中已经存在的记录。
+
+#### 1. UPDATE 基本语法
+
+```sql
+UPDATE 表名
+SET 字段一 = 新值一,
+    字段二 = 新值二
+WHERE 查询条件;
+```
+
+例如：
+
+```sql
+UPDATE person
+SET username = 'stu0003'
+WHERE user_id = 1;
+```
+
+其中：
+
+- `UPDATE person` 指定要修改的数据表；
+- `SET` 指定要修改的字段和值；
+- `WHERE` 指定需要修改的记录。
+
+也可以同时修改多个字段：
+
+```sql
+UPDATE person
+SET username = 'stu0003',
+    email = 'stu03@qq.com'
+WHERE user_id = 1;
+```
+
+需要特别注意，省略 `WHERE` 条件会修改表中的所有记录：
+
+```sql
+UPDATE person
+SET username = 'stu0003';
+```
+
+因此，在执行更新操作前，应确认 `WHERE` 条件是否正确。
+
+#### 2. 使用 Go 更新数据
+
+`UPDATE` 不返回查询结果集，因此使用 `Exec()` 执行。
+
+```go
+package main
+
+import (
+    "fmt"
+
+    _ "github.com/go-sql-driver/mysql"
+    "github.com/jmoiron/sqlx"
+)
+
+func main() {
+    db, err := sqlx.Open(
+        "mysql",
+        "root:root@tcp(127.0.0.1:3306)/test",
+    )
+    if err != nil {
+        fmt.Println("open mysql failed:", err)
+        return
+    }
+    defer db.Close()
+
+    if err := db.Ping(); err != nil {
+        fmt.Println("connect mysql failed:", err)
+        return
+    }
+
+    result, err := db.Exec(
+        `
+        UPDATE person
+        SET username = ?
+        WHERE user_id = ?
+        `,
+        "stu0003",
+        1,
+    )
+    if err != nil {
+        fmt.Println("update failed:", err)
+        return
+    }
+
+    rows, err := result.RowsAffected()
+    if err != nil {
+        fmt.Println("get affected rows failed:", err)
+        return
+    }
+
+    fmt.Println("update success:", rows)
+}
+```
+
+这里的两个参数按照占位符出现的顺序传入：
+
+```go
+"stu0003",
+1,
+```
+
+对应：
+
+```sql
+SET username = ?
+WHERE user_id = ?
+```
+
+使用参数化查询可以防止用户名等外部输入改变 SQL 语句的结构。
+
+#### 3. 获取受影响的行数
+
+可以使用 `RowsAffected()` 获取更新操作实际影响的行数：
+
+```go
+rows, err := result.RowsAffected()
+```
+
+第一次运行时，如果数据确实发生了变化，输出结果可能为：
+
+```text
+update success: 1
+```
+
+表示有一行数据被修改。
+
+再次执行相同的更新时，由于字段值已经是 `stu0003`，数据没有发生实际变化，输出结果可能为：
+
+```text
+update success: 0
+```
+
+在默认配置下，这里的返回值通常表示实际发生变化的行数，而不是 SQL 条件匹配到的行数。
+
+### 13.1.8 Delete 删除数据
+
+`DELETE` 用于删除数据表中的记录。
+
+#### 1. DELETE 基本语法
+
+```sql
+DELETE FROM 表名
+WHERE 查询条件;
+```
+
+例如：
+
+```sql
+DELETE FROM person
+WHERE user_id = 1;
+```
+
+其中：
+
+- `DELETE FROM person` 表示从 `person` 表中删除数据；
+- `WHERE user_id = 1` 表示只删除 `user_id` 等于 `1` 的记录。
+
+需要特别注意，省略 `WHERE` 条件会删除表中的所有数据：
+
+```sql
+DELETE FROM person;
+```
+
+该语句虽然不会删除数据表本身，但会删除表中的所有记录。
+
+因此，执行删除操作时必须谨慎检查删除条件。
+
+#### 2. 使用 Go 删除数据
+
+删除数据同样可以使用 `Exec()`：
+
+```go
+package main
+
+import (
+    "fmt"
+
+    _ "github.com/go-sql-driver/mysql"
+    "github.com/jmoiron/sqlx"
+)
+
+func main() {
+    db, err := sqlx.Open(
+        "mysql",
+        "root:root@tcp(127.0.0.1:3306)/test",
+    )
+    if err != nil {
+        fmt.Println("open mysql failed:", err)
+        return
+    }
+    defer db.Close()
+
+    if err := db.Ping(); err != nil {
+        fmt.Println("connect mysql failed:", err)
+        return
+    }
+
+    result, err := db.Exec(
+        `
+        DELETE FROM person
+        WHERE user_id = ?
+        `,
+        1,
+    )
+    if err != nil {
+        fmt.Println("delete failed:", err)
+        return
+    }
+
+    rows, err := result.RowsAffected()
+    if err != nil {
+        fmt.Println("get affected rows failed:", err)
+        return
+    }
+
+    fmt.Println("delete success:", rows)
+}
+```
+
+查询条件中的数据应当作为参数传入：
+
+```go
+result, err := db.Exec(
+    "DELETE FROM person WHERE user_id = ?",
+    userID,
+)
+```
+
+不应直接拼接外部输入：
+
+```go
+query := "DELETE FROM person WHERE user_id = " + userID
+```
+
+#### 3. 获取删除行数
+
+使用 `RowsAffected()` 可以获得被删除的记录数量：
+
+```go
+rows, err := result.RowsAffected()
+```
+
+如果数据库中存在 `user_id = 1` 的数据，第一次运行结果为：
+
+```text
+delete success: 1
+```
+
+表示成功删除一行数据。
+
+再次执行相同的删除操作时，由于该记录已经不存在，结果为：
+
+```text
+delete success: 0
+```
+
+如果不需要获取受影响的行数，也可以忽略 `Exec()` 返回的 `sql.Result`：
+
+```go
+_, err := db.Exec(
+    "DELETE FROM person WHERE user_id = ?",
+    1,
+)
+if err != nil {
+    fmt.Println("delete failed:", err)
+    return
+}
+```
+
+### 13.1.9 MySQL 事务
+
+事务用于将多个数据库操作组织成一个不可分割的执行单元。
+
+例如，转账操作通常包括：
+
+1. 从一个账户扣除金额；
+2. 向另一个账户增加金额。
+
+这两个操作必须同时成功或者同时失败，不能只执行其中一个。这类场景就需要使用事务。
+
+#### 1. 事务的 ACID 特性
+
+事务具有以下四个基本特性，通常简称为 ACID：
+
+1. 原子性：事务中的操作要么全部执行成功，要么全部不执行；
+2. 一致性：事务执行前后，数据库都应保持符合约束的有效状态；
+3. 隔离性：并发事务之间的执行应当相互隔离；
+4. 持久性：事务提交后，修改结果应被永久保存。
+
+#### 2. Go 中的事务方法
+
+在 Go 中，事务操作主要涉及以下方法。
+
+开始事务：
+
+```go
+tx, err := db.Begin()
+```
+
+提交事务：
+
+```go
+err := tx.Commit()
+```
+
+回滚事务：
+
+```go
+err := tx.Rollback()
+```
+
+使用 `sqlx` 时，也可以调用 `Beginx()` 获得 `*sqlx.Tx`：
+
+```go
+tx, err := db.Beginx()
+```
+
+#### 3. 事务执行流程
+
+事务的基本执行流程如下：
+
+```text
+开始事务
+    ↓
+执行第一条 SQL
+    ↓
+执行第二条 SQL
+    ↓
+全部成功 → 提交事务
+任意失败 → 回滚事务
+```
+
+只有调用 `Commit()` 后，事务中的修改才会正式提交。
+
+如果调用 `Rollback()`，事务中的修改会被撤销。
+
+#### 4. 事务示例
+
+下面在同一个事务中连续插入两条数据：
+
+```go
+package main
+
+import (
+    "fmt"
+
+    _ "github.com/go-sql-driver/mysql"
+    "github.com/jmoiron/sqlx"
+)
+
+func main() {
+    db, err := sqlx.Open(
+        "mysql",
+        "root:root@tcp(127.0.0.1:3306)/test",
+    )
+    if err != nil {
+        fmt.Println("open mysql failed:", err)
+        return
+    }
+    defer db.Close()
+
+    if err := db.Ping(); err != nil {
+        fmt.Println("connect mysql failed:", err)
+        return
+    }
+
+    tx, err := db.Beginx()
+    if err != nil {
+        fmt.Println("begin transaction failed:", err)
+        return
+    }
+
+    result, err := tx.Exec(
+        `
+        INSERT INTO person(username, sex, email)
+        VALUES (?, ?, ?)
+        `,
+        "stu001",
+        "man",
+        "stu01@qq.com",
+    )
+    if err != nil {
+        fmt.Println("first insert failed:", err)
+
+        if rollbackErr := tx.Rollback(); rollbackErr != nil {
+            fmt.Println("rollback failed:", rollbackErr)
+        }
+        return
+    }
+
+    id, err := result.LastInsertId()
+    if err != nil {
+        fmt.Println("get first insert id failed:", err)
+
+        if rollbackErr := tx.Rollback(); rollbackErr != nil {
+            fmt.Println("rollback failed:", rollbackErr)
+        }
+        return
+    }
+
+    fmt.Println("insert success:", id)
+
+    result, err = tx.Exec(
+        `
+        INSERT INTO person(username, sex, email)
+        VALUES (?, ?, ?)
+        `,
+        "stu001",
+        "man",
+        "stu01@qq.com",
+    )
+    if err != nil {
+        fmt.Println("second insert failed:", err)
+
+        if rollbackErr := tx.Rollback(); rollbackErr != nil {
+            fmt.Println("rollback failed:", rollbackErr)
+        }
+        return
+    }
+
+    id, err = result.LastInsertId()
+    if err != nil {
+        fmt.Println("get second insert id failed:", err)
+
+        if rollbackErr := tx.Rollback(); rollbackErr != nil {
+            fmt.Println("rollback failed:", rollbackErr)
+        }
+        return
+    }
+
+    fmt.Println("insert success:", id)
+
+    if err := tx.Commit(); err != nil {
+        fmt.Println("commit transaction failed:", err)
+        return
+    }
+
+    fmt.Println("transaction committed")
+}
+```
+
+示例输出：
+
+```text
+insert success: 2
+insert success: 3
+transaction committed
+```
+
+查看 MySQL 中的数据：
+
+```sql
+mysql> SELECT * FROM person;
++---------+----------+------+--------------+
+| user_id | username | sex  | email        |
++---------+----------+------+--------------+
+|       2 | stu001   | man  | stu01@qq.com |
+|       3 | stu001   | man  | stu01@qq.com |
++---------+----------+------+--------------+
+2 rows in set (0.00 sec)
+```
+
+#### 5. 事务中的注意事项
+
+事务开始后，事务中的数据库操作必须通过事务对象 `tx` 执行：
+
+```go
+tx.Exec(...)
+```
+
+不能在事务中混用原来的数据库对象：
+
+```go
+db.Exec(...)
+```
+
+下面的写法是错误的：
+
+```go
+tx, err := db.Beginx()
+if err != nil {
+    return
+}
+
+tx.Exec("INSERT INTO person ...")
+
+// 这条语句不属于上面的事务。
+db.Exec("UPDATE person ...")
+
+tx.Commit()
+```
+
+`db.Exec()` 可能从连接池中获取另一条连接，因此它执行的 SQL 不属于当前事务。
+
+如果其中任意一步执行失败，应调用：
+
+```go
+tx.Rollback()
+```
+
+回滚事务。
+
+只有所有操作均成功时，才调用：
+
+```go
+tx.Commit()
+```
+
+提交事务。
+
+参数化查询同样适用于事务中的 SQL：
+
+```go
+tx.Exec(
+    "UPDATE person SET username = ? WHERE user_id = ?",
+    username,
+    userID,
+)
+```
+
+事务只能保证一组数据库操作按照事务规则执行，并不能替代参数化查询。即使 SQL 在事务中执行，也不能直接拼接外部输入。
+
+## 代码注释补充
+
+下面的说明按原文小节顺序对应所有代码块。原始 SQL、方法名和示例输入保持不变；阅读代码时可将这一节作为逐段注释使用。
+
+### 数据库与表结构
+
+- `CREATE DATABASE IF NOT EXISTS test` 只在数据库不存在时创建，重复执行不会报错；`USE test` 只影响当前命令行会话，Go 的目标数据库由 DSN 决定。
+- `person.user_id` 的 `AUTO_INCREMENT` 由 MySQL 生成，插入时不要自己猜测下一个编号；代码应从 `sql.Result.LastInsertId` 取得本次写入的结果。
+- `person` 中的 `username`、`sex`、`email` 都允许 `NULL`。若查询结果要扫描到 Go 中，应使用 `sql.NullString`，不能假定它们总能扫描进 `string`。
+- `place` 用来说明不同列类型的映射，但它没有主键和唯一约束，不适合作为生产业务表的模板。生产表至少要明确主键、字符集、必要的索引与约束。
+- `DESC` 的输出中，`Null` 表示是否允许 SQL `NULL`，`Key` 表示索引类型，`Extra` 中的 `auto_increment` 表示由数据库生成值。
+
+### 驱动导入与连接代码
+
+- `go get` 会把依赖写入当前 module 的 `go.mod`；实际项目应提交 `go.mod` 和 `go.sum`，让构建使用可重复的依赖版本。
+- `_ "github.com/go-sql-driver/mysql"` 的空白标识符表示只执行包初始化，不直接引用包名。驱动的 `init` 调用 `sql.Register("mysql", ...)`，所以 `sqlx.Open` 和 `sql.Open` 才能通过名称找到驱动。
+- DSN 中 `tcp(127.0.0.1:3306)` 指定网络和地址，末尾数据库名指定默认 schema。密码含特殊字符或需要 `parseTime` 等选项时，优先用驱动的 `mysql.Config` 生成 DSN。
+- `sqlx.Open` 和 `sql.Open` 返回的是连接池句柄，不保证已建立物理连接。示例随后调用 `Ping`，正是在启动时把地址、网络、认证和数据库名错误尽早暴露出来。
+- `defer db.Close()` 只应放在应用进程退出的生命周期中。每个请求都创建并关闭 `*sqlx.DB` 会不断创建新连接池，无法复用连接。
+- `db` 标签只被 sqlx 的反射映射读取。`UserID int \`db:"user_id"\`` 将下划线列名与 Go 的驼峰字段明确对应；使用标准库手动 `Scan` 时，标签不起作用。
+
+### SQL 基础、参数绑定与预处理
+
+- `SELECT ... FROM ... WHERE ... ORDER BY ... LIMIT ...` 中，`WHERE` 过滤行，`ORDER BY` 决定顺序，`LIMIT` 限制返回数量。生产查询应明确列名，避免长期依赖 `SELECT *`。
+- 拼接用户名的示例专门展示 SQL 注入：输入若进入 SQL 文本，数据库无法区分它是普通字符串还是语法。`fmt.Sprintf` 只是另一种拼接方式，并不会增加安全性。
+- MySQL 的 `?` 是值占位符。参数必须作为 `Exec`、`Query`、`Get` 或 `Select` 的独立实参传入；不要写成 `WHERE username = '?'`，单引号会把占位符变为普通字符。
+- `Preparex` 返回可复用的语句对象，使用后需要 `defer stmt.Close()`。显式预处理适合重复执行同一 SQL；防注入的核心仍然是模板与参数分离，不要求每次显式 `Prepare`。
+- 表名、字段名和排序方向属于 SQL 结构，不能由 `?` 绑定。动态排序示例先将外部输入映射到 `allowedSortFields`，再格式化映射后的固定字符串；原始输入绝不能直接进入 `ORDER BY`。
+- `strconv.Atoi` 只能校验“能否转换成整数”，不能代替参数绑定。输入校验和参数化查询分别承担业务正确性与 SQL 结构安全。
+
+### Insert、Select、Update 与 Delete
+
+- `Exec` 用于不返回结果集的语句。返回的 `sql.Result` 可以读取 `LastInsertId` 和 `RowsAffected`；两者都可能返回错误，不能省略错误判断。
+- 每个 `?` 与参数按位置一一对应。插入语句不传 `user_id`，由 `AUTO_INCREMENT` 生成主键；字符串引号、转义和类型编码由驱动完成。
+- `Select(&people, ...)` 的第一个参数必须是切片指针，sqlx 才能把多行结果写入切片；`Get(&person, ...)` 适合一行结果。零行时 `Get` 会返回 `sql.ErrNoRows`，业务层应使用 `errors.Is` 区分“未找到”和数据库故障。
+- `UPDATE` 和 `DELETE` 中的 `WHERE` 是安全边界。省略它会影响整张表；执行前应确认资源 ID 和业务条件都进入了 `WHERE`。
+- `RowsAffected` 对更新的语义取决于数据库和驱动设置。MySQL 默认情况下，更新成相同值可能返回 0；因此 0 不总能单独表示“记录不存在”。
+
+### 事务代码
+
+- `Begin` 或 `Beginx` 成功后，`tx` 会固定占用池中的一条连接。事务内所有相关 SQL 必须经由 `tx.Exec`、`tx.Get` 或 `tx.Query` 发出，不能混用外层 `db`。
+- 每条 SQL 失败路径都调用 `Rollback` 的原始写法是正确的；生产代码常用 `defer tx.Rollback()` 集中兜底，并在所有语句成功后调用一次 `Commit`。
+- `Commit` 成功后事务已结束，随后兜底 `Rollback` 返回 `sql.ErrTxDone` 可以忽略。`Commit` 失败时不要假定服务器一定没有提交，重要写入需要幂等键和状态核对。
+- 参数化规则在事务中完全相同。事务保证一组操作的原子性，不能修复把外部输入拼接进 SQL 的注入漏洞。
+
+## 底层原理补充
+
+### `database/sql` 如何找到 MySQL 驱动
+
+MySQL 驱动包初始化时注册名称，概念上等价于：
+
+```go
 func init() {
-	// 将驱动实现注册到 database/sql 的全局驱动表。
-	sql.Register("mysql", &MySQLDriver{})
+    // 把 MySQL 协议实现放入 database/sql 的全局驱动表。
+    sql.Register("mysql", &MySQLDriver{})
 }
-~~~
+```
 
-因此，`sql.Open("mysql", dsn)` 的第一个参数不是数据库地址，而是注册名。少了驱动导入时，标准库会返回类似 `sql: unknown driver "mysql" (forgotten import?)` 的错误。
+`sql.Open("mysql", dsn)` 先从这张注册表取出驱动。标准库不认识 MySQL 协议；它只定义 `database/sql/driver` 接口。驱动实现连接、认证、网络读写、参数编码和结果解码，标准库负责在它之上提供统一的 `DB`、`Tx`、`Rows` API。
 
-### `Open`、`PingContext` 与连接池的职责边界
+### `sql.Open` 与连接池的实际职责
 
-标准库 `Open` 的重要工作不是创建一条连接，而是：从注册表查找驱动、根据 DSN 创建 `driver.Connector`、再用它创建 `*sql.DB`。`*sql.DB` 保存连接池状态并启动连接创建协程；真实连接会在首次 `PingContext`、查询或事务开始时按需创建。
+`sql.Open` 返回 `*sql.DB`。这个对象是并发安全的池管理器，不是一条固定连接。简化后的内部流程如下：
 
-下面是依据 Go 1.26.5 `database/sql` 源码整理的流程伪代码，名称经过简化，不能直接复制：
-
-~~~go
+```go
 func (db *DB) conn(ctx context.Context) (*driverConn, error) {
-	db.mu.Lock() // 保护空闲连接、已打开数量和等待者队列。
+    db.mu.Lock() // 保护空闲连接、打开数量和等待队列。
 
-	if db.hasIdleConnection() {
-		conn := db.takeIdleConnection()
-		conn.inUse = true
-		db.mu.Unlock()
-		return resetSessionIfNeeded(ctx, conn)
-	}
+    if db.hasIdleConnection() {
+        conn := db.takeIdleConnection() // 优先复用空闲连接。
+        db.mu.Unlock()
+        return conn, nil
+    }
+    if db.maxOpen > 0 && db.numOpen >= db.maxOpen {
+        waiter := db.addWaiter()
+        db.mu.Unlock()
+        return waiter.wait(ctx) // 池满时等待；ctx 取消可中断等待。
+    }
 
-	if db.maxOpen > 0 && db.numOpen >= db.maxOpen {
-		waiter := db.addConnectionWaiter()
-		db.mu.Unlock()
-		return waitForConnectionOrContextDone(ctx, waiter)
-	}
-
-	db.numOpen++ // 先占用名额，避免多个 goroutine 同时突破上限。
-	db.mu.Unlock()
-	return db.connector.Connect(ctx) // 网络拨号在锁外执行。
+    db.numOpen++ // 先预留名额，避免并发超过上限。
+    db.mu.Unlock()
+    return db.connector.Connect(ctx) // 锁外执行可能阻塞的网络拨号。
 }
-~~~
+```
 
-这段逻辑解释了连接池的三个分支：
+`Rows.Close`、`Tx.Commit` 与 `Tx.Rollback` 会触发连接归还；长时间未关闭的 `Rows` 和未结束的事务都会占用物理连接。`SetMaxOpenConns` 限制并发连接，达到上限后调用方会等待，因此 `DBStats.WaitCount` 的增长既可能是池过小，也可能是慢 SQL、锁等待或资源泄漏。
 
-~~~text
-一次 Exec / Query / BeginTx
-  ├─ 池中有空闲连接         → 借用
-  ├─ 没有空闲且未达上限      → 创建
-  └─ 已达到 MaxOpenConns     → 等待归还，或因 Context 超时而返回
+### sqlx 在标准库之上做了什么
 
-Rows.Close / Tx.Commit / Tx.Rollback
-  → 归还连接到空闲池，或因过期、出错而关闭
-~~~
+`sqlx.DB` 包装已有的 `*sql.DB`，不会创建第二个连接池。它的 `Get`、`Select` 最终仍通过标准库查询获得 `Rows`，再根据列名和 `db` 标签用反射执行结构体扫描；`NamedExec` 先把 `:name` 转成驱动占位符和参数列表；`sqlx.In` 把一个切片参数展开为多个占位符；`Rebind` 让同一 SQL 能适配 MySQL 的 `?` 和 PostgreSQL 的 `$1` 等风格。
 
-所以资源释放不是形式要求：未关闭的 `Rows` 和未结束的事务都在长期占用池里的连接。使用 `DBStats` 观察状态：
-
-~~~go
-stats := db.Stats()
-log.Printf(
-	"open=%d in_use=%d idle=%d wait_count=%d wait_duration=%s",
-	stats.OpenConnections, // 当前打开的物理连接数。
-	stats.InUse,           // 被 SQL、Rows 或 Tx 占用的连接数。
-	stats.Idle,            // 可立即借用的空闲连接数。
-	stats.WaitCount,       // 因 MaxOpenConns 而等待的累计次数。
-	stats.WaitDuration,    // 上述等待的累计时长。
-)
-~~~
-
-`WaitCount` 持续增长不能直接推导为“连接数太小”。还可能是慢 SQL、锁等待、长事务或遗漏 `Rows.Close`。先定位阻塞来源，再评估连接总预算：
-
-~~~text
-应用实例数 × 每实例 MaxOpenConns
-    ≤ MySQL 可分配给业务连接的总预算
-~~~
-
-预算还要为迁移、监控、管理连接和故障恢复留出余量。Demo 中的 `20` 只是本地教学配置，不是生产环境的通用答案。
-
-## 在已理解标准库后使用 sqlx
-
-标准库的显式 `Scan` 很可靠，但重复的列列表和一长串扫描目标会变得冗长。`sqlx` 保持 `database/sql` 的连接和事务模型，只补充以下高频能力：
-
-- `GetContext`：查询一行并映射到结构体；
-- `SelectContext`：查询多行并映射到结构体切片；
-- `NamedExecContext`：把结构体或 map 的字段绑定到命名参数；
-- `sqlx.In`：展开 `IN (?)` 中的切片参数；
-- `BeginTxx`：获得支持上述辅助能力的事务对象。
-
-### 先包装已有连接池
-
-不要为 `database/sql` 和 `sqlx` 各调用一次 `Open`。那会创建两个独立连接池，连接上限、统计和生命周期配置都会分裂。正确方式是包装已有的 `*sql.DB`：
-
-~~~go
-// NewSQLX 不创建新连接池；sqlx 与 database/sql 共用同一个 *sql.DB。
-func NewSQLX(db *sql.DB) *sqlx.DB {
-	return sqlx.NewDb(db, "mysql")
-}
-~~~
-
-`sqlx.DB` 在内部持有 `*sql.DB`，并记录驱动名与字段映射器。`GetContext` 和 `SelectContext` 最终仍通过底层的 `QueryContext` 获得结果集，再按照列名和结构体标签执行扫描。
-
-### 结构体映射：从手动 `Scan` 到 `GetContext`
-
-给字段写上 `db` 标签，列名与 Go 命名不同也能清晰映射。标签由 `sqlx` 使用；标准库的手动 `Scan` 不会读取它：
-
-~~~go
-type Product struct {
-	ID         int64     `db:"id"`
-	SKU        string    `db:"sku"`
-	Name       string    `db:"name"`
-	PriceCents int64     `db:"price_cents"`
-	Stock      int64     `db:"stock"`
-	CreatedAt  time.Time `db:"created_at"`
-}
-
-// GetProductSQLX 不再手写 Scan 顺序，但 SQL 的列仍然显式列出。
-func GetProductSQLX(ctx context.Context, db *sqlx.DB, id int64) (Product, error) {
-	var product Product
-	err := db.GetContext(ctx, &product, `
-		SELECT id, sku, name, price_cents, stock, created_at
-		FROM products
-		WHERE id = ?`, id)
-	if errors.Is(err, sql.ErrNoRows) {
-		return Product{}, ErrProductNotFound
-	}
-	if err != nil {
-		return Product{}, fmt.Errorf("get product %d: %w", id, err)
-	}
-	return product, nil
-}
-
-// SelectContext 查询多行，并完成 Rows 迭代、StructScan 与结果集关闭。
-func ListProductsSQLX(ctx context.Context, db *sqlx.DB) ([]Product, error) {
-	products := make([]Product, 0)
-	if err := db.SelectContext(ctx, &products, `
-		SELECT id, sku, name, price_cents, stock, created_at
-		FROM products
-		ORDER BY id`); err != nil {
-		return nil, fmt.Errorf("list products: %w", err)
-	}
-	return products, nil
-}
-~~~
-
-`GetContext` 在零行时仍返回 `sql.ErrNoRows`；`SelectContext` 查询零行时得到空切片而不是错误。`sqlx` 减少扫描样板代码，但不会替业务决定“找不到数据”应当如何处理。
-
-### 命名参数与 `IN` 查询
-
-位置参数多时容易把值的顺序写错。`NamedExecContext` 用结构体字段或 map 的键匹配 SQL 中的命名参数：
-
-~~~go
-type CreateProductParams struct {
-	SKU        string `db:"sku"`
-	Name       string `db:"name"`
-	PriceCents int64  `db:"price_cents"`
-	Stock      int64  `db:"stock"`
-}
-
-// 命名参数提升可读性，但 SQL 仍由应用维护，值仍由驱动安全绑定。
-result, err := db.NamedExecContext(ctx, `
-	INSERT INTO products (sku, name, price_cents, stock)
-	VALUES (:sku, :name, :price_cents, :stock)`, input)
-if err != nil {
-	return Product{}, fmt.Errorf("insert product: %w", err)
-}
-~~~
-
-切片不能直接作为一个 `?` 的值传入 `IN (?)`。不要手工将 ID 拼接进 SQL；使用 `sqlx.In` 展开参数，并通过 `Rebind` 适配不同驱动的占位符风格：
-
-~~~go
-func GetProductsByIDsSQLX(ctx context.Context, db *sqlx.DB, ids []int64) ([]Product, error) {
-	if len(ids) == 0 {
-		return []Product{}, nil // 避免生成 MySQL 不接受的 IN ()。
-	}
-
-	query, args, err := sqlx.In(`
-		SELECT id, sku, name, price_cents, stock, created_at
-		FROM products
-		WHERE id IN (?)
-		ORDER BY id`, ids)
-	if err != nil {
-		return nil, fmt.Errorf("expand IN: %w", err)
-	}
-
-	// MySQL 保持 ?；切换 PostgreSQL 等驱动时会改写为 $1、$2……
-	query = db.Rebind(query)
-
-	products := make([]Product, 0)
-	if err := db.SelectContext(ctx, &products, query, args...); err != nil {
-		return nil, fmt.Errorf("query products by IDs: %w", err)
-	}
-	return products, nil
-}
-~~~
-
-`sqlx` 事务的正确用法与标准库没有本质变化：使用 `BeginTxx` 获得 `*sqlx.Tx`，后续所有需要原子性的语句都通过 `tx.GetContext`、`tx.NamedExecContext` 或 `tx.ExecContext` 执行，最后 `Commit`，中途通过延迟 `Rollback` 兜底。结构体映射和命名参数改变的是表达方式，不会改变锁、隔离级别和事务边界。
-
-## 常见错误与排查顺序
-
-| 现象 | 优先检查 | 修复方向 |
-| --- | --- | --- |
-| `unknown driver "mysql"` | 是否导入了 MySQL 驱动，注册名是否拼写正确 | 空白导入或普通导入 `go-sql-driver/mysql` |
-| `Open` 成功，第一次查询失败 | 是否误把 `Open` 当作连通性校验 | 启动时调用带超时的 `PingContext` |
-| 连接池等待增多 | `Rows` 是否关闭、事务是否结束、是否有慢 SQL 或锁等待 | 查看 `DBStats`、慢日志和事务状态，再调整池大小 |
-| 取不到数据却没有错误分支 | 是否只检查了 `QueryRowContext` 调用 | 在 `Scan` 返回值中判断 `sql.ErrNoRows` |
-| `Scan` 类型错误 | 列顺序、`NULL`、`DATETIME` 解析 | 显式列出列，使用 `sql.Null*`，配置 `parseTime` |
-| 更新返回 0 行 | 值是否相同、条件是否匹配 | 先定义接口语义，必要时读取或使用版本号条件更新 |
-| 事务中出现部分写入 | 是否混用了 `db.*` 与 `tx.*` | 事务内全部经 `tx` 执行，并保证回滚 |
-| 并发下超卖 | 是否只做“查询库存后更新” | 使用事务、`FOR UPDATE` 或原子条件更新，并检查影响行数 |
-| 动态查询存在注入风险 | 是否拼接了请求输入 | 值参数化；表名、列名、排序方向只允许白名单 |
-
-## 参考资料
-
-- [Go 标准库 `database/sql`](https://pkg.go.dev/database/sql)
-- [Go 1.26.5 `database/sql` 源码](https://github.com/golang/go/blob/go1.26.5/src/database/sql/sql.go)
-- [go-sql-driver/mysql 文档](https://pkg.go.dev/github.com/go-sql-driver/mysql)
-- [go-sql-driver/mysql v1.10.0 驱动源码](https://github.com/go-sql-driver/mysql/blob/v1.10.0/driver.go)
-- [sqlx 使用指南](https://jmoiron.github.io/sqlx/)
-- [可运行的数据库访问 Demo](https://github.com/zzxrepository/gocode-examples/tree/2d147d72f1ca7144eb001c18e8bbe75c3b18578f/go/01-database-sql-demo)
+因此，sqlx 减少的是映射和绑定代码，不会改变连接池、事务、行锁、执行计划或索引的行为。
 
 ## 总结
 
-`database/sql`、MySQL 驱动和 `sqlx` 的关系可以归纳为：标准库管理统一 API、连接池和事务；驱动完成 MySQL 通信与数据转换；`sqlx` 在不改变底层模型的前提下减少结构体扫描、命名参数和 `IN` 查询的样板代码。
-
-可靠的数据访问建立在几个不可替代的规则上：`*sql.DB` 要长期复用并设置合理边界；每次数据库调用都应带 `Context`；值必须通过占位符绑定；多行查询关闭 `Rows` 并检查 `Rows.Err`；查询一行在 `Scan` 时处理 `sql.ErrNoRows`；事务内所有语句只使用 `tx`；库存、余额等并发写入要同时设计事务边界与数据库条件。
-
-掌握这些规则后，选择 `database/sql` 还是 `sqlx` 就不再是“能不能访问数据库”的问题，而是“是否需要减少重复映射代码”的表达选择。无论选择哪一种，连接池、SQL 安全、事务和索引仍然是应用必须亲自负责的部分。
+原文的 SQL 基础、参数化、CRUD 与事务代码已经保持原顺序复制。实际使用时，重点是长期复用 `*sql.DB` 或 `*sqlx.DB`、为调用传递 `Context`、关闭多行结果集、在 `Scan` 时处理单行查询错误、让事务内所有 SQL 使用同一个 `tx`，并把所有外部值通过占位符传给驱动。
