@@ -16,11 +16,9 @@ tag:
 
 ## 前言
 
-时间处理的关键在于区分时间点、时长与时区。以下保留原有结构，依次介绍构造与解析、计算与比较，以及 `Timer`、`Ticker` 的使用。
+时间代码的难点不在于取得“现在”，而在于准确表达业务含义：一个瞬间、一次持续时间，还是某个时区中的日历时间。把单位、时区和解析规则写清楚，才能避免线上最隐蔽的时间错误。
 
-> 说明：本章按原有内容、示例和顺序拆分为独立文章。代码中的资源关闭、错误处理、参数含义等关键点均保留在原示例及其紧邻说明中，便于对照阅读。
-
-## 14.2.1 `time` 包概述
+## `time` 包概述
 
 `time` 包提供时间点表示、时间间隔计算、日期格式化与解析、时区转换以及定时任务等能力。
 
@@ -34,9 +32,9 @@ tag:
 
 `time.Time` 表示“什么时候”，`time.Duration` 表示“持续多久”，`time.Location` 决定时间如何显示为年月日和时分秒。
 
-## 14.2.2 获取和构造时间
+## 获取和构造时间
 
-### 1. 获取当前时间
+### 获取当前时间
 
 ```go
 package main
@@ -80,7 +78,7 @@ now.Nanosecond()
 now.Weekday()
 ```
 
-### 2. 使用 `time.Date` 构造时间
+### 使用 `time.Date` 构造时间
 
 ```go
 // 使用 IANA 时区名加载规则，避免依赖机器的默认本地时区。
@@ -96,7 +94,7 @@ fmt.Println(t)
 
 构造业务时间时应明确指定时区，避免无意中依赖程序运行环境的本地时区。
 
-## 14.2.3 Unix 时间戳
+## Unix 时间戳
 
 Unix 时间戳以 **1970 年 1 月 1 日 00:00:00 UTC** 为起点。
 
@@ -138,7 +136,7 @@ milliseconds := int64(1721044200000)
 timeObj := time.UnixMilli(milliseconds)
 ```
 
-## 14.2.4 时间间隔 `time.Duration`
+## 时间间隔 `time.Duration`
 
 `time.Duration` 表示一段时间间隔，其底层类型是 `int64`，单位为纳秒。
 
@@ -188,9 +186,9 @@ fmt.Println(d)
 
 常用单位包括 `ns`、`us`、`µs`、`ms`、`s`、`m` 和 `h`。`Duration` 不提供天和月单位，因为它们并不是固定时长。
 
-## 14.2.5 时间计算与比较
+## 时间计算与比较
 
-### 1. `Add` 和 `AddDate`
+### `Add` 和 `AddDate`
 
 ```go
 // Add 增加固定时长；负 Duration 则向过去移动。
@@ -207,7 +205,7 @@ nextMonth := now.AddDate(0, 1, 0)
 nextYear := now.AddDate(1, 0, 0)
 ```
 
-### 2. `Sub`、`Since` 和 `Until`
+### `Sub`、`Since` 和 `Until`
 
 ```go
 // 记录开始时间，再用 Since 计算已耗时。
@@ -225,7 +223,7 @@ deadline := time.Now().Add(5 * time.Minute)
 fmt.Println(time.Until(deadline))
 ```
 
-### 3. 比较时间先后
+### 比较时间先后
 
 ```go
 // 基于同一时刻创建一小时后的比较对象。
@@ -259,7 +257,7 @@ fmt.Println(utc == shanghai)     // 通常为 false
 
 业务逻辑中通常使用 `Equal`、`Before` 或 `After`，不要用 `==` 代替时间点比较。
 
-## 14.2.6 时区与 `Location`
+## 时区与 `Location`
 
 ```go
 // UTC 只改变显示位置，不改变 now 代表的瞬间。
@@ -298,7 +296,7 @@ fmt.Println("纽约：", now.In(newYork))
 import _ "time/tzdata"
 ```
 
-## 14.2.7 时间格式化
+## 时间格式化
 
 Go 不使用 `YYYY-MM-DD` 这样的占位符，而是使用一个固定的参考时间：
 
@@ -344,11 +342,11 @@ fmt.Println(now.Format("2006-01-02 15:04:05.000"))
 
 程序之间交换时间时，通常优先使用带时区信息的 `time.RFC3339` 或 `time.RFC3339Nano`。
 
-## 14.2.8 解析字符串时间
+## 解析字符串时间
 
 格式化使用 `Time.Format`，解析使用 `time.Parse` 或 `time.ParseInLocation`。布局必须与输入字符串的结构一致。
 
-### 1. 使用 `time.Parse`
+### 使用 `time.Parse`
 
 ```go
 package main
@@ -378,7 +376,7 @@ func main() {
 
 输入字符串不包含时区信息时，`time.Parse` 会将其解释为 UTC，而不是本地时间。
 
-### 2. 使用 `time.ParseInLocation`
+### 使用 `time.ParseInLocation`
 
 如果无时区字符串表示某个指定地区的本地时间，应使用 `ParseInLocation`：
 
@@ -421,9 +419,9 @@ input := "2026-07-15T14:35:20+08:00"
 t, err := time.Parse(time.RFC3339, input)
 ```
 
-## 14.2.9 休眠、定时器与周期任务
+## 休眠、定时器与周期任务
 
-### 1. `time.Sleep`
+### `time.Sleep`
 
 ```go
 // Sleep 只挂起当前 goroutine，不会阻塞其他 goroutine。
@@ -434,7 +432,7 @@ fmt.Println("两秒后继续")
 
 `Sleep` 只会暂停当前 goroutine，不会阻塞整个 Go 运行时中的其他 goroutine。
 
-### 2. 一次性定时器 `Timer`
+### 一次性定时器 `Timer`
 
 ```go
 package main
@@ -467,7 +465,7 @@ case <-time.After(2 * time.Second):
 }
 ```
 
-### 3. 周期任务 `Ticker`
+### 周期任务 `Ticker`
 
 ```go
 package main
@@ -513,7 +511,7 @@ for t := range ticks {
 
 需要主动停止、重置周期或明确管理生命周期时，应使用 `time.NewTicker`。
 
-## 14.2.10 时间处理建议
+## 时间处理建议
 
 1. **明确时间单位。** 变量名中可以包含 `Seconds`、`Millis` 等单位，避免秒、毫秒和纳秒混用。
 2. **明确时区。** 解析不带时区的输入时，应确定它代表本地时间、UTC 还是某个业务时区。
@@ -528,4 +526,4 @@ for t := range ticks {
 
 ## 总结
 
-使用 `time` 时要明确单位和时区：固定时长使用 `Duration` 与 `Add`，日历计算使用 `AddDate`；比较时间点使用 `Equal`、`Before`、`After`；跨系统交换时间优先使用 RFC 3339。创建可停止的定时任务时，记得停止 `Timer` 或 `Ticker`。
+`time.Time` 表示时间点，`time.Duration` 表示固定时长，`time.Location` 决定日历含义。固定间隔用 `Add`，日历规则用 `AddDate`；比较时使用 `Equal`、`Before`、`After`；跨系统交换优先使用携带偏移量的 RFC 3339。定时器和周期任务都有生命周期，创建后应明确何时停止。
