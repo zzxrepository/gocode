@@ -1,5 +1,5 @@
 ---
-permalink: /backend/go/frameworks-and-ecosystem/02-data-access/02-sqlx/
+permalink: /backend/go/frameworks-and-ecosystem/02-data-access/01-sqlx/
 title: 01. Go MySQL 数据访问：database/sql 与 sqlx
 shortTitle: 01. database/sql 与 sqlx
 order: 1

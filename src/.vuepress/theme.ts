@@ -146,6 +146,8 @@ export default hopeTheme({
         "/backend/go/frameworks-and-ecosystem/": "/backend/go/frameworks-and-ecosystem/01-web-frameworks/",
         "/backend/go/frameworks-and-ecosystem/03-microservice-frameworks/01-kratos/": "/backend/go/frameworks-and-ecosystem/03-microservice-frameworks/02-kratos/",
         "/backend/go/frameworks-and-ecosystem/03-microservice-frameworks/02-go-zero/": "/backend/go/frameworks-and-ecosystem/03-microservice-frameworks/01-go-zero/",
+        "/backend/go/frameworks-and-ecosystem/02-data-access/02-sqlx/": "/backend/go/frameworks-and-ecosystem/02-data-access/01-sqlx/",
+        "/backend/go/frameworks-and-ecosystem/02-data-access/03-gorm/": "/backend/go/frameworks-and-ecosystem/02-data-access/02-gorm/",
         "/backend/go/advanced/01-standard-library/04-net-http/": "/backend/go/advanced/03-web-development/01-http-server/",
         "/backend/go/advanced/04-engineering-practice/01-viper-config/": "/backend/go/frameworks-and-ecosystem/04-common-libraries/01-viper-config/",
         "/backend/go/advanced/06-third-party-libraries/01-viper-config/": "/backend/go/frameworks-and-ecosystem/04-common-libraries/01-viper-config/",

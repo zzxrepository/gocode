@@ -1,5 +1,5 @@
 ---
-permalink: /backend/go/frameworks-and-ecosystem/02-data-access/03-gorm/
+permalink: /backend/go/frameworks-and-ecosystem/02-data-access/02-gorm/
 title: 2.Go mysql 数据访问：GORM
 shortTitle: 2. GORM
 order: 2
