@@ -17,6 +17,9 @@ tag:
   - context
   - reflect
   - encoding
+  - fmt
+  - time
+  - flag
   - database/sql
   - sync
 ---
