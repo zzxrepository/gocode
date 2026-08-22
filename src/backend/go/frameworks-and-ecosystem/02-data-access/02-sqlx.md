@@ -21,769 +21,528 @@ tag:
 
 ## 前言
 
-假设要实现一个极小的商品下单服务：用户购买商品时，程序先检查库存，再扣库存，接着创建订单和订单明细。任何一步失败，前面的修改都不应留下。
+能执行一条 SELECT，并不代表已经掌握了数据库访问。真实项目还必须处理连接复用、请求取消、结果集释放、事务一致性和并发写入。一个错误的连接池生命周期或一次遗漏的 Rows.Close，往往比 SQL 语法更早造成线上问题。
 
-这个场景足够小，却正好覆盖 Go 访问 MySQL 的关键问题：连接从哪里来、查询怎样映射、何时释放资源、怎样避免超卖、事务怎样保证一致性，以及 sqlx 到底节省了什么。
+这里使用一个可运行的下单扣库存项目建立完整认识：先创建商品；下单时锁定商品库存；库存足够才扣减；最后创建订单和订单明细。任一步失败，前面的修改必须全部撤销。
 
-先让完整 Demo 跑起来，再解释刚刚实际用到的机制。Demo 的第一版只用标准库 `database/sql`；随后把同一段代码改成 sqlx。这样不会停留在 API 名字上，也能看清 sqlx 改变和没有改变的边界。
+配套代码：[gocode-examples/go/01-database-sql-demo](https://github.com/zzxrepository/gocode-examples/tree/7068d075e04e9e1f6ad3e245b7cca721b6cca05b/go/01-database-sql-demo)。链接固定到源码提交，文章中的文件和函数都能直接定位到可运行项目。
 
-## 三个库的关系
+项目使用 Go 1.26.5，模块固定了 go-sql-driver/mysql v1.10.0 与 sqlx v1.4.0。版本升级时，应以自身 go.mod 和依赖项目的兼容性声明为准。
 
-```text
-业务代码
-   │  QueryContext / ExecContext / BeginTx
-   ▼
-database/sql
-   │  统一 API、连接池、事务、通用参数转换
-   ▼
-database/sql/driver 接口
+## 阅读结构
+
+内容按照代码实际运行的因果顺序组织：先运行项目，接着解释标准库代码，然后沿着已调用的路径阅读驱动、连接池和 sqlx 的原理。
+
+| 部分 | 核心问题 | 关键对象 |
+| --- | --- | --- |
+| Demo 主线 | 下单时程序具体做了什么 | 商品、订单、库存 |
+| 初始化 | 谁创建连接池，怎样验证 MySQL | sql.DB、DSN、PingContext |
+| 基础读写 | 怎样写入、查询一行和查询多行 | ExecContext、QueryRowContext、Rows |
+| 事务 | 怎样避免超卖和部分写入 | Tx、FOR UPDATE、Commit、Rollback |
+| 底层原理 | 调用如何进入连接池和驱动 | sql.Register、Connector、DB.conn |
+| sqlx | sqlx 省略了什么，保留了什么 | GetContext、NamedExecContext、sqlx.In |
+
+下单业务的主链：
+
+~~~text
+创建商品
+  -> 锁定商品库存
+  -> 扣减库存
+  -> 创建订单
+  -> 创建订单明细
+  -> Commit
+
+任一步失败 -> Rollback -> 前面执行过的写入全部撤销
+~~~
+
+## 先运行完整 Demo
+
+项目提供两个入口。第一个只用 database/sql；第二个使用 sqlx 完成同一业务，便于比较两者的边界。
+
+~~~text
+01-database-sql-demo/
+├── cmd/database-sql-demo/main.go  标准库下单流程
+├── cmd/sqlx-demo/main.go          sqlx 下单流程
+├── internal/store/mysql.go         驱动配置与连接池
+├── internal/store/product.go       商品 CRUD
+├── internal/store/order.go         标准库事务下单
+├── internal/store/sqlx.go          sqlx CRUD 与事务下单
+├── scripts/docker-compose.yml      MySQL 容器
+└── scripts/schema.sql              表结构
+~~~
+
+在 examples 项目目录执行：
+
+~~~bash
+# 启动 MySQL；首次创建数据卷时会自动执行 schema.sql。
+make docker-up
+
+# 运行只使用 database/sql 的版本。
+make run
+
+# 运行 sqlx 版本。
+make run-sqlx
+
+# 执行不依赖 MySQL 的输入校验测试，并检查所有包。
+make test
+~~~
+
+[标准库入口](https://github.com/zzxrepository/gocode-examples/blob/7068d075e04e9e1f6ad3e245b7cca721b6cca05b/go/01-database-sql-demo/cmd/database-sql-demo/main.go) 的关键动作是：
+
+~~~go
+db, err := store.OpenMySQL(ctx, mysqlConfig())
+if err != nil {
+    log.Fatal(err)
+}
+defer db.Close() // 只在进程退出时关闭连接池。
+
+product, err := store.CreateProduct(ctx, db, store.CreateProductInput{
+    SKU:        fmt.Sprintf("keyboard-sql-%d", time.Now().UnixNano()),
+    Name:       "database/sql 机械键盘",
+    PriceCents: 39900,
+    Stock:      10,
+})
+
+orderID, err := store.PlaceOrder(ctx, db, store.PlaceOrderInput{
+    CustomerID: 10001,
+    ProductID:  product.ID,
+    Quantity:   2,
+})
+~~~
+
+预期可以观察到库存变化：
+
+~~~text
+创建商品: id=1 stock=10
+下单成功: order_id=1; 下单后库存=8
+~~~
+
+程序运行可分成两个阶段：
+
+~~~text
+启动阶段
+  配置驱动 -> 创建 sql.DB 连接池 -> PingContext 验证真实连接
+
+业务阶段
+  从连接池借连接 -> 执行 SQL -> 归还连接
+  或 BeginTx -> 同一连接执行多条 SQL -> Commit 或 Rollback
+~~~
+
+## 三层数据访问栈
+
+~~~text
+业务 Store
    │
-   ▼
-go-sql-driver/mysql
-   │  MySQL 协议、认证、网络 I/O、结果解码
-   ▼
-MySQL Server
+   ├─ database/sql：sql.DB、sql.Tx、sql.Rows
+   │       │
+   │       └─ database/sql/driver 接口
+   │                 │
+   │                 └─ go-sql-driver/mysql：认证、MySQL 协议、网络 I/O
+   │
+   └─ sqlx：包装 sql.DB 和 sql.Tx，增加映射与绑定能力
+~~~
 
-sqlx 位于业务代码和 database/sql 之间：
-sqlx.DB 内嵌 *sql.DB，复用连接池和驱动，只增加映射与绑定能力。
-```
+database/sql 是标准库提供的通用访问模型。它不理解 MySQL 协议，也没有内置 MySQL 驱动。go-sql-driver/mysql 实现标准库定义的 driver 接口，负责与 MySQL 建立连接、认证、发送查询和解码结果。
 
-- `database/sql` 是标准库，不会说 MySQL 协议，也没有内置 MySQL 驱动。
-- `github.com/go-sql-driver/mysql` 是驱动，实现标准库的 driver 接口并和 MySQL 通信。
-- sqlx 是 `database/sql` 的轻量扩展，不是驱动，也不是自动生成 SQL 的 ORM。SQL 仍由程序明确写出。
+sqlx 不在驱动下面。它建立在 database/sql 之上，主要补充三类高频操作：
 
-## 运行 Demo
+- 将查询列映射到结构体字段；
+- 由结构体或 map 绑定命名参数；
+- 展开 IN 查询中的切片参数，并按照驱动的占位符风格改写 SQL。
 
-### 1. 启动 MySQL 并初始化项目
+因此，即使用了 sqlx，Context、连接池、Rows.Close、事务和锁的规则也完全不变。
 
-```bash
-# 容器的 3306 映射到宿主机 3307，避免与本机 MySQL 冲突。
-docker run --name go-store-mysql \
-  -e MYSQL_ROOT_PASSWORD=rootpass \
-  -e MYSQL_DATABASE=go_store \
-  -p 3307:3306 \
-  -d mysql:8.4
+## 连接池：sql.DB 不是一条连接
 
-mkdir go-mysql-store
-cd go-mysql-store
-go mod init example.com/go-mysql-store
-go get github.com/go-sql-driver/mysql
-go get github.com/jmoiron/sqlx
-```
+[internal/store/mysql.go](https://github.com/zzxrepository/gocode-examples/blob/7068d075e04e9e1f6ad3e245b7cca721b6cca05b/go/01-database-sql-demo/internal/store/mysql.go) 将驱动配置和连接池创建集中在启动阶段：
 
-目录结构：
+~~~go
+driverCfg := mysql.NewConfig()
+driverCfg.User = cfg.User
+driverCfg.Passwd = cfg.Password
+driverCfg.Net = "tcp"
+driverCfg.Addr = cfg.Address
+driverCfg.DBName = cfg.Database
 
-```text
-go-mysql-store/
-├── cmd/demo/main.go
-├── internal/store/mysql.go
-├── internal/store/product.go
-├── internal/store/order.go
-└── schema.sql
-```
+// DATETIME 需要由驱动解析为 Go 的 time.Time。
+driverCfg.ParseTime = true
+driverCfg.Loc = time.Local
 
-### 2. 创建表
+// 连接级网络超时；它们不同于一次 SQL 的 Context 超时。
+driverCfg.Timeout = 3 * time.Second
+driverCfg.ReadTimeout = 5 * time.Second
+driverCfg.WriteTimeout = 5 * time.Second
 
-把以下内容保存为 `schema.sql`，执行 `mysql -h 127.0.0.1 -P 3307 -uroot -prootpass go_store < schema.sql`。
+db, err := sql.Open("mysql", driverCfg.FormatDSN())
+~~~
 
-```sql
--- 金额用分保存为整数；商品之后调价也不能修改订单成交价。
-CREATE TABLE products (
-    id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    sku         VARCHAR(64) NOT NULL,
-    name        VARCHAR(128) NOT NULL,
-    price_cents BIGINT UNSIGNED NOT NULL,
-    stock       BIGINT UNSIGNED NOT NULL,
-    created_at  DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    PRIMARY KEY (id),
-    UNIQUE KEY uk_products_sku (sku)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+sql.Open 返回 sql.DB。它是并发安全的连接池句柄，并不表示已经取得了一条可以永久使用的连接。下面的每请求 Open 是错误做法：
 
-CREATE TABLE orders (
-    id                 BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    customer_id        BIGINT UNSIGNED NOT NULL,
-    status             VARCHAR(32) NOT NULL,
-    total_amount_cents BIGINT UNSIGNED NOT NULL,
-    created_at         DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    PRIMARY KEY (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+~~~go
+func handleRequest(ctx context.Context) error {
+    db, err := sql.Open("mysql", dsn)
+    if err != nil {
+        return err
+    }
+    defer db.Close()
+    return db.PingContext(ctx)
+}
+~~~
 
-CREATE TABLE order_items (
-    id               BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    order_id         BIGINT UNSIGNED NOT NULL,
-    product_id       BIGINT UNSIGNED NOT NULL,
-    quantity         BIGINT UNSIGNED NOT NULL,
-    unit_price_cents BIGINT UNSIGNED NOT NULL,
-    PRIMARY KEY (id),
-    KEY idx_order_items_order_id (order_id),
-    CONSTRAINT fk_order_items_order FOREIGN KEY (order_id) REFERENCES orders(id),
-    CONSTRAINT fk_order_items_product FOREIGN KEY (product_id) REFERENCES products(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-```
+每次请求都创建新池，连接无法复用，MySQL 连接数也会迅速膨胀。项目只创建一个池，并控制其容量和连接寿命：
 
-## 第一版：只使用 database/sql
+~~~go
+db.SetMaxOpenConns(20)              // 单个实例最多占用 20 条物理连接。
+db.SetMaxIdleConns(20)              // 保留可立即复用的空闲连接。
+db.SetConnMaxLifetime(3 * time.Minute)
+db.SetConnMaxIdleTime(time.Minute)
+~~~
 
-### 3. 创建连接池
+这不是固定最佳值。10 个实例都设置 20，MySQL 最坏就可能接收 200 条连接。连接池大小必须结合实例数量、max_connections、慢查询和实际等待指标配置。
 
-保存为 `internal/store/mysql.go`。这是整个程序唯一创建数据库句柄的地方。
+sql.Open 通常不会立即拨号，所以项目随后执行：
 
-```go
-package store
+~~~go
+if err := db.PingContext(ctx); err != nil {
+    _ = db.Close()
+    return nil, fmt.Errorf("ping MySQL: %w", err)
+}
+~~~
 
-import (
-	"context"
-	"database/sql"
-	"fmt"
-	"time"
+PingContext 会从池借连接或新建连接，才能在启动阶段发现地址、密码、网络或 MySQL 服务的问题。业务查询本身会借连接，不应在每次查询前额外 Ping。
 
-	mysql "github.com/go-sql-driver/mysql"
+## database/sql 基础读写
+
+### 写入：ExecContext 和参数绑定
+
+[CreateProduct](https://github.com/zzxrepository/gocode-examples/blob/7068d075e04e9e1f6ad3e245b7cca721b6cca05b/go/01-database-sql-demo/internal/store/product.go) 使用 ExecContext 执行 INSERT：
+
+~~~go
+result, err := db.ExecContext(ctx,
+    "INSERT INTO products (sku, name, price_cents, stock) VALUES (?, ?, ?, ?)",
+    input.SKU, input.Name, input.PriceCents, input.Stock,
 )
-
-// MySQLConfig 从环境变量、配置中心或密钥服务填充，密码不能写进源码。
-type MySQLConfig struct {
-	User     string
-	Password string
-	Address  string // 例如 "127.0.0.1:3307"
-	Database string
+if err != nil {
+    return Product{}, fmt.Errorf("insert product: %w", err)
 }
+id, err := result.LastInsertId()
+~~~
 
-// OpenMySQL 返回连接池句柄，不是某条单独的 TCP 连接。
-// 程序启动时创建一次；进程退出时才关闭。
-func OpenMySQL(ctx context.Context, cfg MySQLConfig) (*sql.DB, error) {
-	// 用驱动 Config 生成 DSN，避免密码、时区等包含特殊字符时手拼出错。
-	driverCfg := mysql.NewConfig()
-	driverCfg.User = cfg.User
-	driverCfg.Passwd = cfg.Password
-	driverCfg.Net = "tcp"
-	driverCfg.Addr = cfg.Address
-	driverCfg.DBName = cfg.Database
+每个问号只能绑定一个值。驱动会对值进行编码，外部输入不会被解释为 SQL 语法。不能拼接用户输入：
 
-	// 开启后，MySQL DATE/DATETIME 才能稳定扫描到 Go 的 time.Time。
-	driverCfg.ParseTime = true
-	driverCfg.Loc = time.Local
+~~~go
+// 错误：name 若来自请求，会成为 SQL 文本的一部分。
+query := "SELECT id FROM products WHERE name = '" + name + "'"
+~~~
 
-	// 这些限制的是单条物理连接的拨号、读、写，不等于查询 ctx 的超时。
-	driverCfg.Timeout = 3 * time.Second
-	driverCfg.ReadTimeout = 5 * time.Second
-	driverCfg.WriteTimeout = 5 * time.Second
+占位符不能替代表名、列名和排序方向。这些 SQL 结构若要动态变化，只能从程序维护的白名单选择。
 
-	// Open 往往只创建池句柄，此时不保证已经连接上 MySQL。
-	db, err := sql.Open("mysql", driverCfg.FormatDSN())
-	if err != nil {
-		return nil, fmt.Errorf("open MySQL handle: %w", err)
-	}
+LastInsertId 在 MySQL AUTO_INCREMENT 场景可用；跨数据库项目应审查目标驱动是否具有相同语义。
 
-	// 每个应用实例最多打开 20 条连接；这些值要按实例数和 MySQL 上限调节。
-	db.SetMaxOpenConns(20)
-	db.SetMaxIdleConns(20)
-	db.SetConnMaxLifetime(3 * time.Minute)
-	db.SetConnMaxIdleTime(time.Minute)
+### 单行：QueryRowContext 的错误在 Scan 时出现
 
-	// PingContext 会真实借用或创建连接，因此能尽早发现网络和认证错误。
-	if err := db.PingContext(ctx); err != nil {
-		_ = db.Close() // 初始化失败时不把半可用的池交给调用者。
-		return nil, fmt.Errorf("ping MySQL: %w", err)
-	}
-	return db, nil
-}
-```
+GetProduct 的核心：
 
-`sql.DB` 是并发安全的连接池。不要在每个 HTTP 请求或每个 repository 方法中 `sql.Open`；那是在不断创建新连接池。10 个实例都设置 `MaxOpenConns=20` 时，MySQL 最坏要承受 200 条连接。
-
-### 4. 商品 CRUD：写入、一行查询、多行查询
-
-保存为 `internal/store/product.go`。
-
-```go
-package store
-
-import (
-	"context"
-	"database/sql"
-	"errors"
-	"fmt"
-	"time"
+~~~go
+err := db.QueryRowContext(ctx,
+    "SELECT id, sku, name, price_cents, stock, created_at FROM products WHERE id = ?",
+    id,
+).Scan(
+    &product.ID,
+    &product.SKU,
+    &product.Name,
+    &product.PriceCents,
+    &product.Stock,
+    &product.CreatedAt,
 )
-
-var ErrProductNotFound = errors.New("product not found")
-
-// db tag 暂时不被 database/sql 使用；保留它是为了后面切换 sqlx。
-type Product struct {
-	ID         int64     `db:"id"`
-	SKU        string    `db:"sku"`
-	Name       string    `db:"name"`
-	PriceCents int64     `db:"price_cents"`
-	Stock      int64     `db:"stock"`
-	CreatedAt  time.Time `db:"created_at"`
+if errors.Is(err, sql.ErrNoRows) {
+    return Product{}, ErrProductNotFound
 }
+~~~
 
-type CreateProductInput struct {
-	SKU        string
-	Name       string
-	PriceCents int64
-	Stock      int64
+QueryRowContext 返回延迟取值的 Row。SQL 语法错误、网络错误和没有记录都会在 Scan 时报告，因此必须检查 Scan 的结果。
+
+Scan 的目标顺序必须和 SELECT 列顺序一致。明确列名比 SELECT 星号稳定：表新增字段不会悄悄改变读取接口，代码审查也能发现列与字段不匹配的问题。
+
+### 多行：QueryContext、Rows.Close 和 Rows.Err
+
+ListProducts 展示完整模式：
+
+~~~go
+rows, err := db.QueryContext(ctx,
+    "SELECT id, sku, name, price_cents, stock, created_at FROM products ORDER BY id")
+if err != nil {
+    return nil, fmt.Errorf("query products: %w", err)
 }
+defer rows.Close()
 
-func CreateProduct(ctx context.Context, db *sql.DB, input CreateProductInput) (Product, error) {
-	if input.SKU == "" || input.Name == "" || input.PriceCents < 0 || input.Stock < 0 {
-		return Product{}, fmt.Errorf("invalid product input")
-	}
-
-	result, err := db.ExecContext(ctx, `
-		INSERT INTO products (sku, name, price_cents, stock)
-		VALUES (?, ?, ?, ?)`,
-		input.SKU,        // 每个 ? 只绑定一个“值”，绝不把参数当作 SQL 语法。
-		input.Name,
-		input.PriceCents,
-		input.Stock,
-	)
-	if err != nil {
-		return Product{}, fmt.Errorf("insert product: %w", err)
-	}
-	id, err := result.LastInsertId() // MySQL AUTO_INCREMENT 生成的主键。
-	if err != nil {
-		return Product{}, fmt.Errorf("read inserted product ID: %w", err)
-	}
-	return GetProduct(ctx, db, id) // 读回完整数据，返回统一的 Product 形态。
+for rows.Next() {
+    var product Product
+    if err := rows.Scan(
+        &product.ID, &product.SKU, &product.Name,
+        &product.PriceCents, &product.Stock, &product.CreatedAt,
+    ); err != nil {
+        return nil, fmt.Errorf("scan product row: %w", err)
+    }
+    products = append(products, product)
 }
-
-// QueryRowContext 的错误在 Scan 时才报告，因此必须检查 Scan 的返回值。
-func GetProduct(ctx context.Context, db *sql.DB, id int64) (Product, error) {
-	var product Product
-	err := db.QueryRowContext(ctx, `
-		SELECT id, sku, name, price_cents, stock, created_at
-		FROM products WHERE id = ?`, id,
-	).Scan(
-		&product.ID,         // Scan 目标的顺序必须和 SELECT 列的顺序一致。
-		&product.SKU,
-		&product.Name,
-		&product.PriceCents,
-		&product.Stock,
-		&product.CreatedAt,
-	)
-	if errors.Is(err, sql.ErrNoRows) {
-		return Product{}, ErrProductNotFound
-	}
-	if err != nil {
-		return Product{}, fmt.Errorf("get product %d: %w", id, err)
-	}
-	return product, nil
+if err := rows.Err(); err != nil {
+    return nil, fmt.Errorf("iterate product rows: %w", err)
 }
+~~~
 
-func ListProducts(ctx context.Context, db *sql.DB) ([]Product, error) {
-	rows, err := db.QueryContext(ctx, `
-		SELECT id, sku, name, price_cents, stock, created_at
-		FROM products ORDER BY id`)
-	if err != nil {
-		return nil, fmt.Errorf("query products: %w", err)
-	}
-	// Rows 持有连接和结果集；无论正常结束还是提前 return 都必须关闭。
-	defer rows.Close()
+Rows 不是普通切片迭代器。它可能还在读取 MySQL 结果集，并占用池中的物理连接。Close 保证提前返回时也释放资源；Rows.Err 捕获 Next 拉取后续数据时发生的网络和解码错误。
 
-	products := make([]Product, 0)
-	for rows.Next() {
-		var product Product
-		if err := rows.Scan(
-			&product.ID, &product.SKU, &product.Name,
-			&product.PriceCents, &product.Stock, &product.CreatedAt,
-		); err != nil {
-			return nil, fmt.Errorf("scan product row: %w", err)
-		}
-		products = append(products, product)
-	}
-	// Next 返回 false 既可能是读完，也可能是网络或解码错误。
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate product rows: %w", err)
-	}
-	return products, nil
+## 事务下单：一致性来自事务边界
+
+[PlaceOrder](https://github.com/zzxrepository/gocode-examples/blob/7068d075e04e9e1f6ad3e245b7cca721b6cca05b/go/01-database-sql-demo/internal/store/order.go) 是项目的核心。它先开始事务：
+
+~~~go
+tx, err := db.BeginTx(ctx, nil)
+if err != nil {
+    return 0, fmt.Errorf("begin order transaction: %w", err)
 }
-```
+defer func() { _ = tx.Rollback() }()
+~~~
 
-这三个函数已经给出常用模式：
+sql.Tx 绑定连接池中的一条连接。Commit 前，所有需要原子执行的查询和写入必须使用 tx 的方法。若库存更新使用 tx、订单插入误用外层 db，订单插入就不属于这个事务。
 
-- 不返回结果集的语句使用 `ExecContext`；
-- 一行使用 `QueryRowContext(...).Scan(...)`，通过 `sql.ErrNoRows` 区分未找到；
-- 多行使用 `QueryContext`，立即 `defer rows.Close()`，循环后检查 `rows.Err()`；
-- 不拼接用户输入。占位符只能绑定值，表名、列名和排序方向只能来自代码白名单。
+下单前锁定目标商品：
 
-### 5. 下单事务：避免扣了库存却没有订单
+~~~go
+err = tx.QueryRowContext(ctx,
+    "SELECT price_cents, stock FROM products WHERE id = ? FOR UPDATE",
+    input.ProductID,
+).Scan(&priceCents, &stock)
+if stock < input.Quantity {
+    return 0, ErrInsufficientStock
+}
+~~~
 
-保存为 `internal/store/order.go`。事务内每一条 SQL 都通过 `tx` 执行，而不是外层 `db`。
+FOR UPDATE 是 InnoDB 事务内的排他行锁。并发下单者尝试锁定同一商品时只能等待当前事务完成，或因 Context 超时退出。扣库存时仍带库存条件并检查影响行数：
 
-```go
-package store
-
-import (
-	"context"
-	"database/sql"
-	"errors"
-	"fmt"
+~~~go
+result, err := tx.ExecContext(ctx,
+    "UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?",
+    input.Quantity, input.ProductID, input.Quantity,
 )
-
-var (
-	ErrInvalidOrder      = errors.New("invalid order")
-	ErrInsufficientStock = errors.New("insufficient stock")
-)
-
-type PlaceOrderInput struct {
-	CustomerID int64
-	ProductID  int64
-	Quantity   int64
+affected, err := result.RowsAffected()
+if affected != 1 {
+    return 0, ErrInsufficientStock
 }
+~~~
 
-// PlaceOrder 将锁库存、扣库存、创建订单、写订单项放入同一原子边界。
-func PlaceOrder(ctx context.Context, db *sql.DB, input PlaceOrderInput) (int64, error) {
-	if input.CustomerID <= 0 || input.ProductID <= 0 || input.Quantity <= 0 {
-		return 0, ErrInvalidOrder
-	}
+同一个 tx 随后写入 orders 和 order_items，最后才 Commit。任意 INSERT 或 UPDATE 失败，defer 中的 Rollback 会撤销前面已成功的写入。Commit 成功后 Rollback 只会得到 sql.ErrTxDone，忽略即可。
 
-	// tx 在 Commit 或 Rollback 前会独占连接池中的一条连接。
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return 0, fmt.Errorf("begin order transaction: %w", err)
-	}
-	// Commit 成功后 Rollback 返回 sql.ErrTxDone，可安全忽略。
-	// 任意中途 return 都会触发回滚。
-	defer func() { _ = tx.Rollback() }()
+事务应尽量短。不要在锁住商品后调用第三方 HTTP、等待用户输入或执行无关慢查询；这些操作会延长锁持有时间，也会减少连接池可用连接。
 
-	var priceCents, stock int64
-	err = tx.QueryRowContext(ctx, `
-		SELECT price_cents, stock
-		FROM products WHERE id = ?
-		FOR UPDATE`, input.ProductID,
-	).Scan(&priceCents, &stock)
-	if errors.Is(err, sql.ErrNoRows) {
-		return 0, ErrProductNotFound
-	}
-	if err != nil {
-		return 0, fmt.Errorf("lock product %d: %w", input.ProductID, err)
-	}
-	if stock < input.Quantity {
-		return 0, ErrInsufficientStock
-	}
+## 用过 API 后，再阅读底层调用链
 
-	// FOR UPDATE 已经锁行；stock >= ? 再提供一层防御，并让结果可检查。
-	result, err := tx.ExecContext(ctx, `
-		UPDATE products SET stock = stock - ?
-		WHERE id = ? AND stock >= ?`,
-		input.Quantity, input.ProductID, input.Quantity,
-	)
-	if err != nil {
-		return 0, fmt.Errorf("decrease stock: %w", err)
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return 0, fmt.Errorf("read stock update result: %w", err)
-	}
-	if affected != 1 {
-		return 0, ErrInsufficientStock
-	}
+### 驱动如何被找到
 
-	// 真实系统需要根据业务上限检查 priceCents * Quantity 溢出。
-	total := priceCents * input.Quantity
-	orderResult, err := tx.ExecContext(ctx, `
-		INSERT INTO orders (customer_id, status, total_amount_cents)
-		VALUES (?, 'created', ?)`, input.CustomerID, total)
-	if err != nil {
-		return 0, fmt.Errorf("insert order: %w", err)
-	}
-	orderID, err := orderResult.LastInsertId()
-	if err != nil {
-		return 0, fmt.Errorf("read inserted order ID: %w", err)
-	}
+MySQL 驱动初始化时注册自己的名字：
 
-	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO order_items (order_id, product_id, quantity, unit_price_cents)
-		VALUES (?, ?, ?, ?)`,
-		orderID, input.ProductID, input.Quantity, priceCents,
-	); err != nil {
-		return 0, fmt.Errorf("insert order item: %w", err)
-	}
-	if err := tx.Commit(); err != nil {
-		return 0, fmt.Errorf("commit order transaction: %w", err)
-	}
-	return orderID, nil
-}
-```
-
-```text
-BeginTx
-  ├─ SELECT ... FOR UPDATE：锁住商品行
-  ├─ UPDATE products：扣库存
-  ├─ INSERT orders：创建订单头
-  └─ INSERT order_items：写入成交单价和数量
-Commit
-
-任一步失败 → defer Rollback → 前面的写入全部撤销
-```
-
-不要在事务中调用第三方 HTTP、等待用户输入或做无关慢操作。事务越长，锁等待和连接池压力越大。
-
-### 6. 运行入口
-
-保存为 `cmd/demo/main.go`。每次运行使用唯一 SKU，可重复执行。
-
-```go
-package main
-
-import (
-	"context"
-	"fmt"
-	"log"
-	"os"
-	"time"
-
-	"example.com/go-mysql-store/internal/store"
-)
-
-func main() {
-	// 整个 Demo 只有 10 秒预算。HTTP 服务应使用请求传入的 Context。
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	db, err := store.OpenMySQL(ctx, store.MySQLConfig{
-		User:     getenv("MYSQL_USER", "root"),
-		Password: getenv("MYSQL_PASSWORD", "rootpass"),
-		Address:  getenv("MYSQL_ADDRESS", "127.0.0.1:3307"),
-		Database: getenv("MYSQL_DATABASE", "go_store"),
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer db.Close() // 只在程序退出时关闭连接池。
-
-	product, err := store.CreateProduct(ctx, db, store.CreateProductInput{
-		SKU:        fmt.Sprintf("keyboard-%d", time.Now().UnixNano()),
-		Name:       "机械键盘",
-		PriceCents: 39900, // 399.00 元
-		Stock:      10,
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("创建商品: id=%d, stock=%d\n", product.ID, product.Stock)
-
-	orderID, err := store.PlaceOrder(ctx, db, store.PlaceOrderInput{
-		CustomerID: 10001,
-		ProductID:  product.ID,
-		Quantity:   2,
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("下单成功: order_id=%d\n", orderID)
-
-	updated, err := store.GetProduct(ctx, db, product.ID)
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("下单后库存: %d\n", updated.Stock) // 输出应为 8。
-}
-
-func getenv(key, fallback string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return fallback
-}
-```
-
-```bash
-go run ./cmd/demo
-# 创建商品: id=1, stock=10
-# 下单成功: order_id=1
-# 下单后库存: 8
-```
-
-## 看懂已经用到的底层原理
-
-### 驱动注册、Open 和 Ping
-
-MySQL 驱动初始化时的关键源码只有一行：
-
-```go
+~~~go
 func init() {
-	// "mysql" 是驱动注册名，不是数据库名。
-	sql.Register("mysql", &MySQLDriver{})
+    sql.Register("mysql", &MySQLDriver{})
 }
-```
+~~~
 
-因此 `sql.Open("mysql", dsn)` 才能按名字找到驱动。若代码只需注册、不使用驱动导出的 `Config`，可采用空白导入：
+所以 sql.Open 的第一个参数 mysql 是驱动注册名。若只想触发注册，不使用驱动导出的 Config，可以空白导入：
 
-```go
+~~~go
 import _ "github.com/go-sql-driver/mysql"
-```
+~~~
 
-下面是 Go 标准库 `database/sql` 的核心路径缩略版。锁、统计和错误分支被省略，只保留实际的调用关系：
+### Open 为什么不一定建立连接
 
-```go
+标准库的关键逻辑可以缩略为：
+
+~~~go
 func Open(driverName, dsn string) (*DB, error) {
-	driverImpl := drivers[driverName] // 来自驱动 init 中的 sql.Register
-	if driverCtx, ok := driverImpl.(driver.DriverContext); ok {
-		connector, err := driverCtx.OpenConnector(dsn)
-		if err != nil {
-			return nil, err
-		}
-		return OpenDB(connector), nil
-	}
-	return OpenDB(dsnConnector{dsn: dsn, driver: driverImpl}), nil
+    driverImpl := drivers[driverName]
+    if driverCtx, ok := driverImpl.(driver.DriverContext); ok {
+        connector, err := driverCtx.OpenConnector(dsn)
+        if err != nil {
+            return nil, err
+        }
+        return OpenDB(connector), nil
+    }
+    return OpenDB(dsnConnector{dsn: dsn, driver: driverImpl}), nil
 }
 
 func OpenDB(connector driver.Connector) *DB {
-	db := &DB{connector: connector /* 空闲连接和等待队列也在 DB 中 */}
-	go db.connectionOpener(context.Background())
-	return db
+    db := &DB{connector: connector}
+    go db.connectionOpener(context.Background())
+    return db
 }
+~~~
 
+OpenDB 保存 Connector、空闲连接和等待队列等池状态。真正执行业务时，标准库按下列顺序借连接：
+
+~~~go
 func (db *DB) conn(ctx context.Context) (*driverConn, error) {
-	if idle := db.takeIdleConnection(); idle != nil {
-		return idle, nil // 先复用空闲连接
-	}
-	if db.openCount >= db.maxOpen {
-		return db.waitForConnection(ctx) // 上限已满时等待，ctx 可取消
-	}
-	return db.connector.Connect(ctx) // 此处才由 MySQL 驱动拨号、认证
+    if idle := db.takeIdleConnection(); idle != nil {
+        return idle, nil
+    }
+    if db.openCount >= db.maxOpen {
+        return db.waitForConnection(ctx)
+    }
+    return db.connector.Connect(ctx)
 }
-```
+~~~
 
-这解释了三个常见现象：
+先复用空闲连接；达到 MaxOpenConns 就等待；有配额才进入 MySQL 驱动拨号和认证。Context 能取消池等待，也能向支持 Context 的驱动传递取消信号。它不是无条件终止服务端 SQL 的魔法开关，最终行为仍取决于驱动和 MySQL。
 
-| 代码 | 实际含义 |
-| --- | --- |
-| `sql.Open` | 创建连接池句柄，通常还没有建立 TCP 连接。 |
-| `PingContext` | 借连接并验证网络、认证和 MySQL 服务真实可用。 |
-| `rows.Close` | 释放结果集，使其占用的连接可以回到池中。 |
+标准库提供 DBStats 观察池：
 
-`context.Context` 同时限制池等待、连接建立和支持取消的数据库调用。它不是立刻终止任何 SQL 的魔法按钮，取消效果也取决于驱动和 MySQL；但改用 `context.Background()` 会直接切断请求取消链路。
+~~~go
+stats := db.Stats()
+log.Printf("open=%d in_use=%d idle=%d wait_count=%d wait_duration=%s",
+    stats.OpenConnections,
+    stats.InUse,
+    stats.Idle,
+    stats.WaitCount,
+    stats.WaitDuration,
+)
+~~~
 
-### 用指标调连接池
+WaitCount 持续增长时，先排查未关闭的 Rows、长事务、慢查询和锁等待。直接增大连接数常常只是把排队从应用移到 MySQL。
 
-```go
-// 由定时任务调用并接入日志或监控。
-func LogPoolStats(db *sql.DB, logf func(format string, args ...any)) {
-	stats := db.Stats()
-	logf(
-		"mysql pool: open=%d in_use=%d idle=%d wait_count=%d wait_duration=%s",
-		stats.OpenConnections, // 总连接数 = InUse + Idle
-		stats.InUse,           // 查询或事务尚未归还的连接
-		stats.Idle,            // 可立即复用的连接
-		stats.WaitCount,       // 因 MaxOpenConns 而等待的累计次数
-		stats.WaitDuration,    // 上述等待的累计耗时
-	)
+## sqlx：同一 Demo 的更简洁表达
+
+[sqlx 入口](https://github.com/zzxrepository/gocode-examples/blob/7068d075e04e9e1f6ad3e245b7cca721b6cca05b/go/01-database-sql-demo/cmd/sqlx-demo/main.go) 先创建标准库连接池，再用 NewSQLX 包装：
+
+~~~go
+baseDB, err := store.OpenMySQL(ctx, mysqlConfig())
+if err != nil {
+    log.Fatal(err)
 }
-```
+defer baseDB.Close()
 
-`WaitCount` 持续增长时，先找未关闭的 `Rows`、长事务、慢查询和锁等待。盲目增大连接数往往只是把排队从应用移到 MySQL。
+db := store.NewSQLX(baseDB)
+~~~
 
-## 用 sqlx 重构同一个 Demo
+包装函数只有一行：
 
-先掌握了手写 `Scan`，才能知道 sqlx 的价值：SQL、连接池和事务都不变；它主要减少列映射和长位置参数的样板。
-
-### 1. 包装已有连接池
-
-```go
-import "github.com/jmoiron/sqlx"
-
+~~~go
 func NewSQLX(db *sql.DB) *sqlx.DB {
-	// 只包一层，不创建第二个连接池；driverName 告诉 sqlx MySQL 使用 ?。
-	return sqlx.NewDb(db, "mysql")
+    return sqlx.NewDb(db, "mysql")
 }
-```
+~~~
 
-不要对同一个数据库同时单独 `sql.Open` 和 `sqlx.Open`。两次 Open 会得到两套独立的连接池，连接数和限额都会翻倍。
+这不会创建第二个连接池。sqlx.DB 内嵌原始 sql.DB，连接上限、Stats、Context 和事务规则仍来自标准库。
 
-### 2. 用结构体映射替换 Scan
+### 结构体映射
 
-```go
-package store
+[GetProductSQLX](https://github.com/zzxrepository/gocode-examples/blob/7068d075e04e9e1f6ad3e245b7cca721b6cca05b/go/01-database-sql-demo/internal/store/sqlx.go) 用 GetContext 取代手写 Scan：
 
-import (
-	"context"
-	"database/sql"
-	"errors"
-	"fmt"
+~~~go
+var product Product
+err := db.GetContext(ctx, &product,
+    "SELECT id, sku, name, price_cents, stock, created_at FROM products WHERE id = ?",
+    id,
+)
+if errors.Is(err, sql.ErrNoRows) {
+    return Product{}, ErrProductNotFound
+}
+~~~
 
-	"github.com/jmoiron/sqlx"
+Product 的字段通过 db tag 对应列名。GetContext 的源码逻辑本质上仍是查询一行再扫描：
+
+~~~go
+func GetContext(ctx context.Context, q QueryerContext, dest interface{},
+    query string, args ...interface{}) error {
+    r := q.QueryRowxContext(ctx, query, args...)
+    return r.scanAny(dest, false)
+}
+~~~
+
+所以 sql.ErrNoRows、Context、连接池与驱动错误语义完全不变。SelectContext 适合大小受控的列表，它内部遍历、映射并关闭 Rows；大量导出仍应使用 QueryxContext 流式读取。
+
+联表查询有重名列时必须起别名，例如 order_id、product_id 和 product_name。不要使用 db.Unsafe 静默跳过找不到字段的列；映射错误越早暴露越安全。
+
+### 命名参数与 IN
+
+sqlx 的命名参数让长写入更易读：
+
+~~~go
+result, err := db.NamedExecContext(ctx,
+    "INSERT INTO products (sku, name, price_cents, stock) VALUES (:sku, :name, :price_cents, :stock)",
+    input,
+)
+~~~
+
+对 MySQL，它会根据结构体的 db tag 取值，再改写为问号占位符与参数切片。它仍只绑定值，不能绑定表名、列名和排序方向。
+
+一个占位符不能直接装下切片。项目使用 sqlx.In：
+
+~~~go
+query, args, err := sqlx.In(
+    "SELECT id, sku, name, price_cents, stock, created_at FROM products WHERE id IN (?) ORDER BY id",
+    ids,
+)
+if err != nil {
+    return nil, err
+}
+query = db.Rebind(query)
+~~~
+
+sqlx.In 将切片展开为多个占位符；Rebind 将 SQL 调整为当前驱动的风格。MySQL 使用问号，PostgreSQL 等驱动会使用数字占位符。空切片必须提前返回，不能生成 IN ()。
+
+### sqlx 事务仍是标准库事务
+
+[PlaceOrderSQLX](https://github.com/zzxrepository/gocode-examples/blob/7068d075e04e9f6ad3e245b7cca721b6cca05b/go/01-database-sql-demo/internal/store/sqlx.go) 用 BeginTxx、GetContext 和 NamedExecContext 改写了同一业务流程：
+
+~~~go
+tx, err := db.BeginTxx(ctx, nil)
+if err != nil {
+    return 0, err
+}
+defer func() { _ = tx.Rollback() }()
+
+err = tx.GetContext(ctx, &locked,
+    "SELECT price_cents, stock FROM products WHERE id = ? FOR UPDATE",
+    input.ProductID,
 )
 
-func GetProductX(ctx context.Context, db *sqlx.DB, id int64) (Product, error) {
-	var product Product
-	// GetContext 仍执行一行查询，只是根据 Product 的 db tag 自动映射列。
-	err := db.GetContext(&product, `
-		SELECT id, sku, name, price_cents, stock, created_at
-		FROM products WHERE id = ?`, id)
-	if errors.Is(err, sql.ErrNoRows) {
-		return Product{}, ErrProductNotFound
-	}
-	if err != nil {
-		return Product{}, fmt.Errorf("get product %d: %w", id, err)
-	}
-	return product, nil
-}
+result, err := tx.NamedExecContext(ctx,
+    "UPDATE products SET stock = stock - :quantity WHERE id = :product_id AND stock >= :quantity",
+    params,
+)
+~~~
 
-func ListProductsX(ctx context.Context, db *sqlx.DB) ([]Product, error) {
-	products := make([]Product, 0)
-	// SelectContext 会迭代、映射并关闭 Rows，适用于结果集大小受控的列表。
-	if err := db.SelectContext(&products, `
-		SELECT id, sku, name, price_cents, stock, created_at
-		FROM products ORDER BY id`); err != nil {
-		return nil, fmt.Errorf("list products: %w", err)
-	}
-	return products, nil
-}
-```
+sqlx 不会自动开启事务，也不会自动避免超卖。无论使用 sql.Tx 还是 sqlx.Tx，所有原子操作都必须通过同一个 tx 执行、检查错误并显式 Commit。
 
-联表时必须为同名列取别名，不能让 sqlx 猜测两个 `id` 应放在哪里：
+## 选择与检查清单
 
-```sql
-SELECT o.id AS order_id, p.id AS product_id, p.name AS product_name
-FROM orders AS o
-JOIN order_items AS oi ON oi.order_id = o.id
-JOIN products AS p ON p.id = oi.product_id;
-```
-
-不要使用 `db.Unsafe()` 静默忽略找不到字段的列。列别名或 tag 写错时，报错比悄悄丢数据更安全。
-
-### 3. 用命名参数和 IN 查询
-
-```go
-type CreateProductParams struct {
-	SKU        string `db:"sku"`
-	Name       string `db:"name"`
-	PriceCents int64  `db:"price_cents"`
-	Stock      int64  `db:"stock"`
-}
-
-func CreateProductX(ctx context.Context, db *sqlx.DB, input CreateProductParams) (int64, error) {
-	result, err := db.NamedExecContext(ctx, `
-		INSERT INTO products (sku, name, price_cents, stock)
-		VALUES (:sku, :name, :price_cents, :stock)`, input)
-	if err != nil {
-		return 0, fmt.Errorf("insert product: %w", err)
-	}
-	return result.LastInsertId()
-}
-
-func GetProductsByIDsX(ctx context.Context, db *sqlx.DB, ids []int64) ([]Product, error) {
-	if len(ids) == 0 {
-		return []Product{}, nil // 避免生成 MySQL 不接受的 IN ()。
-	}
-	query, args, err := sqlx.In(`
-		SELECT id, sku, name, price_cents, stock, created_at
-		FROM products WHERE id IN (?) ORDER BY id`, ids)
-	if err != nil {
-		return nil, fmt.Errorf("expand IN: %w", err)
-	}
-	query = db.Rebind(query) // MySQL 保持 ?；PostgreSQL 会改成 $1、$2……
-
-	products := make([]Product, 0)
-	if err := db.SelectContext(ctx, &products, query, args...); err != nil {
-		return nil, fmt.Errorf("query products: %w", err)
-	}
-	return products, nil
-}
-```
-
-命名参数会变为 MySQL 可执行的形式：
-
-```text
-VALUES (:sku, :name, :price_cents, :stock)
-                 │  sqlx 根据 db tag 取值并重写
-                 ▼
-VALUES (?, ?, ?, ?)
-args = [input.SKU, input.Name, input.PriceCents, input.Stock]
-```
-
-命名参数依旧只能绑定值，不能绑定表名、列名和排序方向。
-
-### 4. sqlx 的事务没有新规则
-
-下列函数只抽出下单中的“锁定并扣库存”步骤，用于对照标准库版本。它特别说明两点：先判断 `BeginTxx` 的错误再安排回滚；写入依然必须通过 `tx`。
-
-```go
-func LockAndDecreaseStockX(ctx context.Context, db *sqlx.DB, input PlaceOrderInput) error {
-	// *sqlx.Tx 内嵌 *sql.Tx，仍然绑定连接池中的一条连接。
-	tx, err := db.BeginTxx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin stock transaction: %w", err)
-	}
-	// Commit 成功后这里的 Rollback 返回 sql.ErrTxDone；忽略即可。
-	defer func() { _ = tx.Rollback() }()
-
-	var locked struct {
-		PriceCents int64 `db:"price_cents"`
-		Stock      int64 `db:"stock"`
-	}
-	// GetContext 只是把 QueryRowContext(...).Scan(...) 换成 db tag 映射；
-	// FOR UPDATE 的锁语义和 MySQL 事务语义完全没变。
-	if err := tx.GetContext(ctx, &locked,
-		"SELECT price_cents, stock FROM products WHERE id = ? FOR UPDATE", input.ProductID,
-	); err != nil {
-		return fmt.Errorf("lock product: %w", err)
-	}
-	if locked.Stock < input.Quantity {
-		return ErrInsufficientStock
-	}
-
-	// 写入仍必须通过 tx，不能改回外层 db。
-	result, err := tx.NamedExecContext(ctx, `
-		UPDATE products SET stock = stock - :quantity
-		WHERE id = :product_id AND stock >= :quantity`, map[string]any{
-		"product_id": input.ProductID,
-		"quantity":   input.Quantity,
-	})
-	if err != nil {
-		return fmt.Errorf("decrease stock: %w", err)
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("read update result: %w", err)
-	}
-	if affected != 1 {
-		return ErrInsufficientStock
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit stock transaction: %w", err)
-	}
-	return nil
-}
-```
-
-sqlx 的 `GetContext` 源码揭示了它的边界：
-
-```go
-func GetContext(ctx context.Context, q QueryerContext, dest interface{},
-	query string, args ...interface{}) error {
-	r := q.QueryRowxContext(ctx, query, args...) // 仍从底层发起单行查询
-	return r.scanAny(dest, false)                // 只将手写 Scan 换成结构体映射
-}
-```
-
-它不会替你开启事务、选择隔离级别或解决超卖；这些仍由 SQL、锁和 `database/sql` 事务边界决定。
-
-## 排错与选择
-
-| 现象或需求 | 优先检查或选择 |
+| 场景 | 优先选择 |
 | --- | --- |
-| `sql: unknown driver "mysql"` | 驱动没有导入，或注册名不是 `mysql`。 |
-| Open 成功但 Ping 失败 | DSN、网络、账号密码或 MySQL 服务状态。 |
-| 连接池等待增长 | `Rows.Close`、长事务、慢查询、锁等待。 |
-| sqlx 映射失败 | SELECT 列、AS 别名和 `db` tag。 |
-| 事务“不生效” | 是否有 SQL 误用了外层 `db` 而非 `tx`。 |
-| 少量字段、需精细扫描 | 直接使用 `database/sql`。 |
-| 大量手写 SQL、字段较多 | 在 `database/sql` 基础上使用 sqlx。 |
+| 字段很少，需要精确控制 Scan | database/sql |
+| 大量手写 SQL、字段和写入参数较多 | sqlx |
+| 大结果集导出 | QueryContext 或 QueryxContext 流式处理 |
+| 多条写入需要一致性 | BeginTx 或 BeginTxx |
+| 动态表名、列名、排序规则 | 代码白名单 |
+
+- 全进程复用一个 sql.DB；sqlx 包装它而不是重新 Open。
+- 使用带 Context 的查询、写入和事务 API。
+- 每一个 Rows 都关闭，并在迭代结束后检查 Rows.Err。
+- 外部值使用占位符；SQL 结构只能来自白名单。
+- 事务中只使用 tx，保持事务短小，为死锁重试设计幂等性。
+- 使用 DBStats、慢查询和锁等待调优连接池。
+- sqlx 查询写清列名、tag 和联表别名，不用 Unsafe 掩盖映射错误。
 
 ## 总结
 
-这个 Demo 先跑通了完整的“创建商品 → 锁库存 → 下单 → 读取库存”流程，再把每个动作放回正确层次：驱动实现 MySQL 协议，`database/sql` 管理连接池、资源与事务，sqlx 仅减少结构体映射和参数绑定的重复代码。
+Go 访问 MySQL 不是单个查询函数，而是一条协作链：驱动实现 MySQL 协议，database/sql 管理连接池、资源与事务，sqlx 在其上减少结构体映射和参数绑定的样板代码。
 
-`sql.Open` 创建的是池句柄，`PingContext` 验证真实连接，`Rows.Close` 归还资源，`BeginTx` 将多条 SQL 绑定在同一原子边界。理解这些基础后，sqlx 的 `GetContext`、`NamedExecContext` 和 `sqlx.In` 就只是更易读的表达，而不是另一套神秘机制。
+下单 Demo 先展示如何运行，再将代码拆解为连接池、CRUD、事务、驱动注册和 sqlx 重构。理解这条因果链后，既能写出可读的数据库代码，也能在并发、超时和资源耗尽时准确定位问题。
 
 ## 参考资料
 
+- [配套 Demo README](https://github.com/zzxrepository/gocode-examples/blob/7068d075e04e9f6ad3e245b7cca721b6cca05b/go/01-database-sql-demo/README.md)
 - [Go 官方：访问关系型数据库](https://go.dev/doc/database/)
 - [Go 官方：打开数据库句柄与连接池](https://go.dev/doc/database/open-handle)
 - [Go 标准库 database/sql 源码](https://go.dev/src/database/sql/sql.go)
-- [go-sql-driver/mysql：DSN、时间解析、连接池与超时](https://github.com/go-sql-driver/mysql)
+- [go-sql-driver/mysql 文档](https://github.com/go-sql-driver/mysql)
 - [sqlx 项目文档](https://github.com/jmoiron/sqlx)
-- [sqlx 使用说明](https://jmoiron.github.io/sqlx/)
