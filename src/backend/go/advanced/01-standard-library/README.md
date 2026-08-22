@@ -20,6 +20,11 @@ tag:
   - fmt
   - time
   - flag
+  - io
+  - bufio
+  - log
+  - slog
+  - strconv
   - database/sql
   - sync
 ---

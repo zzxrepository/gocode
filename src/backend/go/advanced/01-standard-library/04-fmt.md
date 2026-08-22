@@ -1,235 +1,578 @@
 ---
-permalink: /backend/go/advanced/01-standard-library/04-fmt/
-title: 04. fmt：格式化、错误包装与文本输入
+title: 04. fmt：格式化输入与输出
 shortTitle: 04. fmt
 order: 4
+permalink: /backend/go/advanced/01-standard-library/04-fmt/
 category:
   - Go
   - Golang 进阶知识
   - 标准库
 tag:
   - Go
-  - fmt
-  - 格式化
-  - 错误处理
-  - io.Writer
+  - 标准库
 ---
 
-# 04. fmt：格式化、错误包装与文本输入
+# 04. fmt：格式化输入与输出
 
 ## 前言
 
-fmt 是写 Go 时最早接触的包之一：打印日志、构造错误消息、输出调试对象都会用到它。但 fmt 的价值不止是 println。它负责把 Go 值格式化为文本，并将文本发送到终端、文件、网络连接或内存缓冲区，也能从简单文本中扫描值。
+`fmt` 是 Go 最常见的格式化输入输出工具。内容从输出、构造字符串和错误，到格式化规则与扫描输入，保留原有示例逐项说明。
 
-下面以“生成订单结算单”为例。结算单不直接写死到终端，而是接收 io.Writer：生产代码可传 HTTP 响应或文件，测试可传内存缓冲区。这种写法能让格式化逻辑复用且可验证。
+> 说明：本章按原有内容、示例和顺序拆分为独立文章。代码中的资源关闭、错误处理、参数含义等关键点均保留在原示例及其紧邻说明中，便于对照阅读。
 
-## 输出目的地决定使用哪组函数
+## 14.1.1 `fmt` 包概述
 
-| 函数族 | 输出目的地 | 常用函数 | 场景 |
-| --- | --- | --- | --- |
-| Print | 标准输出 | Println、Printf | 临时命令行提示 |
-| Fprint | 指定 io.Writer | Fprintln、Fprintf | 文件、HTTP、标准错误、缓冲区 |
-| Sprint | 返回 string | Sprintf | 构造文本或错误信息 |
-| Append | 追加到 []byte | Appendf | 已有字节缓冲区 |
+`fmt` 包实现了格式化输入与输出，常用函数可以分为以下几组：
 
-名称最后的 f 表示使用格式字符串；ln 表示添加换行。不同函数族的格式规则相同，差别只是结果被送到哪里。
+| 函数组        | 主要作用                  | 典型函数                        |
+| ------------- | ------------------------- | ------------------------------- |
+| `Print` 系列  | 输出到标准输出            | `Print`、`Printf`、`Println`    |
+| `Fprint` 系列 | 输出到指定的 `io.Writer`  | `Fprint`、`Fprintf`、`Fprintln` |
+| `Sprint` 系列 | 格式化并返回字符串        | `Sprint`、`Sprintf`、`Sprintln` |
+| `Errorf`      | 构造格式化错误            | `Errorf`                        |
+| `Scan` 系列   | 从标准输入读取            | `Scan`、`Scanf`、`Scanln`       |
+| `Fscan` 系列  | 从指定的 `io.Reader` 读取 | `Fscan`、`Fscanf`、`Fscanln`    |
+| `Sscan` 系列  | 从字符串读取              | `Sscan`、`Sscanf`、`Sscanln`    |
 
-## 一个可复用的结算单
+函数名中的字母通常具有以下含义：
 
-~~~go
+- `F`：操作对象由调用者提供，例如 `io.Writer` 或 `io.Reader`；
+- `S`：返回字符串，或者从字符串中读取；
+- `f`：使用格式字符串；
+- `ln`：输出时追加换行，或者扫描时以换行为边界。
+
+## 14.1.2 `Print`、`Printf` 与 `Println`
+
+这三个函数都将内容写入标准输出 `os.Stdout`：
+
+```go
+func Print(a ...any) (n int, err error)
+func Printf(format string, a ...any) (n int, err error)
+func Println(a ...any) (n int, err error)
+```
+
+它们的区别如下：
+
+- `Print` 使用默认格式输出，不会自动换行；
+- `Printf` 根据格式字符串输出，不会自动换行；
+- `Println` 使用默认格式输出，在参数之间添加空格，并在末尾追加换行。
+
+```go
+package main
+
+import "fmt"
+
+func main() {
+    // 示例数据分别用于字符串和整数占位符。
+    name := "张三"
+    age := 20
+
+    // Print 不追加换行，因此把换行符作为普通参数传入。
+    fmt.Print("姓名：", name, "，年龄：", age, "\n")
+    // Printf 按 %s、%d 精确控制输出格式。
+    fmt.Printf("姓名：%s，年龄：%d\n", name, age)
+    // Println 自动在参数之间加空格，并在末尾追加换行。
+    fmt.Println("姓名：", name, "年龄：", age)
+}
+```
+
+输出结果：
+
+```text
+姓名：张三，年龄：20
+姓名：张三，年龄：20
+姓名： 张三 年龄： 20
+```
+
+对于结构固定、需要精确控制格式的输出，通常使用 `Printf`；只需要简单打印一行内容时，可以使用 `Println`。
+
+## 14.1.3 `Fprint`：写入指定的 `io.Writer`
+
+`Fprint` 系列函数将内容写入调用者提供的 `io.Writer`：
+
+```go
+func Fprint(w io.Writer, a ...any) (n int, err error)
+func Fprintf(w io.Writer, format string, a ...any) (n int, err error)
+func Fprintln(w io.Writer, a ...any) (n int, err error)
+```
+
+文件、标准输出、标准错误、网络连接和内存缓冲区等类型都可以实现 `io.Writer`。
+
+```go
 package main
 
 import (
-	`bytes`
-	`fmt`
-	`io`
-	`os`
+    "fmt"
+    "os"
 )
 
-type Order struct {
-	ID          int64
-	Customer    string
-	AmountCents int64
-	Paid        bool
-}
+func main() {
+    // 目标可以是任意 io.Writer；这里先写到标准输出。
+    fmt.Fprintln(os.Stdout, "写入标准输出")
 
-// WriteReceipt 将结算单写入 w，不依赖具体文件、终端或 HTTP 实现。
-// io.Writer 是“可写入字节”的接口；os.Stdout、*os.File、bytes.Buffer 都实现它。
-func WriteReceipt(w io.Writer, order Order) error {
-	// Fprintf 返回写入字节数和错误。写入文件或网络时必须检查错误，
-	// 因为磁盘空间不足、客户端断开等情况都会使写入失败。
-	if _, err := fmt.Fprintf(w, `订单号：%06d\n`, order.ID); err != nil {
-		return fmt.Errorf(`write order ID: %w`, err)
-	}
-	if _, err := fmt.Fprintf(w, `客户：%s\n`, order.Customer); err != nil {
-		return fmt.Errorf(`write customer: %w`, err)
-	}
-	if _, err := fmt.Fprintf(w, `金额：%.2f 元\n`, float64(order.AmountCents)/100); err != nil {
-		return fmt.Errorf(`write amount: %w`, err)
-	}
-	if _, err := fmt.Fprintf(w, `状态：%t\n`, order.Paid); err != nil {
-		return fmt.Errorf(`write status: %w`, err)
-	}
-	return nil
+    // 以创建、只写、追加方式打开，避免覆盖旧文件内容。
+    file, err := os.OpenFile(
+        "example.txt",
+        os.O_CREATE|os.O_WRONLY|os.O_APPEND,
+        0o644,
+    )
+    if err != nil {
+        fmt.Fprintln(os.Stderr, "打开文件失败：", err)
+        return
+    }
+    // 成功打开后延迟关闭文件，释放文件描述符。
+    defer file.Close()
+
+    // Fprintf 的返回错误反映写入目标是否成功。
+    if _, err := fmt.Fprintf(file, "用户名：%s\n", "张三"); err != nil {
+        fmt.Fprintln(os.Stderr, "写入文件失败：", err)
+    }
 }
+```
+
+在真实项目中，向文件、网络连接等目标写入数据时，应检查函数返回的错误。
+
+## 14.1.4 `Sprint`：生成格式化字符串
+
+`Sprint` 系列函数不会直接输出，而是返回生成后的字符串：
+
+```go
+func Sprint(a ...any) string
+func Sprintf(format string, a ...any) string
+func Sprintln(a ...any) string
+```
+
+```go
+package main
+
+import "fmt"
 
 func main() {
-	order := Order{ID: 42, Customer: `李雷`, AmountCents: 1299, Paid: true}
+    // Sprint 系列只构造字符串，不会直接输出。
+    name := "张三"
+    age := 20
 
-	// 终端也是 io.Writer。
-	if err := WriteReceipt(os.Stdout, order); err != nil {
-		fmt.Fprintln(os.Stderr, `输出结算单失败：`, err)
-	}
+    // 分别比较默认拼接、格式化拼接和自动换行的结果。
+    s1 := fmt.Sprint("姓名：", name)
+    s2 := fmt.Sprintf("姓名：%s，年龄：%d", name, age)
+    s3 := fmt.Sprintln("姓名：", name, "年龄：", age)
 
-	// 测试或构造 HTTP 响应时，使用内存缓冲区而不是捕获终端输出。
-	var buffer bytes.Buffer
-	if err := WriteReceipt(&buffer, order); err != nil {
-		panic(err)
-	}
-	fmt.Printf(`内存中的结算单：%q\n`, buffer.String())
+    // %q 用引号和转义符显示字符串，便于观察末尾换行。
+    fmt.Printf("%q\n", s1)
+    fmt.Printf("%q\n", s2)
+    fmt.Printf("%q\n", s3)
 }
-~~~
+```
 
-%06d 表示最小宽度为 6 的整数，并在左边补 0；%.2f 表示保留两位小数；%t 输出 true 或 false。金额在领域模型中保存为整数分，只有显示时才换算为元，避免浮点计算精度问题。
+输出结果：
 
-## Print、Printf 与 Println
+```text
+"姓名：张三"
+"姓名：张三，年龄：20"
+"姓名： 张三 年龄： 20\n"
+```
 
-~~~go
-name, count := `Go`, 3
+`Sprintln` 返回的字符串末尾包含换行符。需要构造包含多个字段的提示信息、错误信息或文件内容时，通常使用 `Sprintf`。
 
-fmt.Print(`语言：`, name, `\n`)                 // 默认格式；不自动换行。
-fmt.Println(`语言：`, name, `数量：`, count)     // 参数间加空格，末尾换行。
-fmt.Printf(`语言：%s，数量：%d\n`, name, count) // 完全由格式字符串控制。
-~~~
+如果只是连续拼接大量普通字符串，应优先考虑 `strings.Builder`，避免反复创建临时字符串。
 
-格式固定时优先使用 Printf 或 Fprintf，格式在代码里一目了然。调试复合对象时，先掌握下列动词即可：
+## 14.1.5 使用 `Errorf` 构造和包装错误
 
-| 目的 | 动词 | 说明 |
-| --- | --- | --- |
-| 默认显示 | %v | 使用值的默认格式 |
-| 调试结构体 | %+v、%#v | 前者输出字段名，后者接近 Go 语法 |
-| 查看类型 | %T | 输出动态类型 |
-| 字符串 | %s、%q | %q 带引号并转义，适合排查空格和换行 |
-| 数字 | %d、%x、%08d | 十进制、十六进制、左补零 |
-| 浮点 | %f、%.2f、%g | 固定小数位或紧凑格式 |
-| 字节 | %x、% X | 后者在字节之间添加空格 |
+`fmt.Errorf` 根据格式字符串构造一个满足 `error` 接口的值：
 
-~~~go
-type Config struct {
-	Port  int
-	Debug bool
-}
+```go
+func Errorf(format string, a ...any) error
+```
 
-cfg := Config{Port: 8080, Debug: true}
-fmt.Printf(`%v\n`, cfg)  // {8080 true}
-fmt.Printf(`%+v\n`, cfg) // {Port:8080 Debug:true}
-fmt.Printf(`%#v\n`, cfg) // main.Config{Port:8080, Debug:true}
-fmt.Printf(`%T\n`, cfg)  // main.Config
+```go
+// Errorf 按格式构造一个实现 error 接口的值。
+err := fmt.Errorf("用户 %q 不存在", "张三")
+fmt.Println(err)
+```
 
-fmt.Printf(`|%-8s|\n`, `Go`)      // 左对齐：|Go      |
-fmt.Printf(`|%08d|\n`, 123)       // 补零：|00000123|
-fmt.Printf(`|%.3s|\n`, `Gopher`)  // 字符串按 rune 截断：|Gop|
-fmt.Printf(`|%8.2f|\n`, 12.3456) // |   12.35|
-fmt.Printf(`完成度：100%%\n`)      // %% 输出字面量百分号。
-~~~
+使用 `%w` 可以包装底层错误，使调用者能够通过 `errors.Is` 和 `errors.As` 检查错误链：
 
-宽度是最小输出宽度，内容更长时不会被截断。若出现 %!d(string=...)、%!(EXTRA ...) 或 %!s(MISSING)，说明动词和参数的类型或数量不匹配。运行 go vet ./... 能发现很多此类错误。
-
-## Sprintf、Appendf 和 Stringer
-
-Sprintf 返回字符串；需要追加到已有字节缓冲区时使用 Appendf，避免先产生临时字符串再复制。
-
-~~~go
-requestID := `req-42`
-message := fmt.Sprintf(`request_id=%s status=%d`, requestID, 200)
-
-buf := make([]byte, 0, 64)
-buf = fmt.Appendf(buf, `user=%q `, `alice`)
-buf = fmt.Appendf(buf, `attempt=%d`, 3)
-fmt.Println(message, string(buf))
-~~~
-
-若类型实现 String() string，fmt 在适用格式下会调用它。该方法应无副作用，并避免泄漏敏感数据。
-
-~~~go
-type Money int64 // 单位：分
-
-func (m Money) String() string {
-	// 转为基础类型，防止在 String 内再次格式化 Money 而递归调用 String。
-	return fmt.Sprintf(`%.2f 元`, float64(m)/100)
-}
-
-var price Money = 1299
-fmt.Println(price) // 12.99 元
-~~~
-
-## Errorf：增加上下文，同时保留错误判断
-
-~~~go
+```go
 package main
 
 import (
-	`errors`
-	`fmt`
-	`os`
+    "errors"
+    "fmt"
+    "os"
 )
 
-func readConfig(path string) error {
-	_, err := os.ReadFile(path)
-	if err != nil {
-		// %w 将原始错误放入错误链，调用者仍可用 errors.Is 判断它。
-		return fmt.Errorf(`read config %q: %w`, path, err)
-	}
-	return nil
+func readConfig() error {
+    // Open 返回底层文件错误，例如文件不存在。
+    _, err := os.Open("config.yaml")
+    if err != nil {
+        // %w 保留底层错误，使调用者能用 errors.Is 识别它。
+        return fmt.Errorf("读取配置文件失败：%w", err)
+    }
+    return nil
 }
 
 func main() {
-	err := readConfig(`missing.yaml`)
-	if errors.Is(err, os.ErrNotExist) {
-		fmt.Println(`配置文件不存在：`, err)
-	}
+    // 通过错误链判断，而不是比较错误文本。
+    err := readConfig()
+    if errors.Is(err, os.ErrNotExist) {
+        fmt.Println("配置文件不存在")
+    }
 }
-~~~
+```
 
-只有调用方需要识别底层错误时才使用 %w；若不应暴露内部细节，使用 %v。错误消息要提供操作和对象，例如 read config "app.yaml"，不要只重复一层 failed。
+只有在调用者需要识别底层错误时才使用 `%w`；如果底层实现属于不希望暴露的内部细节，可以使用 `%v` 只保留错误文本。
 
-## 文本输入：Scan 的适用边界
+## 14.1.6 常用格式化占位符
 
-Scan、Fscan、Sscan 都按空白字符分隔字段，目标必须传指针：
+### 1. 通用占位符
 
-~~~go
-reader := strings.NewReader(`alice 18 true`)
+| 占位符 | 说明                                 |
+| ------ | ------------------------------------ |
+| `%v`   | 使用值的默认格式                     |
+| `%+v`  | 与 `%v` 类似；输出结构体时包含字段名 |
+| `%#v`  | 输出值的 Go 语法表示                 |
+| `%T`   | 输出值的具体类型                     |
+| `%%`   | 输出百分号 `%`                       |
+
+```go
+package main
+
+import "fmt"
+
+type User struct {
+    Name string
+    Age  int
+}
+
+func main() {
+    // 结构体实例用于观察不同通用占位符的输出。
+    user := User{Name: "张三", Age: 20}
+
+    // 依次输出默认格式、带字段名、Go 语法、类型和字面量百分号。
+    fmt.Printf("%v\n", user)
+    fmt.Printf("%+v\n", user)
+    fmt.Printf("%#v\n", user)
+    fmt.Printf("%T\n", user)
+    fmt.Printf("完成度：100%%\n")
+}
+```
+
+### 2. 布尔值
+
+| 占位符 | 说明                   |
+| ------ | ---------------------- |
+| `%t`   | 输出 `true` 或 `false` |
+
+### 3. 整数与字符
+
+| 占位符 | 说明                                 |
+| ------ | ------------------------------------ |
+| `%b`   | 二进制                               |
+| `%c`   | 对应 Unicode 码点表示的字符          |
+| `%d`   | 十进制                               |
+| `%o`   | 八进制                               |
+| `%O`   | 带 `0o` 前缀的八进制                 |
+| `%x`   | 十六进制，使用 `a-f`                 |
+| `%X`   | 十六进制，使用 `A-F`                 |
+| `%U`   | Unicode 格式，例如 `U+0041`          |
+| `%q`   | 使用单引号包围并按 Go 字符字面量转义 |
+
+```go
+// 65 对应 ASCII/Unicode 字符 A，便于观察不同进制和字符格式。
+n := 65
+fmt.Printf("%b\n", n)
+fmt.Printf("%c\n", n)
+fmt.Printf("%d\n", n)
+fmt.Printf("%o\n", n)
+fmt.Printf("%O\n", n)
+fmt.Printf("%x\n", n)
+fmt.Printf("%X\n", n)
+fmt.Printf("%U\n", n)
+fmt.Printf("%q\n", n)
+```
+
+### 4. 浮点数与复数
+
+| 占位符     | 说明                                   |
+| ---------- | -------------------------------------- |
+| `%b`       | 无小数部分、使用二进制指数的科学计数法 |
+| `%e`       | 科学计数法，使用小写 `e`               |
+| `%E`       | 科学计数法，使用大写 `E`               |
+| `%f`、`%F` | 十进制小数形式                         |
+| `%g`       | 自动选择 `%e` 或 `%f`，输出更紧凑      |
+| `%G`       | 自动选择 `%E` 或 `%F`                  |
+| `%x`、`%X` | 十六进制浮点表示                       |
+
+```go
+// 同一个浮点数使用不同动词会得到不同的文本形式。
+f := 12.34
+fmt.Printf("%e\n", f)
+fmt.Printf("%E\n", f)
+fmt.Printf("%f\n", f)
+fmt.Printf("%g\n", f)
+```
+
+复数会分别格式化实部和虚部：
+
+```go
+fmt.Printf("%f\n", complex(1.2, 3.4))
+// 输出：(1.200000+3.400000i)
+```
+
+### 5. 字符串与字节切片
+
+| 占位符 | 说明                                   |
+| ------ | -------------------------------------- |
+| `%s`   | 按原始字节输出字符串或 `[]byte`        |
+| `%q`   | 使用双引号包围并按 Go 字符串字面量转义 |
+| `%x`   | 每个字节使用两个小写十六进制字符表示   |
+| `%X`   | 每个字节使用两个大写十六进制字符表示   |
+
+```go
+// 字符串含有非 ASCII 字符，可观察 %x 输出的是 UTF-8 字节。
+s := "Go语言"
+fmt.Printf("%s\n", s)
+fmt.Printf("%q\n", s)
+fmt.Printf("%x\n", s)
+fmt.Printf("%X\n", s)
+```
+
+`%x` 和 `%X` 会按字符串的 UTF-8 字节编码输出。
+
+### 6. 指针
+
+| 占位符 | 说明                                 |
+| ------ | ------------------------------------ |
+| `%p`   | 以带 `0x` 前缀的十六进制形式输出地址 |
+| `%#p`  | 输出地址但省略 `0x` 前缀             |
+
+```go
+// 取地址后再用 %p 输出指针值；地址每次运行都可能变化。
+a := 18
+fmt.Printf("%p\n", &a)
+fmt.Printf("%#p\n", &a)
+```
+
+实际地址每次运行都可能不同。
+
+## 14.1.7 宽度、精度与标志
+
+完整的格式化指令可以同时包含标志、宽度和精度：
+
+```text
+%[标志][宽度][.精度]动词
+```
+
+### 1. 宽度与精度
+
+| 格式    | 说明                        |
+| ------- | --------------------------- |
+| `%f`    | 默认宽度，默认精度为 6      |
+| `%9f`   | 最小宽度为 9，默认精度      |
+| `%.2f`  | 默认宽度，保留 2 位小数     |
+| `%9.2f` | 最小宽度为 9，保留 2 位小数 |
+| `%9.f`  | 最小宽度为 9，精度为 0      |
+
+```go
+// 宽度不足不会截断数据，只会在需要时填充空格。
+n := 88.88
+fmt.Printf("|%f|\n", n)
+fmt.Printf("|%9f|\n", n)
+fmt.Printf("|%.2f|\n", n)
+fmt.Printf("|%9.2f|\n", n)
+fmt.Printf("|%9.f|\n", n)
+```
+
+宽度表示输出至少占用的宽度，不会截断超过宽度的内容。
+
+### 2. 常用标志
+
+| 标志 | 作用                                                   |
+| ---- | ------------------------------------------------------ |
+| `+`  | 数值始终显示正负号；与 `%q` 配合时将非 ASCII 字符转义  |
+| 空格 | 正数前添加空格；与 `%x`、`%X` 配合时在字节之间添加空格 |
+| `-`  | 左对齐，右侧填充空格                                   |
+| `#`  | 使用替代格式，例如十六进制增加 `0x` 前缀               |
+| `0`  | 使用 `0` 进行左侧填充                                  |
+
+```go
+// 分别演示强制符号、空格、左对齐、替代格式和零填充。
+fmt.Printf("|%+d|\n", 12)
+fmt.Printf("|% d|\n", 12)
+fmt.Printf("|%-8s|\n", "Go")
+fmt.Printf("|%#x|\n", 255)
+fmt.Printf("|%08d|\n", 123)
+```
+
+## 14.1.8 从标准输入读取数据
+
+`fmt` 包提供 `Scan`、`Scanf` 和 `Scanln` 从标准输入中读取数据：
+
+```go
+func Scan(a ...any) (n int, err error)
+func Scanf(format string, a ...any) (n int, err error)
+func Scanln(a ...any) (n int, err error)
+```
+
+接收输入的参数必须传入指针，否则函数无法修改变量中的值。
+
+### 1. `fmt.Scan`
+
+`Scan` 按空白字符分隔输入，换行也会被视为空白字符。
+
+```go
+package main
+
+import "fmt"
+
+func main() {
+    // 扫描目标必须传指针，Scan 才能把解析结果写回变量。
+    var name string
+    var age int
+    var married bool
+
+    fmt.Print("请输入姓名、年龄和婚姻状态：")
+    // Scan 按空白分隔读取三个字段，n 是成功赋值的字段数量。
+    n, err := fmt.Scan(&name, &age, &married)
+    if err != nil {
+        fmt.Println("读取失败：", err)
+        return
+    }
+
+    fmt.Printf(
+        "成功读取 %d 项：name=%s age=%d married=%t\n",
+        n,
+        name,
+        age,
+        married,
+    )
+}
+```
+
+### 2. `fmt.Scanf`
+
+`Scanf` 根据格式字符串匹配输入，普通字符必须与输入内容对应：
+
+```go
+// 普通文本和占位符都必须与输入结构匹配。
+n, err := fmt.Scanf(
+    "name=%s age=%d married=%t",
+    &name,
+    &age,
+    &married,
+)
+```
+
+`Scanf` 对格式要求较严格，不适合解析由用户任意输入的复杂文本。
+
+### 3. `fmt.Scanln`
+
+`Scanln` 与 `Scan` 类似，但遇到换行就停止扫描：
+
+```go
+// Scanln 在换行处停止，仍按空白分隔每个字段。
+n, err := fmt.Scanln(&name, &age)
+```
+
+`Scanln` 仍然按照空白字符拆分数据，因此不能直接读取包含空格的完整句子。
+
+## 14.1.9 读取包含空格的整行文本
+
+输入内容可能包含空格时，应使用 `bufio.Reader` 或 `bufio.Scanner`。
+
+```go
+package main
+
+import (
+    "bufio"
+    "fmt"
+    "os"
+    "strings"
+)
+
+func main() {
+    // Reader 保留输入流状态，适合读取包含空格的一整行。
+    reader := bufio.NewReader(os.Stdin)
+
+    fmt.Print("请输入一段文字：")
+    // 读到换行符为止；返回的字符串通常包含该换行符。
+    text, err := reader.ReadString('\n')
+    if err != nil {
+        fmt.Println("读取失败：", err)
+        return
+    }
+
+    // 去除换行和两端空白，再作为最终文本使用。
+    text = strings.TrimSpace(text)
+    fmt.Printf("读取结果：%q\n", text)
+}
+```
+
+也可以使用 `bufio.Scanner`：
+
+```go
+// Scanner 默认以行为 token，适合简单的逐行交互输入。
+scanner := bufio.NewScanner(os.Stdin)
+if scanner.Scan() {
+    fmt.Println(scanner.Text())
+}
+if err := scanner.Err(); err != nil {
+    fmt.Println("读取失败：", err)
+}
+```
+
+## 14.1.10 从 `io.Reader` 或字符串中扫描
+
+`Fscan` 系列从指定的 `io.Reader` 读取：
+
+```go
+func Fscan(r io.Reader, a ...any) (n int, err error)
+func Fscanf(r io.Reader, format string, a ...any) (n int, err error)
+func Fscanln(r io.Reader, a ...any) (n int, err error)
+```
+
+```go
+// strings.NewReader 将内存中的字符串适配为 io.Reader。
+reader := strings.NewReader("张三 20 true")
+
 var name string
 var age int
 var active bool
 
-// Fscan 从指定 Reader 读取，而 &name 等指针允许函数写入变量。
+// 从 reader 中按空白分隔读取，并把结果写入三个指针。
 n, err := fmt.Fscan(reader, &name, &age, &active)
-if err != nil {
-	// 此处只演示扫描；真实函数应将错误返回给调用者。
-	panic(fmt.Errorf(`scan input: %w`, err))
-}
-fmt.Printf(`读取 %d 项：name=%q age=%d active=%t\n`, n, name, age, active)
-~~~
+fmt.Println(n, err, name, age, active)
+```
 
-Scan 从标准输入读，Sscan 从字符串读，Scanf 用严格格式匹配。若要读取包含空格的一整行，应使用 bufio.Reader 或 bufio.Scanner：
+`Sscan` 系列直接从字符串中读取：
 
-~~~go
-reader := bufio.NewReader(os.Stdin)
-fmt.Print(`请输入备注：`)
-line, err := reader.ReadString('\n') // 读到换行，保留用户输入中的空格。
-if err != nil && !errors.Is(err, io.EOF) {
-	panic(fmt.Errorf(`read note: %w`, err))
-}
-note := strings.TrimSpace(line) // 去掉行尾换行和两端空白。
-~~~
+```go
+func Sscan(str string, a ...any) (n int, err error)
+func Sscanf(str string, format string, a ...any) (n int, err error)
+func Sscanln(str string, a ...any) (n int, err error)
+```
+
+```go
+input := "name=张三 age=20"
+
+var name string
+var age int
+
+// Sscanf 直接从 input 解析；格式中的固定文本也必须匹配。
+n, err := fmt.Sscanf(input, "name=%s age=%d", &name, &age)
+```
+
+## 14.1.11 `fmt` 使用建议
+
+1. 简单打印一行内容可使用 `Println`，需要稳定格式时使用 `Printf`。
+2. 需要得到字符串时使用 `Sprintf`，不要先输出再截取。
+3. 写文件、网络连接或缓冲区时使用 `Fprint` 系列，并检查错误。
+4. 包装底层错误时使用 `%w`，仅需要错误文本时使用 `%v`。
+5. `Scan` 系列更适合格式简单且明确的输入；交互式程序通常先读取整行，再校验和解析。
+6. 格式字符串与参数类型不匹配时，输出中可能出现 `%!` 开头的诊断信息，可使用 `go vet` 检查常见错误。
+
+
 
 ## 总结
 
-fmt 的关键是将“格式化”与“输出目的地”分开。固定文本用 Fprintf，构造字符串用 Sprintf 或 Appendf，错误上下文用 Errorf 的 %w，简单的空白分隔文本才使用 Scan 系列。让格式化函数接收 io.Writer，能显著提高复用性和可测试性。
-
-## 参考资料
-
-- [Go 官方 fmt 包文档](https://pkg.go.dev/fmt)
-- [Go 官方 errors 包文档](https://pkg.go.dev/errors)
-- [Go 官方 io 包文档](https://pkg.go.dev/io)
+`fmt` 的核心是选择正确的函数族：输出到标准输出使用 `Print`，写入指定目标使用 `Fprint`，构造字符串使用 `Sprint`，构造或包装错误使用 `Errorf`。处理外部输入时，始终传入指针并检查返回错误；读取整行文本时，使用 `bufio.Reader` 或 `bufio.Scanner`。

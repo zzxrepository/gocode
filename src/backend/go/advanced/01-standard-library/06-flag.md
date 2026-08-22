@@ -1,249 +1,263 @@
 ---
-permalink: /backend/go/advanced/01-standard-library/06-flag/
-title: 06. flag：命令行参数、帮助与子命令
+title: 06. flag：解析命令行参数
 shortTitle: 06. flag
 order: 6
+permalink: /backend/go/advanced/01-standard-library/06-flag/
 category:
   - Go
   - Golang 进阶知识
   - 标准库
 tag:
   - Go
-  - flag
-  - CLI
-  - 命令行参数
-  - FlagSet
+  - 标准库
 ---
 
-# 06. flag：命令行参数、帮助与子命令
+# 06. flag：解析命令行参数
 
 ## 前言
 
-服务端程序和脚本都需要从启动命令接收配置：端口、超时、日志级别、输入文件。flag 是 Go 标准库中处理这类简单、明确选项的工具。
+`flag` 将命令行选项解析为具有默认值和帮助文本的 Go 变量。原有内容从 `os.Args` 开始，逐步说明选项、位置参数与子命令。
 
-这里实现 campaignctl 命令行工具：
+> 说明：本章按原有内容、示例和顺序拆分为独立文章。代码中的资源关闭、错误处理、参数含义等关键点均保留在原示例及其紧邻说明中，便于对照阅读。
 
-~~~text
-campaignctl create -name "夏季活动" -start "2026-08-22 09:00" -duration 9h
-campaignctl show 42
-~~~
+## 14.3.1 命令行参数与 `os.Args`
 
-create 是子命令，后面带自己的选项；show 接收一个位置参数。这个结构覆盖了服务和脚本最常见的参数组织方式。
+程序启动时，操作系统会把命令行参数传递给进程。Go 使用 `os.Args` 保存这些参数，其类型为 `[]string`：
 
-## os.Args 与最小 flag 示例
+- `os.Args[0]` 通常是程序的执行路径或名称；
+- `os.Args[1:]` 是用户传入的参数。
 
-操作系统会将命令拆成字符串放在 os.Args：os.Args[0] 是程序路径，os.Args[1:] 才是用户输入。少量无名称参数可以直接读取切片；有默认值、帮助、类型转换时交给 flag。
-
-~~~go
+```go
 package main
 
 import (
-	`flag`
-	`fmt`
-	`time`
+    "fmt"
+    "os"
 )
 
 func main() {
-	// 返回指针的定义方式适合选项较少的程序。
-	port := flag.Int(`port`, 8080, `HTTP 监听端口`)
-	debug := flag.Bool(`debug`, false, `启用调试日志`)
-	timeout := flag.Duration(`timeout`, 3*time.Second, `请求超时，例如 500ms 或 3s`)
-
-	// 所有选项定义完再 Parse；此前变量仍是默认值。
-	flag.Parse()
-
-	fmt.Printf(`port=%d debug=%t timeout=%s\n`, *port, *debug, *timeout)
-	fmt.Printf(`positionals=%q\n`, flag.Args()) // 未被解析为选项的剩余参数。
+    // os.Args[0] 是程序路径，后续元素才是用户给出的文本参数。
+    for i, arg := range os.Args {
+        fmt.Printf("os.Args[%d] = %q\n", i, arg)
+    }
 }
-~~~
+```
 
-~~~bash
-go run . -port=9000 -debug -timeout=800ms config.yaml
-# port=9000 debug=true timeout=800ms
-# positionals=["config.yaml"]
-~~~
+执行：
 
-标准 flag 支持 -port=9000、--port=9000 和非布尔参数的 -port 9000。布尔参数 -debug 即为 true；写 false 时使用 -debug=false，不要写 -debug false，后者会把 false 作为位置参数。
+```bash
+go run . hello world
+```
 
-flag 在第一个位置参数处停止解析。因此 app input.txt -port=9000 中的 port 不会生效；应把选项放在位置参数之前，或为子命令使用独立 FlagSet。
+可能得到：
 
-## 用 FlagSet 实现可测试的子命令
+```text
+os.Args[0] = "/tmp/go-build.../exe/example"
+os.Args[1] = "hello"
+os.Args[2] = "world"
+```
 
-包级 flag.CommandLine 出错会直接输出并退出。子命令用 flag.NewFlagSet，选择 ContinueOnError，让调用方决定错误如何显示；解析函数也因此能被单元测试。
+`os.Args` 适合参数很少、无需名称和默认值的场景。需要处理 `-port`、`-debug` 等选项时，应使用 `flag` 包。
 
-~~~go
+## 14.3.2 定义并解析选项
+
+### 1. 返回指针的定义函数
+
+```go
+// 每个定义函数依次接收：选项名、默认值、帮助文本，并返回结果指针。
+name := flag.String("name", "guest", "用户名")
+age := flag.Int("age", 18, "年龄")
+debug := flag.Bool("debug", false, "是否开启调试模式")
+timeout := flag.Duration("timeout", 5*time.Second, "超时时间")
+```
+
+这些函数返回对应类型的指针。调用 `flag.Parse()` 后，通过解引用取得结果：
+
+```go
+// Parse 读取当前命令行并把结果写入上面的指针。
+flag.Parse()
+fmt.Println(*name, *age, *debug, *timeout)
+```
+
+### 2. 将结果写入已有变量
+
+```go
+// 用已有变量接收参数，便于集中保存到后续的配置结构体。
+var (
+    name    string
+    age     int
+    debug   bool
+    timeout time.Duration
+)
+
+// Var 形式的第一个参数是结果写入位置。
+flag.StringVar(&name, "name", "guest", "用户名")
+flag.IntVar(&age, "age", 18, "年龄")
+flag.BoolVar(&debug, "debug", false, "是否开启调试模式")
+flag.DurationVar(&timeout, "timeout", 5*time.Second, "超时时间")
+
+// 所有选项定义完成后只解析一次。
+flag.Parse()
+```
+
+配置项较多时，`TypeVar` 形式通常更便于将结果集中存入配置结构体。
+
+## 14.3.3 常用参数类型
+
+| 参数类型 | 常用函数                  | 示例                            |
+| -------- | ------------------------- | ------------------------------- |
+| 字符串   | `String`、`StringVar`     | `-name=alice`                   |
+| 整数     | `Int`、`IntVar`           | `-port=8080`                    |
+| 布尔值   | `Bool`、`BoolVar`         | `-debug`、`-debug=false`        |
+| 浮点数   | `Float64`、`Float64Var`   | `-ratio=0.75`                   |
+| 时间间隔 | `Duration`、`DurationVar` | `-timeout=3s`、`-timeout=1m30s` |
+
+`Duration` 参数使用与 `time.ParseDuration` 相同的格式。
+
+## 14.3.4 参数写法与解析规则
+
+标准库 `flag` 支持以下形式：
+
+```text
+-flag
+--flag
+-flag=value
+--flag=value
+-flag value    # 仅适用于非布尔参数
+```
+
+对于布尔参数：
+
+- `-debug` 表示设置为 `true`；
+- 明确设置为 `false` 时应写成 `-debug=false`；
+- 不应写成 `-debug false`，因为 `false` 会被当成普通位置参数。
+
+`flag` 遇到第一个非选项参数后会停止解析，也可以使用 `--` 显式结束选项部分。
+
+## 14.3.5 获取位置参数
+
+调用 `flag.Parse()` 后，可以读取未被解析为选项的参数：
+
+| 函数           | 作用                                      |
+| -------------- | ----------------------------------------- |
+| `flag.Args()`  | 返回全部位置参数                          |
+| `flag.Arg(i)`  | 返回第 `i` 个位置参数，越界时返回空字符串 |
+| `flag.NArg()`  | 返回位置参数数量                          |
+| `flag.NFlag()` | 返回用户实际设置的选项数量                |
+
+```go
+// Parse 之后，未被识别为选项的内容成为位置参数。
+flag.Parse()
+
+// Args、NArg、NFlag 分别读取全部位置参数、数量和已设置选项数。
+fmt.Println("位置参数：", flag.Args())
+fmt.Println("位置参数数量：", flag.NArg())
+fmt.Println("已设置选项数量：", flag.NFlag())
+```
+
+## 14.3.6 完整示例
+
+```go
 package main
 
 import (
-	`bytes`
-	`flag`
-	`fmt`
-	`io`
-	`os`
-	`time`
+    "flag"
+    "fmt"
+    "time"
 )
 
-type CreateConfig struct {
-	Name     string
-	Start    string
-	Duration time.Duration
-}
-
-// parseCreate 只解析和校验参数，不创建活动，也不调用 os.Exit。
-// out 由调用者传入，测试可以使用 bytes.Buffer 捕获帮助文本。
-func parseCreate(args []string, out io.Writer) (CreateConfig, error) {
-	fs := flag.NewFlagSet(`create`, flag.ContinueOnError)
-	fs.SetOutput(out)
-
-	var cfg CreateConfig
-	fs.StringVar(&cfg.Name, `name`, ``, `活动名称（必填）`)
-	fs.StringVar(&cfg.Start, `start`, ``, `开始时间，格式：2006-01-02 15:04`)
-	fs.DurationVar(&cfg.Duration, `duration`, time.Hour, `活动时长，例如 30m、9h`)
-
-	fs.Usage = func() {
-		fmt.Fprintln(out, `用法：campaignctl create -name NAME -start TIME [-duration 1h]`)
-		fs.PrintDefaults()
-	}
-
-	if err := fs.Parse(args); err != nil {
-		return CreateConfig{}, fmt.Errorf(`parse create flags: %w`, err)
-	}
-	if fs.NArg() != 0 {
-		return CreateConfig{}, fmt.Errorf(`create does not accept positionals: %q`, fs.Args())
-	}
-	if cfg.Name == `` || cfg.Start == `` {
-		fs.Usage()
-		return CreateConfig{}, fmt.Errorf(`name and start are required`)
-	}
-	if cfg.Duration <= 0 {
-		return CreateConfig{}, fmt.Errorf(`duration must be positive`)
-	}
-	return cfg, nil
+type config struct {
+    name    string
+    port    int
+    debug   bool
+    timeout time.Duration
 }
 
 func main() {
-	if len(os.Args) < 2 {
-		printRootUsage(os.Stderr)
-		os.Exit(2) // 2 通常表示命令行用法错误。
-	}
+    // cfg 统一承载经过解析的启动配置。
+    var cfg config
 
-	switch os.Args[1] {
-	case `create`:
-		cfg, err := parseCreate(os.Args[2:], os.Stderr)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, `错误：`, err)
-			os.Exit(2)
-		}
-		fmt.Printf(`创建活动：name=%q start=%q duration=%s\n`, cfg.Name, cfg.Start, cfg.Duration)
+    // 将每个命令行选项绑定到 cfg 的对应字段。
+    flag.StringVar(&cfg.name, "name", "server", "服务名称")
+    flag.IntVar(&cfg.port, "port", 8080, "监听端口")
+    flag.BoolVar(&cfg.debug, "debug", false, "开启调试模式")
+    flag.DurationVar(&cfg.timeout, "timeout", 5*time.Second, "请求超时时间")
+    // 必须在读取 cfg 字段前完成解析。
+    flag.Parse()
 
-	case `show`:
-		if err := runShow(os.Args[2:], os.Stdout); err != nil {
-			fmt.Fprintln(os.Stderr, `错误：`, err)
-			os.Exit(2)
-		}
-
-	default:
-		fmt.Fprintf(os.Stderr, `未知子命令：%q\n`, os.Args[1])
-		printRootUsage(os.Stderr)
-		os.Exit(2)
-	}
+    fmt.Printf(
+        "name=%s port=%d debug=%t timeout=%s\n",
+        cfg.name,
+        cfg.port,
+        cfg.debug,
+        cfg.timeout,
+    )
+    // 例如 config.yaml 这类不带 - 前缀的参数会保留在 Args 中。
+    fmt.Println("位置参数：", flag.Args())
 }
+```
 
-func runShow(args []string, out io.Writer) error {
-	if len(args) != 1 {
-		return fmt.Errorf(`用法：campaignctl show ID`)
-	}
-	// 省略数据库查询，只展示位置参数的校验与输出边界。
-	_, err := fmt.Fprintf(out, `显示活动 ID=%s\n`, args[0])
-	return err
+运行：
+
+```bash
+go run . -name=user-api -port=9000 -debug -timeout=3s config.yaml
+```
+
+使用 `-h` 或 `--help` 可以查看自动生成的帮助信息。
+
+## 14.3.7 使用 `FlagSet` 处理子命令
+
+当程序需要 `serve`、`version` 等子命令时，可以为不同子命令创建独立的 `FlagSet`：
+
+```go
+package main
+
+import (
+    "flag"
+    "fmt"
+    "os"
+)
+
+func main() {
+    // 至少需要一个子命令；没有时给出用法并以错误码退出。
+    if len(os.Args) < 2 {
+        fmt.Fprintln(os.Stderr, "用法：app <serve|version>")
+        os.Exit(2)
+    }
+
+    // 第一个用户参数决定应该使用哪套 FlagSet。
+    switch os.Args[1] {
+    case "serve":
+        // serve 拥有独立的选项集合，不会与其他子命令混淆。
+        serveFlags := flag.NewFlagSet("serve", flag.ExitOnError)
+        port := serveFlags.Int("port", 8080, "监听端口")
+        // 子命令名之后的参数才属于 serve 的选项。
+        serveFlags.Parse(os.Args[2:])
+
+        fmt.Println("启动服务，端口：", *port)
+
+    case "version":
+        fmt.Println("v1.0.0")
+
+    default:
+        fmt.Fprintf(os.Stderr, "未知子命令：%s\n", os.Args[1])
+        os.Exit(2)
+    }
 }
+```
 
-func printRootUsage(out io.Writer) {
-	fmt.Fprintln(out, `用法：campaignctl <create|show> [选项]`)
-}
+命令层级很深、需要自动补全或复杂帮助页面时，再考虑专门的第三方 CLI 框架。
 
-func ExampleParseCreate() {
-	var output bytes.Buffer
-	cfg, err := parseCreate(
-		[]string{`-name`, `夏季活动`, `-start`, `2026-08-22 09:00`, `-duration`, `9h`},
-		&output,
-	)
-	fmt.Println(err == nil, cfg.Name, cfg.Duration)
-	// Output: true 夏季活动 9h0m0s
-}
-~~~
+## 14.3.8 使用建议
 
-上例将“解析”与“执行”分开：parseCreate 直接接收 []string 和 io.Writer，main 只负责调度与退出码。这比把 flag.Parse、os.Exit、业务调用堆在一起更容易维护和测试。
+1. 小型工具、脚本和服务启动参数可以直接使用 `flag`。
+2. 参数较多时，将结果写入配置结构体。
+3. 帮助文本应说明用途、默认值和单位。
+4. 端口、并发数等参数仍需进行业务范围校验。
+5. 注意标准 `flag` 在第一个位置参数处停止解析的规则。
 
-## 位置参数、帮助和显式选项
 
-| 方法 | 含义 |
-| --- | --- |
-| Args() | 所有位置参数 |
-| Arg(i) | 第 i 个位置参数，越界为空字符串 |
-| NArg() | 位置参数数量 |
-| NFlag() | 用户显式设置的选项数量 |
-| Visit(fn) | 遍历用户显式设置的选项 |
-
-~~~go
-fs := flag.NewFlagSet(`inspect`, flag.ContinueOnError)
-level := fs.String(`level`, `info`, `日志级别`)
-_ = fs.Parse([]string{`-level=debug`, `config.yaml`})
-
-fmt.Println(*level)    // debug
-fmt.Println(fs.NArg()) // 1
-fmt.Println(fs.Args()) // [config.yaml]
-
-fs.Visit(func(f *flag.Flag) {
-	// 默认值不会出现在 Visit 中，只有用户明确传入的选项才会出现。
-	fmt.Printf(`%s=%s\n`, f.Name, f.Value.String())
-})
-~~~
-
--h 或 -help 是 flag 的约定帮助选项。自定义 Usage 时应说明命令结构、必填项、参数单位和典型示例；帮助文本就是 CLI 的公开接口。
-
-## 自定义参数类型
-
-内置类型无法覆盖所有校验规则。例如日志级别必须是固定集合。实现 flag.Value 后，可在解析阶段完成转换和校验：
-
-~~~go
-type logLevel string
-
-func (l *logLevel) String() string {
-	return string(*l) // PrintDefaults 输出默认值时会调用 String。
-}
-
-func (l *logLevel) Set(value string) error {
-	switch value {
-	case `debug`, `info`, `warn`, `error`:
-		*l = logLevel(value) // 仅验证成功后修改目标变量。
-		return nil
-	default:
-		return fmt.Errorf(`invalid log level %q`, value)
-	}
-}
-
-func parseLevel(args []string) (logLevel, error) {
-	fs := flag.NewFlagSet(`app`, flag.ContinueOnError)
-	level := logLevel(`info`)
-	fs.Var(&level, `log-level`, `日志级别：debug|info|warn|error`)
-	if err := fs.Parse(args); err != nil {
-		return ``, err
-	}
-	return level, nil
-}
-~~~
-
-复杂层级命令、Shell 自动补全和大量交叉校验可考虑第三方 CLI 框架；简单服务启动参数、脚本和内部工具优先使用标准 flag，依赖更少，行为也更透明。
 
 ## 总结
 
-flag 处理的是启动时的文本输入，而不是最终业务配置。定义选项后调用 Parse，再对端口、路径、时间、枚举值做业务校验；位置参数和选项边界必须明确。有子命令或需要测试时，使用 FlagSet 加 ContinueOnError，将 os.Exit 留在 main。
-
-将解析函数设计为接收 []string 和 io.Writer，可以保留标准库的简洁，同时得到可靠的帮助、错误处理和测试能力。
-
-## 参考资料
-
-- [Go 官方 flag 包文档](https://pkg.go.dev/flag)
-- [Go 官方 os 包文档](https://pkg.go.dev/os)
-- [Go 官方 time 包文档](https://pkg.go.dev/time)
+简单命令行程序可直接使用 `flag`；参数较多时应写入配置结构体。解析完成后再读取选项值和位置参数，并对端口、并发数等业务参数做范围校验。注意标准 `flag` 会在第一个位置参数处停止解析。
