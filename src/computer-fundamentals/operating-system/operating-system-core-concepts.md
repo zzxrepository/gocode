@@ -20,7 +20,7 @@ tag:
 
 操作系统是计算机系统中管理硬件和软件资源的中间层系统，屏蔽了底层硬件的复杂性，并为用户提供了便捷的交互方式（图形化界面、命令行界面、手势触碰、快捷键）。
 
-<img src="https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/sidebar/sanfene/os-be55aec1-e7ab-433f-97f1-14d99960b6bf.png" alt="三分恶面渣逆袭：操作系统是什么" style="zoom:50%;" />
+<img src="./assets/tobebetterjavaer/os-be55aec1-e7ab-433f-97f1-14d99960b6bf.png" alt="三分恶面渣逆袭：操作系统是什么" style="zoom:50%;" />
 
 ### 🌟操作系统主要有哪些功能？
 
@@ -63,7 +63,7 @@ tag:
 - 稳定性：用户态程序出现问题时，不会影响到整个系统，**避免了程序故障导致系统崩溃的风险**。
 - 易维护性：内核态和用户态的划分使得操作系统内核与用户程序之间有了明确的边界，有利于系统的模块化和方便维护。
 
-<img src="https://cdn.tobebetterjavaer.com/stutymore/os-20240724170451.png" alt="二哥的 Java 进阶之路：用户空间和内核空间" style="zoom:50%;" />
+<img src="./assets/tobebetterjavaer/os-20240724170451.png" alt="二哥的 Java 进阶之路：用户空间和内核空间" style="zoom:50%;" />
 
 ### 🌟用户态和内核态是如何切换的？
 
@@ -71,7 +71,7 @@ tag:
 
 **系统调用是应用程序请求操作系统内核提供服务的接口，如文件操作（如 open、read、write）、进程控制（如 fork、exec）、内存管理（如 mmap）等。**
 
-![三分恶面渣逆袭：用户态&内核态切换](https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/sidebar/sanfene/os-b358cdae-18b6-45d4-8a5b-4ea3a7cfc273.png)
+![三分恶面渣逆袭：用户态&内核态切换](./assets/tobebetterjavaer/os-b358cdae-18b6-45d4-8a5b-4ea3a7cfc273.png)
 
 ## 进程和线程
 
@@ -160,7 +160,7 @@ tag:
 - **恢复目标进程的上下文** ：从要恢复运行的进程中的进程控制块PCB中取出上下文信息，加载到 CPU 寄存器中，使目标进程接管 CPU 继续执行。
 - **切换至目标进程** ：完成上下文加载后，CPU 正式切换到目标进程，使其接续执行。
 
-<img src="https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/sidebar/sanfene/os-187d1cf9-971d-4395-b888-5e6eaf2be5f1.png" alt="三分恶面渣逆袭：进程上下文切换" style="zoom:50%;" />
+<img src="./assets/tobebetterjavaer/os-187d1cf9-971d-4395-b888-5e6eaf2be5f1.png" alt="三分恶面渣逆袭：进程上下文切换" style="zoom:50%;" />
 
 #### 进程上下文切换是切换什么呢？
 
@@ -293,13 +293,13 @@ TCB是操作系统用于管理线程的数据结构，包含了线程的状态�
 
 从表面来看，这种策略体现了一种公平性，然而其存在明显的弊端。一旦先运行的作业执行时间较长，后续较短的作业就不得不等待许久，导致短作业的完成效率受到极大影响，这显然对短作业是不利的。总体而言，FCFS 对长作业较为有利，更适合应用于 CPU 繁忙型作业的系统环境，在 I/O 繁忙型作业的系统中则不太适用，容易引发 “饥饿” 现象。
 
-![三分恶面渣逆袭：先来先服务](https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/sidebar/sanfene/os-93088d03-80c9-46c5-9eaf-eead2adb6e12.png)
+![三分恶面渣逆袭：先来先服务](./assets/tobebetterjavaer/os-93088d03-80c9-46c5-9eaf-eead2adb6e12.png)
 
 ②、**短作业优先**：**该算法的核心在于，从就绪队列中挑选预计运行时间最短的进程予以优先执行**。这样的设计，有着减少平均等待时间与响应时间的优势，也能够提升系统吞吐量，使系统在单位时间内处理更多的作业。
 
 不过，它也存在明显的局限性。一方面，精准预估进程的执行时间并非易事；另一方面，倘若短作业持续不断地被调度执行，长作业则可能不断遭到推迟。在极端情况下，比如就绪队列中短作业数量众多，长作业就会一直被挤压到队列后方，周转时间被大幅拉长，处于长期等待却难以得到运行机会的不利境地。
 
-![三分恶面渣逆袭：短作业优先](https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/sidebar/sanfene/os-517e8392-64fe-4de3-9e1c-b3a944822aba.png)
+![三分恶面渣逆袭：短作业优先](./assets/tobebetterjavaer/os-517e8392-64fe-4de3-9e1c-b3a944822aba.png)
 
 ③、**最短剩余时间优先**：这是短作业优先的一种改进形式，它是抢占式的。其基本原理是：如果一个新进程的预计执行时间比当前运行进程的剩余时间短，调度器将暂停当前的进程，并切换到新进程。这种方法也可以最小化平均等待时间，但同样面临预测执行时间的困难。
 
@@ -324,7 +324,7 @@ TCB是操作系统用于管理线程的数据结构，包含了线程的状态�
 
 然而，该算法存在一个较为明显的缺点：可能导致低优先级进程出现 “饥饿” 现象，即低优先级进程因长期无法获得 CPU 资源而无法运行，影响系统的整体性能和公平性。
 
-![三分恶面渣逆袭：优先级调度](https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/sidebar/sanfene/os-7c4441cf-7b8c-4660-8ba8-29b8076e2da1.png)
+![三分恶面渣逆袭：优先级调度](./assets/tobebetterjavaer/os-7c4441cf-7b8c-4660-8ba8-29b8076e2da1.png)
 
 ⑥、**时间片轮转调度**：该算法是一种经典且广泛应用的调度策略，它以公平性为核心目标，通过给每个进程分配固定的时间段（称为时间片）来实现。
 
@@ -340,7 +340,7 @@ TCB是操作系统用于管理线程的数据结构，包含了线程的状态�
 
 通常将时间片设置为 20ms 至 50ms，这在减少切换开销和提高短作业响应速度之间取得良好平衡，使该算法尤其适用于共享系统，能确保每个进程公平地获得 CPU 使用机会。
 
-![三分恶面渣逆袭：时间片轮转](https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/sidebar/sanfene/os-ad224c3a-8ac9-4230-84e4-ec434d5b49f9.png)
+![三分恶面渣逆袭：时间片轮转](./assets/tobebetterjavaer/os-ad224c3a-8ac9-4230-84e4-ec434d5b49f9.png)
 
 
 
@@ -428,9 +428,9 @@ TCB是操作系统用于管理线程的数据结构，包含了线程的状态�
 
 缺点：消息体有一个最大长度的限制，不适合比较大的数据传输；存在用户态与内核态之间的数据拷贝开销。
 
-<img src="https://cdn.tobebetterjavaer.com/stutymore/os-20240314075045.png" alt="编程十万问：消息队列" style="zoom:50%;" />
+<img src="./assets/tobebetterjavaer/os-20240314075045.png" alt="编程十万问：消息队列" style="zoom:50%;" />
 
-<img src="https://cdn.tobebetterjavaer.com/stutymore/os-20240314075326.png" alt="编程十万问：消息队列" style="zoom: 67%;" />
+<img src="./assets/tobebetterjavaer/os-20240314075326.png" alt="编程十万问：消息队列" style="zoom: 67%;" />
 
 #### 简单说说共享内存
 
@@ -442,13 +442,13 @@ TCB是操作系统用于管理线程的数据结构，包含了线程的状态�
 
 缺点：当多进程竞争同一个共享资源时，会造成数据错乱的问题。
 
-![三分恶面渣逆袭：共享内存](https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/sidebar/sanfene/os-d9e3cfaf-01e7-42ff-9290-94ef4a5c7d5e.png)
+![三分恶面渣逆袭：共享内存](./assets/tobebetterjavaer/os-d9e3cfaf-01e7-42ff-9290-94ef4a5c7d5e.png)
 
 #### 简单说说信号量
 
 **信号量类似于红灯停（信号量为零），绿灯行（信号量非零），其本质是一个计数器，用于控制对共享资源的访问数量**。它能够确保共享资源的安全访问，防止多个进程同时访问导致数据混乱。
 
-<img src="https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/sidebar/sanfene/os-5fb765af-918c-4037-a3ad-4cad4d985e16.png" alt="三分恶面渣逆袭：信号量" style="zoom:50%;" />
+<img src="./assets/tobebetterjavaer/os-5fb765af-918c-4037-a3ad-4cad4d985e16.png" alt="三分恶面渣逆袭：信号量" style="zoom:50%;" />
 
 信号量主要通过两个原子操作来控制其值：
 
@@ -457,7 +457,7 @@ TCB是操作系统用于管理线程的数据结构，包含了线程的状态�
 
 信号量不仅可以实现对共享资源的互斥访问，还能用于进程间的同步。在 Java 中，`java.util.concurrent.Semaphore` 类实现了信号量的功能，可用于控制对共享资源的访问数量。
 
-![编程十万问：信号量](https://cdn.tobebetterjavaer.com/stutymore/os-20240314080731.png)
+![编程十万问：信号量](./assets/tobebetterjavaer/os-20240314080731.png)
 
 #### 简单说说套接字Socket
 
@@ -471,7 +471,7 @@ TCB是操作系统用于管理线程的数据结构，包含了线程的状态�
 
 这与 Java 中的 Socket 有相似之处，它在网络通信中扮演着端点的角色，如同通信的 “管道” 两端，使得不同机器上运行的进程能够实现双向通信，像客户端与服务器之间通过 Socket 建立连接后，就能像朋友书信往来一样，互相发送、接收数据，完成各种复杂的网络交互任务，从而让分布在世界各地的计算机能够互联互通，构建起庞大的互联网应用生态。
 
-<img src="https://cdn.tobebetterjavaer.com/stutymore/os-20240314082438.png" alt="img" style="zoom:50%;" />
+<img src="./assets/tobebetterjavaer/os-20240314082438.png" alt="img" style="zoom:50%;" />
 
 ### 信号和信号量有什么区别？
 
@@ -534,15 +534,15 @@ Linux系统提供了五种用于线程通信的方式：**互斥锁、条件变�
 
 - **内核态线程实现**：在内核空间实现的线程，由内核直接管理线程。
 
-<img src="https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/sidebar/sanfene/os-30b84285-8027-4720-b50b-3b0fb18c756f.png" alt="内核态线程实现" style="zoom: 67%;" />
+<img src="./assets/tobebetterjavaer/os-30b84285-8027-4720-b50b-3b0fb18c756f.png" alt="内核态线程实现" style="zoom: 67%;" />
 
 - **⽤户态线程实现**：在⽤户空间实现线程，不需要内核的参与，内核对线程无感知。
 
-<img src="https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/sidebar/sanfene/os-57886181-56fe-42bf-85e1-4d062455788a.png" alt="用户态线程" style="zoom:67%;" />
+<img src="./assets/tobebetterjavaer/os-57886181-56fe-42bf-85e1-4d062455788a.png" alt="用户态线程" style="zoom:67%;" />
 
 - **混合线程实现**：现代操作系统基本都是将两种方式结合起来使用。用户态的执行系统负责进程内部线程在非阻塞时的切换；内核态的操作系统负责阻塞线程的切换。即我们同时实现内核态和用户态线程管理。其中内核态线程数量较少，而用户态线程数量较多。每个内核态线程可以服务一个或多个用户态线程。
 
-<img src="https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/sidebar/sanfene/os-1597d159-1b07-48ae-ac86-7e9b9cb85876.png" alt="混合线程实现" style="zoom:67%;" />
+<img src="./assets/tobebetterjavaer/os-1597d159-1b07-48ae-ac86-7e9b9cb85876.png" alt="混合线程实现" style="zoom:67%;" />
 
 ### 线程间如何同步？
 
@@ -550,7 +550,7 @@ Linux系统提供了五种用于线程通信的方式：**互斥锁、条件变�
 
 在线程同步中，一个关键概念是**临界区**，它指的是访问共享资源的代码片段。为了保证数据的安全性和一致性，临界区的执行需要互斥，即在任意时刻只能有一个线程处于临界区内。这种互斥机制同样适用于进程间的共享资源访问。
 
-<img src="https://cdn.tobebetterjavaer.com/stutymore/javathread-20241008102844.png" alt="cxuan：使用临界区的互斥" style="zoom: 33%;" />
+<img src="./assets/tobebetterjavaer/javathread-20241008102844.png" alt="cxuan：使用临界区的互斥" style="zoom: 33%;" />
 
 同步的实现方式有：
 
@@ -591,7 +591,7 @@ Linux系统提供了五种用于线程通信的方式：**互斥锁、条件变�
   - 第三，页表里的页表项中除了物理地址之外，还有一些标记属性的比特，比如控制一个页的读写权限，标记该页是否存在等。在内存访问方面，操作系统提供了更好的安全性。
 
 
-<img src="https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/sidebar/sanfene/os-ec171cea-0046-4709-a390-7babf3272c49.png" alt="三分恶面渣逆袭：虚拟内存" style="zoom:50%;" />
+<img src="./assets/tobebetterjavaer/os-ec171cea-0046-4709-a390-7babf3272c49.png" alt="三分恶面渣逆袭：虚拟内存" style="zoom:50%;" />
 
 **Linux 是通过对内存分页的方式来管理内存，即将虚拟内存和物理内存空间分割为连续并且固定尺寸的内存空间，称作 页（Page）**  在 Linux 下，每一页的大小为 4KB。虚拟地址与物理地址通过 **页表** 映射，页表存储于内存，由**内存管理单元（MMU）**负责将虚拟内存地址转换为物理地址，如下图：
 
@@ -607,13 +607,13 @@ Linux系统提供了五种用于线程通信的方式：**互斥锁、条件变�
 
 以下是虚拟地址、段表、物理地址的映射示意图：
 
-<img src="https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/sidebar/sanfene/os-075df152-7b77-40c7-abdb-1aa0280d958b.png" alt="虚拟地址、段表、物理地址" style="zoom:50%;" />
+<img src="./assets/tobebetterjavaer/os-075df152-7b77-40c7-abdb-1aa0280d958b.png" alt="虚拟地址、段表、物理地址" style="zoom:50%;" />
 
 段表在虚拟地址与物理地址映射中起关键作用。分段机制将程序虚拟地址分成多个段，每个段在段表中对应一项。
 
 我们来看一个映射，以访问段 3 中偏移量 500 的虚拟地址为例，查找段表中段 3 的段基地址（如基地址为 7000），然后将段基地址 7000 与偏移量 500 相加，计算得到物理地址 7500，其映射过程如下图（图片解析问题同前）
 
-![段虚拟地址映射](https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/sidebar/sanfene/os-a57baf1c-9612-49dd-8b23-8b00a0c63cef.png)
+![段虚拟地址映射](./assets/tobebetterjavaer/os-a57baf1c-9612-49dd-8b23-8b00a0c63cef.png)
 
 ### 什么是内存分页及页表？
 
@@ -661,7 +661,7 @@ Linux系统提供了五种用于线程通信的方式：**互斥锁、条件变�
 
 多级页表（Multilevel Page Table）是一种内存管理技术，用于在虚拟内存系统中高效地管理和转换虚拟地址到物理地址。它通过分层结构减少页表所需的内存开销，以解决单级页表在大地址空间中的效率问题。
 
-<img src="https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/sidebar/sanfene/os-3021f22f-b9a3-49d9-9e80-6d3abaf5a61a.png" alt="三分恶面渣逆袭：多级页表示意图" style="zoom:67%;" />
+<img src="./assets/tobebetterjavaer/os-3021f22f-b9a3-49d9-9e80-6d3abaf5a61a.png" alt="三分恶面渣逆袭：多级页表示意图" style="zoom:67%;" />
 
 在虚拟内存系统中，虚拟地址需要转换为物理地址。页表是实现这种转换的关键数据结构。对于 32 位系统，一个进程的地址空间可以达到 4 GB，如果使用单级页表，每个页表条目（PTE）占用 4 字节，则需要 4 MB 的内存来存储页表。然而，许多进程只使用其中的一小部分地址空间，导致单级页表的内存浪费。
 

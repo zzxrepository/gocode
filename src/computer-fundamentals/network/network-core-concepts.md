@@ -24,7 +24,7 @@ tag:
 - **TCP/IP 四层网络模型是实际应用层面上的网络通信模型，是互联网通信的核心**，定义了一系列协议和标准，确保设备间可以可靠地进行数据传输。
 - 五层结构是为了方便理解和记忆，五层体系结构是对 OSI 和 TCP/IP 的折衷，它保留了 TCP/IP 的实用性，同时提供了比四层模型更细致的分层，便于教学和理解网络的各个方面。
 
-<img src="https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/nice-article/weixin-mianznxjsjwllsewswztwxxssc-11ecdc9c-5a06-4429-bfc4-115793749000.jpg" alt="三分恶面渣逆袭：三种网络体系结构" style="zoom: 33%;" />
+<img src="./assets/tobebetterjavaer/weixin-mianznxjsjwllsewswztwxxssc-11ecdc9c-5a06-4429-bfc4-115793749000.jpg" alt="三分恶面渣逆袭：三种网络体系结构" style="zoom: 33%;" />
 
 #### 详细说说OSI七层模型？
 
@@ -119,7 +119,7 @@ HTTP 的传输单位则是消息或报文（message）、TCP 层的传输单位�
 - 到了数据链路层，控制信息被分成两部分，分别加到本层数据单元的首部（H2）和尾部（T2）
 - 最后的物理层，进行比特流的传输
 
-![数据在各层之间的传输](https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/nice-article/weixin-mianznxjsjwllsewswztwxxssc-6e4a8326-992c-442a-8265-5dc3d179b689.jpg)
+![数据在各层之间的传输](./assets/tobebetterjavaer/weixin-mianznxjsjwllsewswztwxxssc-6e4a8326-992c-442a-8265-5dc3d179b689.jpg)
 
 ### 🌟从浏览器地址栏输入url到显示网页的过程？
 
@@ -164,7 +164,7 @@ HTTP 遵循标准的客户端-服务器模型，即「请求 - 应答」的模�
 - 浏览器收到响应后，会根据响应的信息渲染页面。
 - 然后，浏览器和服务器断开TCP连接或者复用连接。
 
-<img src="https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/nice-article/weixin-mianznxjsjwllsewswztwxxssc-9a1a42b7-c14a-43d8-b8d8-f1f18c9b923b.jpg" alt="三分恶面渣逆袭：HTTP 请求的过程和原理" style="zoom:50%;" />
+<img src="./assets/tobebetterjavaer/weixin-mianznxjsjwllsewswztwxxssc-9a1a42b7-c14a-43d8-b8d8-f1f18c9b923b.jpg" alt="三分恶面渣逆袭：HTTP 请求的过程和原理" style="zoom:50%;" />
 
 ### 怎么抓包
 
@@ -328,7 +328,7 @@ Server: Apache 0.84
 
 它们的主要区别在于，URL 除了提供了资源的标识，还提供了资源访问的方式，可用于指导直接获取资源。这么比喻，URI 像是身份证号，可以唯一标识一个人，而 URL 更像一个通信地址，可以通过 URL 找到这个人——人类住址协议://地球/中国/北京市/海淀区/xx 职业技术学院/14 号宿舍楼/525 号寝/张三.男。
 
-![URI 和 URL](https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/nice-article/weixin-mianznxjsjwllsewswztwxxssc-fee87ab7-0475-429b-aba6-7a8df6841572.jpg)
+![URI 和 URL](./assets/tobebetterjavaer/weixin-mianznxjsjwllsewswztwxxssc-fee87ab7-0475-429b-aba6-7a8df6841572.jpg)
 
 ### 说下 HTTP 1.0、1.1、2.0、3.0的区别？
 
@@ -360,7 +360,7 @@ HTTP/3.0 则基于 QUIC 协议，QUIC其实是Quick UDP Internet Connections的�
 
 #### 目前使用最广泛的是哪个HTTP版本？HTTP1.1
 
-<img src="https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/nice-article/weixin-mianznxjsjwllsewswztwxxssc-9384b248-3ea3-4437-b343-f8b7e73f9157.jpg" alt="三分恶面渣逆袭：HTTP 协议变迁" style="zoom:50%;" />
+<img src="./assets/tobebetterjavaer/weixin-mianznxjsjwllsewswztwxxssc-9384b248-3ea3-4437-b343-f8b7e73f9157.jpg" alt="三分恶面渣逆袭：HTTP 协议变迁" style="zoom:50%;" />
 
 > 1. [Java 面试指南（付费）](https://javabetter.cn/zhishixingqiu/mianshi.html)收录的华为面经同学 8 技术二面面试原题：HTTP 2.0 和 3.0 的区别
 > 2. [Java 面试指南（付费）](https://javabetter.cn/zhishixingqiu/mianshi.html)收录的字节跳动面经同学 1 技术二面面试原题：目前使用最广泛的是哪个HTTP版本？
@@ -434,7 +434,7 @@ HTTPS 在 HTTP 与 TCP 之间加入了 SSL/TLS 层，通过信息加密、校验
 - **摘要算法**（哈希函数）的方式来实现**完整性**，它能够为数据生成独一无二的「指纹」，指纹用于校验数据的完整性，解决了篡改的风险。
 - 将服务器公钥放入到**数字证书**中，解决了冒充的风险，实现了服务器身份的**可信性**。客户端会通过数字证书来验证服务器的身份，数字证书由 CA 签发，包含了服务器的公钥、证书的颁发机构、证书的有效期等。
 
-<img src="https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/nice-article/weixin-mianznxjsjwllsewswztwxxssc-d91b220e-a7e0-4856-af53-697c96591ec7.jpg" alt="三分恶面渣逆袭：HTTPS 主要流程" style="zoom: 50%;" />
+<img src="./assets/tobebetterjavaer/weixin-mianznxjsjwllsewswztwxxssc-d91b220e-a7e0-4856-af53-697c96591ec7.jpg" alt="三分恶面渣逆袭：HTTPS 主要流程" style="zoom: 50%;" />
 
 > 1. [Java 面试指南（付费）](https://javabetter.cn/zhishixingqiu/mianshi.html)收录的比亚迪面经同学 3 Java 技术一面面试原题：说一下 HTTP 的结构和 HTTPS 的原理
 > 2. [Java 面试指南（付费）](https://javabetter.cn/zhishixingqiu/mianshi.html)收录的的腾讯面经同学 26 暑期实习微信支付面试原题：https的加密技术
@@ -484,7 +484,7 @@ HTTPS 在 HTTP 与 TCP 之间加入了 SSL/TLS 层，通过信息加密、校验
 
 如果通信内容被截取，但由于没有会话密钥，所以无法解密。当通信结束后，连接会被关闭，会话密钥也会被销毁，下次通信会重新生成一个会话密钥。
 
-<img src="https://cdn.tobebetterjavaer.com/stutymore/network-20240418124713.png" alt="二哥的Java进阶之路：HTTPS 连接建立过程" style="zoom: 33%;" />
+<img src="./assets/tobebetterjavaer/network-20240418124713.png" alt="二哥的Java进阶之路：HTTPS 连接建立过程" style="zoom: 33%;" />
 
 > 补充：证书颁发机构（CA）用自身私钥加密服务器证书的哈希值，生成**数字签名**，客户端收到 Server Hello 后，客户端（浏览器）会用内置的 CA 公钥解密签名。
 
@@ -611,7 +611,7 @@ CA 签发证书的过程是非常严格的：
 
 TCP（传输控制协议）的三次握手是一种用于在两个主机之间建立可靠连接的过程。它在数据传输开始前完成时序同步，**目的是确认双方具备互相发送和接收数据的能力**，从而为后续通信提供保障。
 
-<img src="https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/nice-article/weixin-mianznxjsjwllsewswztwxxssc-a6c0457e-544e-4291-98d9-862fc6a18631.jpg" alt="三分恶面渣逆袭：TCP 三次握手示意图" style="zoom:33%;" />
+<img src="./assets/tobebetterjavaer/weixin-mianznxjsjwllsewswztwxxssc-a6c0457e-544e-4291-98d9-862fc6a18631.jpg" alt="三分恶面渣逆袭：TCP 三次握手示意图" style="zoom:33%;" />
 
 一开始，客户端和服务端都处于 `CLOSE` 状态，先是服务端主动监听某个端口，处于 `LISTEN` 状态：
 
@@ -722,7 +722,7 @@ TCP 半连接指的是在 TCP 三次握手过程中，服务器接收到了客�
 
 具体来说，**攻击者在短时间内伪造大量不同的源 IP，并向目标服务器不断发送 SYN 报文**；服务器在收到每个 SYN 后都会回复 SYN-ACK，并在半连接队列中为该尚未完成三次握手的连接分配资源，**但由于源 IP 被伪造，服务器永远收不到客户端的最后一个 ACK**，**导致这些半连接长时间占据队列空间**。**当半连接队列被填满后**，服务器将无法接受新的连接请求，正常用户也就无法与服务器完成三次握手，从而造成拒绝服务。
 
-<img src="https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/nice-article/weixin-mianznxjsjwllsewswztwxxssc-f3b36155-842c-4583-ba4d-b0f04f0eda58.jpg" alt="SYN 攻击" style="zoom:50%;" />
+<img src="./assets/tobebetterjavaer/weixin-mianznxjsjwllsewswztwxxssc-f3b36155-842c-4583-ba4d-b0f04f0eda58.jpg" alt="SYN 攻击" style="zoom:50%;" />
 
 #### 泛洪攻击有什么应对方案？
 
@@ -743,7 +743,7 @@ TCP 半连接指的是在 TCP 三次握手过程中，服务器接收到了客�
 
 TCP 连接的断开过程被形象地概括为四次挥手：
 
-<img src="https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/nice-article/weixin-mianznxjsjwllsewswztwxxssc-ba156295-03af-46dc-8ef3-869b44b11303.jpg" alt="三分恶面渣逆袭：TCP 四次挥手" style="zoom:50%;" />
+<img src="./assets/tobebetterjavaer/weixin-mianznxjsjwllsewswztwxxssc-ba156295-03af-46dc-8ef3-869b44b11303.jpg" alt="三分恶面渣逆袭：TCP 四次挥手" style="zoom:50%;" />
 
 **第一次挥手**：客户端主动调用关闭连接的函数，客户端向服务器发送一个FIN结束报文，表示客户端没有数据要发送了，但仍然可以接收数据。客户端进入 FIN-WAIT-1 状态。
 
@@ -923,11 +923,11 @@ UDP 则无连接，发送数据前无需建立连接，发送完也不需断开�
 
 ②、**校验和**：TCP 报文段包括一个校验和字段，用于检测报文段在传输过程中的变化。如果接收方检测到校验和错误，就会丢弃这个报文段。
 
-<img src="https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/nice-article/weixin-mianznxjsjwllsewswztwxxssc-d875c766-0c96-4733-8ca6-181d31c0f83d.jpg" alt="三分恶面渣逆袭：TCP 校验和" style="zoom:50%;" />
+<img src="./assets/tobebetterjavaer/weixin-mianznxjsjwllsewswztwxxssc-d875c766-0c96-4733-8ca6-181d31c0f83d.jpg" alt="三分恶面渣逆袭：TCP 校验和" style="zoom:50%;" />
 
 ③、**序列号**：TCP 将数据分成多个小段，每段数据都有唯一的序列号：能够保证可靠性，既能防止数据丢失，又能避免数据重复；能够保证有序性，按照序列号顺序进行数据包还原；能够提高效率，基于序列号可实现多次发送，一次确认。
 
-<img src="https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/nice-article/weixin-mianznxjsjwllsewswztwxxssc-cbf040f5-ccc5-437d-98c4-711701e47113.jpg" alt="三分恶面渣逆袭：序列号/确认应答" style="zoom:50%;" />
+<img src="./assets/tobebetterjavaer/weixin-mianznxjsjwllsewswztwxxssc-cbf040f5-ccc5-437d-98c4-711701e47113.jpg" alt="三分恶面渣逆袭：序列号/确认应答" style="zoom:50%;" />
 
 ④、**确认应答**：接收方接收数据之后，会回传ACK报文，报文中带有此次确认的序列号，用于告知发送方此次接收数据的情况。在指定时间后，若发送端仍未收到确认应答，就会启动超时重传。
 
@@ -952,7 +952,7 @@ UDP 则无连接，发送数据前无需建立连接，发送完也不需断开�
 - 发送方**多次发送的 “独立小消息”**，在接收方被合并成 “一个连续的字节块” 接收，导致多个消息的边界模糊，无法区分，这种现象就是 “粘包”。
 - 发送方**一次发送的 “大消息”**，因超过 TCP 或网络的传输限制，被 TCP 拆分成多个 “小 TCP 段” 传输，接收方需要多次读取才能拼接出完整的原始消息，这种现象就是 “拆包”。
 
-<img src="https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/nice-article/weixin-mianznxjsjwllsewswztwxxssc-7f201989-9b3d-4a66-b6cd-8acbf4a2737f.jpg" alt="TCP 的粘包和拆包" style="zoom:50%;" />
+<img src="./assets/tobebetterjavaer/weixin-mianznxjsjwllsewswztwxxssc-7f201989-9b3d-4a66-b6cd-8acbf4a2737f.jpg" alt="TCP 的粘包和拆包" style="zoom:50%;" />
 
 - **产生粘包和拆包的原因**：
   - **粘包原因**
@@ -982,7 +982,7 @@ UDP 则无连接，发送数据前无需建立连接，发送完也不需断开�
 - Nagle算法
 - 延迟确认
 
-![小数据情况](https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/nice-article/weixin-mianznxjsjwllsewswztwxxssc-baaa9b39-ba10-4b80-ba4b-d72bb3d22a2b.jpg)
+![小数据情况](./assets/tobebetterjavaer/weixin-mianznxjsjwllsewswztwxxssc-baaa9b39-ba10-4b80-ba4b-d72bb3d22a2b.jpg)
 
 > **Nagle 算法**
 
@@ -1026,7 +1026,7 @@ TCP 头部有个字段叫window，也即那个 **16 位的窗口大小**，它�
 - 未发送但可以发送
 - 未发送也不可以发送
 
-<img src="https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/nice-article/weixin-mianznxjsjwllsewswztwxxssc-4ce3171e-065c-46e3-9b22-626837cf774e.jpg" alt="发送端滑动窗口" style="zoom:50%;" />
+<img src="./assets/tobebetterjavaer/weixin-mianznxjsjwllsewswztwxxssc-4ce3171e-065c-46e3-9b22-626837cf774e.jpg" alt="发送端滑动窗口" style="zoom:50%;" />
 
 - 深蓝色框里就是发送窗口。
 - SND.WND: 表示发送窗口的大小, 上图虚线框的格子数是 10 个，即发送窗口大小是 10。
@@ -1039,7 +1039,7 @@ TCP 头部有个字段叫window，也即那个 **16 位的窗口大小**，它�
 - 未收到数据但可以接收
 - 未收到数据并不可以接收的数据
 
-<img src="https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/nice-article/weixin-mianznxjsjwllsewswztwxxssc-ba692020-9702-4b8c-b007-8a6539f78f72.jpg" alt="接收方滑动窗口" style="zoom:50%;" />
+<img src="./assets/tobebetterjavaer/weixin-mianznxjsjwllsewswztwxxssc-ba692020-9702-4b8c-b007-8a6539f78f72.jpg" alt="接收方滑动窗口" style="zoom:50%;" />
 
 - 蓝色框内，就是接收窗口。
 - REV.WND: 表示接收窗口的大小, 上图虚线框的格子就是 9 个。
@@ -1051,7 +1051,7 @@ TCP 提供了一种机制，可以让发送端根据接收端的实际接收能�
 
 - 首先双方三次握手，初始化各自的窗口大小，均为 400 个字节。
 
-<img src="https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/nice-article/weixin-mianznxjsjwllsewswztwxxssc-fd8ca2c7-ffa3-4947-8f6f-c64c12f9ca58.jpg" alt="TCP 流量控制" style="zoom:50%;" />
+<img src="./assets/tobebetterjavaer/weixin-mianznxjsjwllsewswztwxxssc-fd8ca2c7-ffa3-4947-8f6f-c64c12f9ca58.jpg" alt="TCP 流量控制" style="zoom:50%;" />
 
 - 假如当前发送方给接收方发送了 200 个字节，那么，发送方的`SND.NXT`会右移 200 个字节，也就是说当前的可用窗口减少了 200 个字节。
 - 接受方收到后，放到缓冲队列里面，REV.WND =400-200=200 字节，所以 win=200 字节返回给发送方。接收方会在 ACK 的报文首部带上缩小后的滑动窗口 200 字节
@@ -1221,7 +1221,7 @@ SRTT = (1 - α) * SRTT + α * RTT
 
 RTT，也就是 Round-Trip Time，往返时间，即数据包从发送到接收到确认的时间。TCP 会对每个数据包的 RTT 进行测量，并不断更新这个值。
 
-<img src="https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/nice-article/weixin-mianznxjsjwllsewswztwxxssc-1ddf0bc7-ab7f-4779-8251-a73638e0c3d9.jpg" alt="三分恶面渣逆袭：RTT" style="zoom:50%;" />
+<img src="./assets/tobebetterjavaer/weixin-mianznxjsjwllsewswztwxxssc-1ddf0bc7-ab7f-4779-8251-a73638e0c3d9.jpg" alt="三分恶面渣逆袭：RTT" style="zoom:50%;" />
 
 ②、计算 RTTVAR (RTT Variation，表示RTT的变化量，用于衡量RTT的波动)
 
@@ -1256,7 +1256,7 @@ TCP 还有另外⼀种快速重传（**Fast Retransmit**）机制，它不以时
 
 可以用它来解决超时重发的时间等待问题，快速重传流程如下：
 
-<img src="https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/nice-article/weixin-mianznxjsjwllsewswztwxxssc-46028267-3d31-4eb6-8e6c-aefb0c752035.jpg" alt="快速重传流程" style="zoom: 67%;" />
+<img src="./assets/tobebetterjavaer/weixin-mianznxjsjwllsewswztwxxssc-46028267-3d31-4eb6-8e6c-aefb0c752035.jpg" alt="快速重传流程" style="zoom: 67%;" />
 
 在上图，发送⽅发出了 1，2，3，4，5 份数据：
 
@@ -1280,7 +1280,7 @@ TCP 还有另外⼀种快速重传（**Fast Retransmit**）机制，它不以时
 
 **SACK 机制**就是，在快速重传的基础上，接收方返回最近收到报文段的序列号范围，这样发送方就知道接收方哪些数据包是没收到的。这样就很清楚应该重传哪些数据包。
 
-<img src="https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/nice-article/weixin-mianznxjsjwllsewswztwxxssc-947df4b4-2e14-482b-9b5d-37cb01a0b5c2.jpg" alt="SACK 机制" style="zoom:50%;" />
+<img src="./assets/tobebetterjavaer/weixin-mianznxjsjwllsewswztwxxssc-947df4b4-2e14-482b-9b5d-37cb01a0b5c2.jpg" alt="SACK 机制" style="zoom:50%;" />
 
 如上图中，发送⽅收到了三次同样的 ACK 确认报⽂，于是就会触发快速重发机制，通过 SACK 信息发现只有 200~299 这段数据丢失，则重发时，就只选择了这个 TCP 段进⾏重发。
 
@@ -1292,7 +1292,7 @@ DSACK 的目的是帮助发送方判断，是否发生了包失序、ACK 丢失�
 
 例如，ACK 丢包导致的数据包重复：
 
-<img src="https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/nice-article/weixin-mianznxjsjwllsewswztwxxssc-cf41596b-0d6c-45e3-bd8b-7063f241c11b.jpg" alt="ACK 丢包" style="zoom:50%;" />
+<img src="./assets/tobebetterjavaer/weixin-mianznxjsjwllsewswztwxxssc-cf41596b-0d6c-45e3-bd8b-7063f241c11b.jpg" alt="ACK 丢包" style="zoom:50%;" />
 
 - 接收⽅发给发送⽅的两个 ACK 确认应答都丢失了，所以发送⽅超时后，重传第⼀个数据包（3000 ~3499）
 
@@ -1373,7 +1373,7 @@ UDP 是不可靠传输的，但基于 UDP 的 **QUIC 协议** 可以实现类似
 
 简单总结一下：UDP 协议是无连接方式的协议，它的效率高，速度快，占资源少，对服务器的压力比较小。但是其传输机制为不可靠传送，必须依靠辅助的算法来完成传输控制。QQ 采用的通信协议以 UDP 为主，辅以 TCP 协议。
 
-![QQ 使用 UDP](https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/nice-article/weixin-mianznxjsjwllsewswztwxxssc-cd8fb482-885d-4c99-b948-19d9dcf47fb4.jpg)
+![QQ 使用 UDP](./assets/tobebetterjavaer/weixin-mianznxjsjwllsewswztwxxssc-cd8fb482-885d-4c99-b948-19d9dcf47fb4.jpg)
 
 ## DNS
 
@@ -1404,7 +1404,7 @@ DNS 中的域名都是用**句点**来分隔的，比如`www.server.com`，这�
 - 随后，本地 DNS 向权威域名服务器查询，获得最终 IP 地址并将结果缓存下来。权威域名服务器通常由域名注册机构直接管理，`mmzhang.cn`是在阿里云上注册的，所以阿里云会提供对应的 DNS 解析服务，将域名和阿里云服务器绑定起来。
 - **本地 DNS 把获得的 IP 返回给浏览器。浏览器据此与目标服务器建立 TCP 连接，发起 HTTP 请求，最终收到并呈现网页内容。**
 
-<img src="https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/nice-article/weixin-mianznxjsjwllsewswztwxxssc-03408af8-3ca8-49bd-9244-6afa6fe132c6.jpg" alt="三分析面渣逆袭：DNS 解析流程" style="zoom: 50%;" />
+<img src="./assets/tobebetterjavaer/weixin-mianznxjsjwllsewswztwxxssc-03408af8-3ca8-49bd-9244-6afa6fe132c6.jpg" alt="三分析面渣逆袭：DNS 解析流程" style="zoom: 50%;" />
 
 ### DNS的底层使用TCP还是UDP？
 
@@ -1524,7 +1524,7 @@ SSE (Server-Sent Events) 和 WebSocket 都是用来实现服务器向浏览器�
 
 网络安全攻击主要分为两种类型，**被动攻击**和**主动攻击**：
 
-![主动攻击和被动攻击](https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/nice-article/weixin-mianznxjsjwllsewswztwxxssc-ad171b05-519e-4cdc-aa71-f4b3b2d51fbc.jpg)
+![主动攻击和被动攻击](./assets/tobebetterjavaer/weixin-mianznxjsjwllsewswztwxxssc-ad171b05-519e-4cdc-aa71-f4b3b2d51fbc.jpg)
 
 - **被动攻击**：是指攻击者从网络上窃听他人的通信内容，通常把这类攻击称为截获，被动攻击主要有两种形式：消息内容泄露攻击和流量分析攻击。由于攻击者没有修改数据，使得这种攻击很难被检测到。
 - **主动攻击**：直接对现有的数据和服务造成影响，常见的主动攻击类型有：
@@ -1549,7 +1549,7 @@ CSRF（跨站请求伪造）是一种攻击手段，攻击者通过诱导用户�
 
 ### 什么是 DoS、DDoS、DRDoS 攻击？
 
-![请求太多服务器着不住](https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/nice-article/weixin-mianznxjsjwllsewswztwxxssc-624ef810-660d-40d5-9da9-6073023b7ebd.jpg)
+![请求太多服务器着不住](./assets/tobebetterjavaer/weixin-mianznxjsjwllsewswztwxxssc-624ef810-660d-40d5-9da9-6073023b7ebd.jpg)
 
 - **DOS**(Denial of Service)：中文是拒绝服务, 一切能引起拒绝 行为的攻击都被称为 DOS 攻击。最常见的 DoS 攻击就有**计算机网络宽带攻击**、**连通性攻击**。
 - **DDoS**(Distributed Denial of Service)：中文是分布式拒绝服务，是指处于不同位置的多个攻击者同时向一个或几个目标发动攻击，或者一个攻击者控制了位于不同位置的多台机器，并利用这些机器对受害者同时实施攻击。
@@ -1608,7 +1608,7 @@ IP的作用是在复杂的网络环境中将数据包发送给最终目的的主
 
 IP 协议（Internet Protocol）用于在计算机网络之间传输数据包，它定义了数据包的格式和处理规则，确保数据能够从一个设备传输到另一个设备，可能跨越多个中间网络设备（如路由器）。
 
-![三分恶面渣逆袭：虚拟 IP 网](https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/nice-article/weixin-mianznxjsjwllsewswztwxxssc-2672de5a-b5de-4f7f-905b-7c4935ca3efb.jpg)
+![三分恶面渣逆袭：虚拟 IP 网](./assets/tobebetterjavaer/weixin-mianznxjsjwllsewswztwxxssc-2672de5a-b5de-4f7f-905b-7c4935ca3efb.jpg)
 
 #### IP 协议有哪些作用？
 
@@ -1654,7 +1654,7 @@ IP 地址分为 A，B，C，D，E 五大类：
 - D 类地址 (224~239)：以 1110 开头，保留为多播地址。
 - E 类地址 (240~255)：以 1111 开头，保留位为将来使用
 
-![IP 地址分类](https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/nice-article/weixin-mianznxjsjwllsewswztwxxssc-40b6445c-0392-47b2-97c9-6235675fd459.jpg)
+![IP 地址分类](./assets/tobebetterjavaer/weixin-mianznxjsjwllsewswztwxxssc-40b6445c-0392-47b2-97c9-6235675fd459.jpg)
 
 ### 域名和 IP 的关系？一个 IP 可以对应多个域名吗？
 
@@ -1673,7 +1673,7 @@ IP 地址分为 A，B，C，D，E 五大类：
 
 我们知道，IP 地址有 32 位，可以标记 2 的 32 次方个地址，听起来很多，但是全球的网络设备数量已经远远超过这个数字，所以 IPV4 地址已经不够用了，那怎么解决呢？
 
-![IPV4 不够解决办法](https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/nice-article/weixin-mianznxjsjwllsewswztwxxssc-2787d939-672e-4117-b6ae-03d13221b5bb.jpg)
+![IPV4 不够解决办法](./assets/tobebetterjavaer/weixin-mianznxjsjwllsewswztwxxssc-2787d939-672e-4117-b6ae-03d13221b5bb.jpg)
 
 - DHCP：动态主机配置协议，动态分配 IP 地址，只给接入网络的设备分配 IP 地址，因此同一个 MAC 地址的设备，每次接入互联网时，得到的 IP 地址不一定是相同的，该协议使得空闲的 IP 地址可以得到充分利用。
 - CIDR：无类别域间路由。CIDR 消除了传统的 A 类、B 类、C 类地址以及划分子网的概念，因而更加有效地分配 IPv4 的地址空间，但无法从根本上解决地址耗尽的问题。
@@ -1700,7 +1700,7 @@ ARP（Address Resolution Protocol，地址解析协议）是网络通信中的�
 
 主机 A 收到主机 B 的 ARP 应答后，也会将主机 B 的 IP 和 MAC 地址映射关系缓存到自己的 ARP 缓存中。
 
-![三分恶面渣逆袭：ARP 协议作用](https://cdn.tobebetterjavaer.com/tobebetterjavaer/images/nice-article/weixin-mianznxjsjwllsewswztwxxssc-41988dc1-fb5b-4287-a8e8-754bf2f0d310.jpg)
+![三分恶面渣逆袭：ARP 协议作用](./assets/tobebetterjavaer/weixin-mianznxjsjwllsewswztwxxssc-41988dc1-fb5b-4287-a8e8-754bf2f0d310.jpg)
 
 > 1. [Java 面试指南（付费）](https://javabetter.cn/zhishixingqiu/mianshi.html)收录的快手面经同学 7 Java 后端技术一面面试原题：说一下 ARP 协议的过程
 
