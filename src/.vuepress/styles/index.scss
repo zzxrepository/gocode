@@ -74,6 +74,12 @@ body.gocode-focus-reading .theme-container .vp-page [vp-content] {
   margin-inline: auto;
 }
 
+/* 文章插图以块级元素展示，避免受 Markdown 段落布局影响而偏向左侧。 */
+[vp-content] img {
+  display: block;
+  margin: 1.25rem auto;
+}
+
 @media (max-width: 719px) {
   .gocode-focus-reading-button span:last-child {
     display: none;
