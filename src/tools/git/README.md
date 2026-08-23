@@ -22,3 +22,5 @@ tag:
 
 - [常用命令](./common-commands.md)
 - [分支与协作](./branch-and-collaboration.md)
+- [安装与配置](./git-installation.md)
+- [Git 学习笔记](./git-notes.md)
