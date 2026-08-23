@@ -2,6 +2,7 @@ import { navbar } from "vuepress-theme-hope";
 
 export default navbar([
   { text: "首页", icon: "house", link: "/" },
+  { text: "数据库", icon: "database", link: "/database/" },
   { text: "后端开发", icon: "server", link: "/backend/" },
   { text: "AI 应用开发", icon: "robot", link: "/ai-application-development/" },
   { text: "算法与数据结构", icon: "diagram-project", link: "/algorithm/" },

@@ -1,7 +1,7 @@
 ---
 title: Redis 缓存与常用场景
 shortTitle: Redis
-order: 2
+order: 1
 icon: gauge-high
 category:
   - 数据库

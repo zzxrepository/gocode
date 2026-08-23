@@ -34,9 +34,9 @@ gocode/
 │   │   │   ├── advanced/          # Go 进阶知识
 │   │   │   └── frameworks-and-ecosystem/ # Go 框架与生态
 │   │   ├── java/                  # Java 教程
-│   │   ├── database/              # 数据库
 │   │   ├── message-queue/         # 消息队列
 │   │   └── microservices/         # 微服务与分布式
+│   ├── database/                  # 数据库（关系型与非关系型）
 │   ├── algorithm/                 # 算法与数据结构
 │   ├── computer-fundamentals/     # 计算机基础
 │   ├── tools/                     # 开发工具

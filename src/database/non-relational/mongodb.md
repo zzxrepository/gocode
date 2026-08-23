@@ -1,7 +1,7 @@
 ---
 title: MongoDB 文档数据库入门
 shortTitle: MongoDB
-order: 3
+order: 2
 icon: simple-icons:mongodb
 category:
   - 数据库

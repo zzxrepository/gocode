@@ -8,6 +8,7 @@ export default sidebar({
       icon: "graduation-cap",
       children: [
         { text: "后端开发", icon: "server", link: "/backend/" },
+        { text: "数据库", icon: "database", link: "/database/" },
         { text: "算法与数据结构", icon: "diagram-project", link: "/algorithm/" },
         { text: "计算机基础", icon: "desktop", link: "/computer-fundamentals/" },
         { text: "开发工具", icon: "screwdriver-wrench", link: "/tools/" },
@@ -69,14 +70,6 @@ export default sidebar({
       children: "structure",
     },
     {
-      text: "数据库",
-      icon: "database",
-      collapsible: true,
-      collapsed: false,
-      prefix: "database/",
-      children: "structure",
-    },
-    {
       text: "消息队列",
       icon: "tower-broadcast",
       collapsible: true,
@@ -95,6 +88,7 @@ export default sidebar({
   ],
 
   "/algorithm/": "structure",
+  "/database/": "structure",
   "/computer-fundamentals/": "structure",
   "/tools/": "structure",
   "/frontend/": "structure",

@@ -52,14 +52,23 @@ highlights:
         icon: mug-hot
         details: Java 基础、集合、并发、JVM 与框架
         link: /backend/java/
-      - title: 数据库
-        icon: database
-        details: MySQL、Redis、MongoDB 与数据存储实践
-        link: /backend/database/
       - title: 消息队列与微服务
         icon: tower-broadcast
         details: 消息队列、Spring Boot、go-zero、分布式与云原生
         link: /backend/microservices/
+
+  - header: 数据库
+    description: 按数据模型学习 SQL、缓存与文档数据库的使用边界。
+    image: /assets/image/features.svg
+    highlights:
+      - title: 关系型数据库
+        icon: table-cells
+        details: MySQL、SQL、表设计、索引与事务
+        link: /database/relational/
+      - title: 非关系型数据库
+        icon: cubes
+        details: Redis 缓存与 MongoDB 文档存储
+        link: /database/non-relational/
 
   - header: 基础能力
     description: 夯实解决实际问题所需的通用技术基础。

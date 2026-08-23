@@ -33,7 +33,7 @@ tag:
 
 掌握 MySQL 表设计、索引、事务、Redis 缓存与 MongoDB 的适用场景。
 
-- 站内文章：[数据库](/backend/database/)
+- 站内文章：[数据库](/database/)
 - 练习目标：为项目设计订单、用户等核心数据模型，并做一次慢查询优化。
 
 ## 第四阶段：Web 与 Spring Boot

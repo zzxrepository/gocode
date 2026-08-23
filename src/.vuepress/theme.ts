@@ -157,9 +157,10 @@ export default hopeTheme({
         "/java/basics.html": "/backend/java/basics.html",
         "/java/collections-and-concurrency.html": "/backend/java/collections-and-concurrency.html",
         "/java/jvm-and-frameworks.html": "/backend/java/jvm-and-frameworks.html",
-        "/database/": "/backend/database/",
-        "/database/mysql.html": "/backend/database/mysql.html",
-        "/database/redis.html": "/backend/database/redis.html",
+        "/backend/database/": "/database/",
+        "/backend/database/mysql.html": "/database/relational/mysql.html",
+        "/backend/database/redis.html": "/database/non-relational/redis.html",
+        "/backend/database/mongodb.html": "/database/non-relational/mongodb.html",
       },
     },
 
