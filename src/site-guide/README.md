@@ -52,7 +52,6 @@ gocode/
 │       ├── sidebar.ts             # 左侧目录入口与结构化侧边栏范围
 │       ├── client.ts              # 客户端增强组件
 │       ├── public/                # 全站静态资源
-│       │   ├── CNAME              # GitHub Pages 自定义域名
 │       │   ├── BingSiteAuth.xml   # Bing Webmaster Tools 站点验证文件
 │       │   ├── google*.html       # Google Search Console 站点验证文件
 │       │   └── .nojekyll          # 关闭 GitHub Pages 的 Jekyll 处理
@@ -138,7 +137,7 @@ import { viteBundler } from "@vuepress/bundler-vite";
 import theme from "./theme.js";
 
 export default defineUserConfig({
-  base: "/",
+  base: "/gocode/",
 
   head: [
     [
@@ -172,7 +171,7 @@ export default defineUserConfig({
 });
 ```
 
-`base` 要和最终部署地址匹配。本站当前部署在 `https://gocode.mmzhang.cn/` 的根路径下，因此设置为 `/`。如果改回 GitHub Pages 仓库子路径，例如 `https://zzxrepository.github.io/gocode/`，才需要设置为 `/gocode/`。
+`base` 要和最终部署地址匹配。本站当前使用 GitHub Pages 项目页，地址是 `https://zzxrepository.github.io/gocode/`，因此设置为 `/gocode/`。只有使用独立域名或子域名并部署到根路径时，才应设置为 `/`。
 
 ### 配置主题能力
 
@@ -185,7 +184,7 @@ import navbar from "./navbar.js";
 import sidebar from "./sidebar.js";
 
 export default hopeTheme({
-  hostname: "https://gocode.mmzhang.cn",
+  hostname: "https://zzxrepository.github.io",
 
   author: {
     name: "神马都会亿点点的毛毛张",
@@ -458,37 +457,20 @@ cd -
 
 ### 配置 GitHub Pages
 
-仓库需要在 GitHub Pages 设置中选择 `gh-pages` 分支作为发布来源。如果不配置自定义域名，项目页默认访问地址形如：
+仓库在 GitHub Pages 设置中选择 `gh-pages` 分支的根目录作为发布来源。本站当前使用 GitHub Pages 项目页，访问地址是：
 
 ```text
 https://zzxrepository.github.io/gocode/
 ```
 
-这种项目页部署方式需要把 `base` 设置为 `/gocode/`。
-
-如果使用独立域名或子域名，访问路径通常是站点根路径。本站当前使用：
-
-```text
-https://gocode.mmzhang.cn/
-```
-
 对应配置为：
 
 ```text
-src/.vuepress/config.ts       base: "/"
-src/.vuepress/theme.ts        hostname: "https://gocode.mmzhang.cn"
-src/.vuepress/public/CNAME    gocode.mmzhang.cn
+src/.vuepress/config.ts       base: "/gocode/"
+src/.vuepress/theme.ts        hostname: "https://zzxrepository.github.io"
 ```
 
-域名解析在阿里云 DNS 中添加一条记录即可：
-
-| 主机记录 | 记录类型 | 记录值 |
-| --- | --- | --- |
-| `gocode` | `CNAME` | `zzxrepository.github.io` |
-
-GitHub Pages 的 Custom domain 填 `gocode.mmzhang.cn`。DNS 校验通过后再启用 Enforce HTTPS。
-
-如果仓库名、部署路径或自定义域名不同，需要同步调整 `config.ts` 中的 `base`、`theme.ts` 中的 `hostname`、`public/CNAME`，以及 README 或导航中的站内链接。
+如果以后重新使用独立域名或子域名，需要将 `base` 改为 `/`，同步调整 `theme.ts` 的 `hostname`，并在 GitHub Pages 设置和 DNS 服务商处配置该域名。
 
 ### 完整构建流程
 
@@ -608,49 +590,42 @@ export default defineUserConfig({
 
 | 平台 | 本地文件 | 线上地址 |
 | --- | --- | --- |
-| Google Search Console | `src/.vuepress/public/google17f8ecca886007f8.html` | `https://gocode.mmzhang.cn/google17f8ecca886007f8.html` |
-| Bing Webmaster Tools | `src/.vuepress/public/BingSiteAuth.xml` | `https://gocode.mmzhang.cn/BingSiteAuth.xml` |
+| Google Search Console | `src/.vuepress/public/google17f8ecca886007f8.html` | `https://zzxrepository.github.io/gocode/google17f8ecca886007f8.html` |
+| Bing Webmaster Tools | `src/.vuepress/public/BingSiteAuth.xml` | `https://zzxrepository.github.io/gocode/BingSiteAuth.xml` |
 
 不要删除这些验证文件。Google 或 Bing 后续可能会重新检查站点所有权。
 
 站点地图由 VuePress Theme Hope 在构建时自动生成，地址是：
 
 ```text
-https://gocode.mmzhang.cn/sitemap.xml
+https://zzxrepository.github.io/gocode/sitemap.xml
 ```
 
 `robots.txt` 也会自动生成，并包含 sitemap 地址：
 
 ```text
-https://gocode.mmzhang.cn/robots.txt
+https://zzxrepository.github.io/gocode/robots.txt
 ```
 
 搜索平台中的配置方式：
 
 | 平台 | 推荐操作 |
 | --- | --- |
-| Google Search Console | 添加 `https://gocode.mmzhang.cn/`，使用 HTML 文件验证，然后提交 `sitemap.xml` |
-| Bing Webmaster Tools | 添加 `https://gocode.mmzhang.cn/`，使用 `BingSiteAuth.xml` 验证，然后提交 `https://gocode.mmzhang.cn/sitemap.xml` |
+| Google Search Console | 添加 `https://zzxrepository.github.io/gocode/`，使用 HTML 文件验证，然后提交 `sitemap.xml` |
+| Bing Webmaster Tools | 添加 `https://zzxrepository.github.io/gocode/`，使用 `BingSiteAuth.xml` 验证，然后提交 `https://zzxrepository.github.io/gocode/sitemap.xml` |
 
 后续更新文章时，只需要正常部署网站。构建过程会更新 `sitemap.xml`，Google 和 Bing 会按自己的抓取节奏自动发现新页面。重要新页面可以在 Google 的 URL Inspection 或 Bing 的 URL 检查里手动提交一次，加快发现。
 
-### 维护自定义域名
+### 维护 GitHub Pages 项目页
 
-自定义域名需要同时维护三处：
+当前项目页需要维护两处：
 
 | 位置 | 当前值 | 作用 |
 | --- | --- | --- |
-| `src/.vuepress/config.ts` | `base: "/"` | 控制站内资源和路由前缀 |
-| `src/.vuepress/theme.ts` | `hostname: "https://gocode.mmzhang.cn"` | 控制 sitemap、SEO 和站点元信息 |
-| `src/.vuepress/public/CNAME` | `gocode.mmzhang.cn` | 让 GitHub Pages 绑定自定义域名 |
+| `src/.vuepress/config.ts` | `base: "/gocode/"` | 控制站内资源和路由前缀 |
+| `src/.vuepress/theme.ts` | `hostname: "https://zzxrepository.github.io"` | 控制 sitemap、SEO 和站点元信息 |
 
-DNS 解析使用 CNAME：
-
-```text
-gocode.mmzhang.cn -> zzxrepository.github.io
-```
-
-如果以后改成根域名 `mmzhang.cn`，需要把 GitHub Pages 的 Custom domain、`public/CNAME` 和 `theme.ts` 的 `hostname` 一起改掉；`base` 仍然保持 `/`。
+GitHub Pages 的发布来源应为 `gh-pages` 分支、`/(root)` 目录。若将来切换到独立域名，需要在 GitHub Pages 的 Custom domain 中设置域名、配置 DNS，并重新将 `base` 改为 `/`；不再使用的 DNS 记录应及时删除，避免留下悬空子域名。
 
 ## 文件和网页地址
 
