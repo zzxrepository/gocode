@@ -41,5 +41,5 @@ tag:
 导入时补充了站点元信息和版本说明，将 33 张配图保存到本地，修复了一个失效图片地址，并将原文手工目录替换为本站自动目录。技术正文与代码示例保留原版，未整体升级到 Kafka 4.x。
 
 - [原始 Markdown 快照](https://github.com/dunwu/bigdata-tutorial/tree/b3f38146d8ce7613aca819a628683a87ff513765/docs/kafka)
-- [许可全文](./assets/dunwu/CC-BY-SA-4.0.txt)
-- [原目录与参考资料](./assets/dunwu/source-index.txt)
+- <a :href="$withBase('/downloads/kafka/CC-BY-SA-4.0.txt')">许可全文</a>
+- <a :href="$withBase('/downloads/kafka/source-index.txt')">原目录与参考资料</a>
