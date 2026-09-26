@@ -9,6 +9,7 @@ export default navbar([
   { text: "计算机基础", icon: "desktop", link: "/computer-fundamentals/" },
   { text: "前端开发", icon: "laptop-code", link: "/frontend/" },
   { text: "开发工具", icon: "screwdriver-wrench", link: "/tools/" },
+  { text: "面试题", icon: "clipboard-question", link: "/interview/" },
   { text: "资源导航", icon: "compass", link: "/resources/" },
   { text: "关于作者", icon: "user", link: "/portfolio" },
 ]);

@@ -15,6 +15,7 @@ export default sidebar({
         { text: "AI 应用开发", icon: "robot", link: "/ai-application-development/" },
         { text: "前端开发", icon: "laptop-code", link: "/frontend/" },
         { text: "学习路线", icon: "map", link: "/learning-paths/" },
+        { text: "面试题", icon: "clipboard-question", link: "/interview/" },
         { text: "资源导航", icon: "compass", link: "/resources/" },
         { text: "网站维护指南", icon: "book-open", link: "/site-guide/" },
       ],
@@ -94,6 +95,7 @@ export default sidebar({
   "/frontend/": "structure",
   "/ai-application-development/": "structure",
   "/learning-paths/": "structure",
+  "/interview/": "structure",
   "/resources/": [
     { text: "资源导航", icon: "compass", link: "/resources/" },
     { text: "常用搜索", icon: "magnifying-glass", link: "/resources/#常用搜索" },

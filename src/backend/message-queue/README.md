@@ -28,3 +28,5 @@ tag:
 - [RocketMQ](./rocketmq/)：事务消息、顺序消息与业务消息系统。
 - [Kafka](./kafka/)：高吞吐事件流与日志场景。
 - 实战设计：幂等、消息积压、重复消费与可观测性。
+
+面试复习：[消息队列面试题](/interview/message-queue.html)。

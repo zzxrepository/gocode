@@ -33,6 +33,7 @@ gocode/
 │   ├── tools/                     # 开发工具
 │   ├── ai-application-development/# AI 应用开发
 │   ├── learning-paths/            # 学习路线
+│   ├── interview/                 # 面试题与专题图片
 │   ├── resources/                 # 资源导航
 │   ├── site-guide/                # 网站维护指南
 │   └── .vuepress/

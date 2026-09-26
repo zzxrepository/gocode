@@ -39,6 +39,10 @@ highlights:
         icon: mug-hot
         details: 从基础语法到并发、JVM、Spring Boot 与微服务
         link: /learning-paths/java
+      - title: 面试题
+        icon: clipboard-question
+        details: 消息队列基础、RabbitMQ 与 RocketMQ 常见面试问题
+        link: /interview/
 
   - header: 后端开发
     description: 从语言基础到真实服务，建立完整的后端知识体系。
