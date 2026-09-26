@@ -1,0 +1,265 @@
+{
+  "source_repository": "https://github.com/dunwu/bigdata-tutorial",
+  "source_commit": "b3f38146d8ce7613aca819a628683a87ff513765",
+  "license": "CC-BY-SA-4.0",
+  "articles": [
+    {
+      "file": "01-quickstart.md",
+      "title": "Kafka 快速入门",
+      "page": "https://dunwu.github.io/bigdata-tutorial/kafka/Kafka%E5%BF%AB%E9%80%9F%E5%85%A5%E9%97%A8.html",
+      "source_path": "docs/kafka/Kafka快速入门.md",
+      "source_sha256": "335bf70988d1f7283269555d3f385f78680ab975937b2052edcf757bb3680b07"
+    },
+    {
+      "file": "02-producer.md",
+      "title": "Kafka 生产者",
+      "page": "https://dunwu.github.io/bigdata-tutorial/kafka/Kafka%E7%94%9F%E4%BA%A7%E8%80%85.html",
+      "source_path": "docs/kafka/Kafka生产者.md",
+      "source_sha256": "a6356cb75980b8fbb8431173a3c0adf76cfa4a72fb3608f1784eac958a78f55e"
+    },
+    {
+      "file": "03-consumer.md",
+      "title": "Kafka 消费者",
+      "page": "https://dunwu.github.io/bigdata-tutorial/kafka/Kafka%E6%B6%88%E8%B4%B9%E8%80%85.html",
+      "source_path": "docs/kafka/Kafka消费者.md",
+      "source_sha256": "cbf09aeccc047f9ed0b1be99f90a09ad4ded8aeb97b89c6b8b8153de5e0c1b07"
+    },
+    {
+      "file": "04-cluster.md",
+      "title": "Kafka 集群",
+      "page": "https://dunwu.github.io/bigdata-tutorial/kafka/Kafka%E9%9B%86%E7%BE%A4.html",
+      "source_path": "docs/kafka/Kafka集群.md",
+      "source_sha256": "23f40f5da262e6276ad86e5a0a9b2b1e23334fd72cc7ef480faf3d380e0b2a3e"
+    },
+    {
+      "file": "05-reliability.md",
+      "title": "Kafka 可靠传输",
+      "page": "https://dunwu.github.io/bigdata-tutorial/kafka/Kafka%E5%8F%AF%E9%9D%A0%E4%BC%A0%E8%BE%93.html",
+      "source_path": "docs/kafka/Kafka可靠传输.md",
+      "source_sha256": "3d3fed782d6a9d4aefb898b5cb5b1704c0badd8676cbf730f2fbbaec19259f2c"
+    },
+    {
+      "file": "06-storage.md",
+      "title": "Kafka 存储",
+      "page": "https://dunwu.github.io/bigdata-tutorial/kafka/Kafka%E5%AD%98%E5%82%A8.html",
+      "source_path": "docs/kafka/Kafka存储.md",
+      "source_sha256": "2e61007521220961affff83aef0e0703e4bafe15ec82081fc5289d0a9a6fb452"
+    },
+    {
+      "file": "07-stream-processing.md",
+      "title": "Kafka 流式处理",
+      "page": "https://dunwu.github.io/bigdata-tutorial/kafka/Kafka%E6%B5%81%E5%BC%8F%E5%A4%84%E7%90%86.html",
+      "source_path": "docs/kafka/Kafka流式处理.md",
+      "source_sha256": "49b9a4f00f648b6ac402d721fb16dd95c242c72b27d7e360972099d75afd25b4"
+    },
+    {
+      "file": "08-operations.md",
+      "title": "Kafka 运维",
+      "page": "https://dunwu.github.io/bigdata-tutorial/kafka/Kafka%E8%BF%90%E7%BB%B4.html",
+      "source_path": "docs/kafka/Kafka运维.md",
+      "source_sha256": "f2993ea63e5cf32621783b0c18b3ffe36b062639a2e31f84b669697cad978a28"
+    }
+  ],
+  "images": [
+    {
+      "url": "https://raw.githubusercontent.com/dunwu/images/dev/snap/20210422042613.png",
+      "file": "kafka-01.png",
+      "sha256": "2984a2e9442e2d3677a1a0a77b36f79acba853ad4b7d30ab6d90c11f22d6e1d6",
+      "bytes": 13313
+    },
+    {
+      "url": "https://raw.githubusercontent.com/dunwu/images/dev/snap/20200727140159.png",
+      "file": "kafka-02.png",
+      "sha256": "21b2b00ac7db72bc9c277145a55f2917147d92839921fc4b0a2e0b929822db75",
+      "bytes": 19642
+    },
+    {
+      "url": "https://raw.githubusercontent.com/dunwu/images/dev/snap/20210427195053.png",
+      "file": "kafka-03.png",
+      "sha256": "4212e953a1f5394851c68bbeea3a2142a0d578bb527c37bc2d9680d8f296b990",
+      "bytes": 31268
+    },
+    {
+      "url": "https://raw.githubusercontent.com/dunwu/images/dev/snap/20210615200304.png",
+      "file": "kafka-04.png",
+      "sha256": "0932d3e594462e5692e0ab3d9dc126d0c659ca9d630e245e92637ae63e8769f9",
+      "bytes": 14705
+    },
+    {
+      "url": "https://raw.githubusercontent.com/dunwu/images/dev/snap/20200621134404.png",
+      "file": "kafka-05.png",
+      "sha256": "4757856ac1efb824e95d31c377d7fc4c6993c00e8adc825cd194fd14347f82a3",
+      "bytes": 62227
+    },
+    {
+      "url": "https://raw.githubusercontent.com/dunwu/images/dev/snap/20210615222550.png",
+      "file": "kafka-06.png",
+      "sha256": "0f3c3c7ade0f677dbb202b31a7d502fc83cf7d86ab5493bf20e8bdf485568f09",
+      "bytes": 49634
+    },
+    {
+      "url": "https://raw.githubusercontent.com/dunwu/images/dev/snap/20200621135557.png",
+      "file": "kafka-07.png",
+      "sha256": "ca4413e7a4e64e5e4d105f0af4b42717a75d910039b9e09bd1162a7f4675af32",
+      "bytes": 35128
+    },
+    {
+      "url": "https://raw.githubusercontent.com/dunwu/images/dev/snap/20200621140117.png",
+      "file": "kafka-08.png",
+      "sha256": "3e37d5ce87270f903eb772eaf03ce139d89293ac0dccd1793a5e2d82ecb1445d",
+      "bytes": 33599
+    },
+    {
+      "url": "https://raw.githubusercontent.com/dunwu/images/dev/cs/java/javaweb/distributed/mq/kafka/kafka-event-system.png",
+      "file": "kafka-09.png",
+      "sha256": "950c3cdd9284990720f4d9eebd72b7eb30be2ea18ed934febbe055b2803928f5",
+      "bytes": 398097
+    },
+    {
+      "url": "https://raw.githubusercontent.com/dunwu/images/dev/snap/20200622112309.png",
+      "file": "kafka-10.png",
+      "sha256": "b1db9c96b02cebc475b06adcc8fc83e297555293c9c49415c326e0d96bd93651",
+      "bytes": 1261418
+    },
+    {
+      "url": "https://raw.githubusercontent.com/dunwu/images/dev/snap/20200622113822.png",
+      "file": "kafka-11.png",
+      "sha256": "a5687e22b1aac49079c4e1390f9bc3e3a739cf57e34098adea3bab798ecb3e6a",
+      "bytes": 387893
+    },
+    {
+      "url": "https://raw.githubusercontent.com/dunwu/images/dev/snap/20210425190248.png",
+      "file": "kafka-12.png",
+      "sha256": "67ce335b7c941112cf83d8582be4f24bca64c905b2530bdc118a88fd51a95bdf",
+      "bytes": 21531
+    },
+    {
+      "url": "https://raw.githubusercontent.com/dunwu/images/dev/snap/20200621113917.png",
+      "file": "kafka-13.png",
+      "sha256": "253c68b6303c75108293c37d81f7a161b424f42a095cc2cfa3f4b95ff7b7869c",
+      "bytes": 85326
+    },
+    {
+      "url": "https://raw.githubusercontent.com/dunwu/images/dev/snap/20210408194235.png",
+      "file": "kafka-14.png",
+      "sha256": "2a53d9a63bd323ec870bde365e7354031243c22cae039cdd5ee0ad235bd4fc74",
+      "bytes": 71583
+    },
+    {
+      "url": "https://raw.githubusercontent.com/dunwu/images/dev/snap/20210408194839.png",
+      "file": "kafka-15.png",
+      "sha256": "5089a892db1582eba5a7e614b79c1e1c17fdd87ef401877bc1f6f844212f3f35",
+      "bytes": 46780
+    },
+    {
+      "url": "https://raw.githubusercontent.com/dunwu/images/dev/snap/20210425194822.png",
+      "file": "kafka-16.png",
+      "sha256": "fd4a9bfc0ee2fe3c8161fe1477a5b98fe12aa817bd5ea8fda220d6f1d30d6e46",
+      "bytes": 49260
+    },
+    {
+      "url": "https://raw.githubusercontent.com/dunwu/images/dev/snap/20210415160730.png",
+      "file": "kafka-17.png",
+      "sha256": "4056f9620f582bbdc511a9ef30ee74d7ecb83b25a0337cdd52a82cff4554f8bb",
+      "bytes": 34589
+    },
+    {
+      "url": "https://raw.githubusercontent.com/dunwu/images/dev/snap/20210412200354.png",
+      "file": "kafka-18.png",
+      "sha256": "60b71a3ffcc91f2edcd562857b15fa36d18bf374c047419f850b86254d9c7b72",
+      "bytes": 15052
+    },
+    {
+      "url": "https://raw.githubusercontent.com/dunwu/images/dev/snap/20210412200405.png",
+      "file": "kafka-19.png",
+      "sha256": "2c3e4e3a0ee2bf788f6a26460769d6b843558fe2b90d917159cb718d21b93bce",
+      "bytes": 14410
+    },
+    {
+      "url": "https://raw.githubusercontent.com/dunwu/images/dev/snap/20200528224323.png",
+      "file": "kafka-20.png",
+      "sha256": "9eecc20bf141c7d4a4b6c4cd1bfd56d7129d2978b4b9565a66f498b19009f017",
+      "bytes": 59503
+    },
+    {
+      "url": "https://raw.githubusercontent.com/dunwu/images/dev/snap/20200621113043.png",
+      "file": "kafka-21.png",
+      "sha256": "b0a32a1e68048e0ed159eeb3dd29c2a132d955a047b66d972655b0629c522dd0",
+      "bytes": 44392
+    },
+    {
+      "url": "https://raw.githubusercontent.com/dunwu/images/dev/cs/java/javaweb/distributed/mq/kafka/kafka-log-anatomy.png",
+      "file": "kafka-22.png",
+      "sha256": "7f20068147f274a8d3c1f86fbadfad5f9b51f82bbdbbddc52e1b29283af566a5",
+      "bytes": 19579
+    },
+    {
+      "url": "http://www.heartthinkdo.com/wp-content/uploads/2018/05/1-1.png",
+      "file": "kafka-23.png",
+      "sha256": "28444583930603fe1a85a13cd9f146fed68c425bba45ad0d18bee4963ce5a4be",
+      "bytes": 38520
+    },
+    {
+      "url": "http://www.heartthinkdo.com/wp-content/uploads/2018/05/2.png",
+      "file": "kafka-24.png",
+      "sha256": "be134e21ef542427f414aa3a8d58316d1e2f4a4f71e262c5be54e7baed71b535",
+      "bytes": 93779
+    },
+    {
+      "url": "https://raw.githubusercontent.com/dunwu/images/dev/snap/20210423171607.png",
+      "file": "kafka-25.png",
+      "sha256": "20f4c77a32754286bb4a14c2e7d81ebaf9e641f71c4f507521400ce19ea971ab",
+      "bytes": 57721
+    },
+    {
+      "url": "https://raw.githubusercontent.com/dunwu/images/dev/snap/20210429071042.png",
+      "file": "kafka-26.png",
+      "sha256": "24449336c2fcfd7b05df2ea246fa18500638ccdbb6573a2cfec678a5a833f574",
+      "bytes": 45091
+    },
+    {
+      "url": "https://raw.githubusercontent.com/dunwu/images/dev/snap/20210502213820.png",
+      "file": "kafka-27.png",
+      "sha256": "9e6cecf0cb783f2824f2b495ea822f71bae4d2d3813fb221d6a2faab4544f77f",
+      "bytes": 27856
+    },
+    {
+      "url": "https://raw.githubusercontent.com/dunwu/images/dev/snap/20210407180101.png",
+      "file": "kafka-28.png",
+      "sha256": "1c0b4a12dc66008b904500278e7b11be8295798b440c4f8a2d8f894c64e722d3",
+      "bytes": 19942
+    },
+    {
+      "url": "https://raw.githubusercontent.com/dunwu/images/dev/snap/20210407191337.png",
+      "file": "kafka-29.png",
+      "sha256": "3ccd79d7493bd6524c941e37b8a5ab026b4058bfbc449e4a2eda702db95061df",
+      "bytes": 30180
+    },
+    {
+      "url": "https://raw.githubusercontent.com/dunwu/images/dev/snap/10427194506.png",
+      "resolved_url": "https://raw.githubusercontent.com/dunwu/images/dev/snap/20210427194506.png",
+      "file": "kafka-30.png",
+      "sha256": "28958043e9c4b3711555e4b8d9381a9b9d0aae0ebe56884f9060e75d5e2f2d80",
+      "bytes": 31939,
+      "note": "Original filename missing 202 prefix; restored matching dated image."
+    },
+    {
+      "url": "https://raw.githubusercontent.com/dunwu/images/dev/snap/20200621123848.png",
+      "file": "kafka-31.png",
+      "sha256": "9292c98c648cd1b98640a4f30562fe3dc78430ee2d3a0c8c389e20531e86b512",
+      "bytes": 40270
+    },
+    {
+      "url": "https://raw.githubusercontent.com/dunwu/images/dev/snap/20200621124516.png",
+      "file": "kafka-32.png",
+      "sha256": "d154134760b4e4071658d6931568ef1ef2fc18f4abdf2a281aa508e0f2553d13",
+      "bytes": 33091
+    },
+    {
+      "url": "https://raw.githubusercontent.com/dunwu/images/dev/snap/20200621124533.png",
+      "file": "kafka-33.png",
+      "sha256": "f4515185002ca76ed1999ff760b584001d309a8668aa24951365d6c9470904a0",
+      "bytes": 46332
+    }
+  ]
+}
