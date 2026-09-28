@@ -15,6 +15,8 @@ tag:
   - Maven
   - 正则表达式
   - 开发环境
+  - Linux
+  - Shell
 ---
 
 # 开发工具
@@ -25,3 +27,5 @@ tag:
 - [Git](/tools/git/)：版本管理与协作。
 - [Maven](/tools/maven/)：Java 项目构建与依赖管理。
 - [正则表达式](/tools/regex/)：文本查找、校验、提取和批量替换。
+
+- [Linux 与 Shell](/tools/linux/)：常用命令、文本检索、curl 接口调试与脚本编程。
