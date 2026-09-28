@@ -29,6 +29,7 @@ tag:
 6. [存储](./06-storage.html)
 7. [流式处理](./07-stream-processing.html)
 8. [运维](./08-operations.html)
+9. [Go 集成 Kafka：用 Sarama 从订单事件走到可靠消费](./09-go-sarama.html)——通过 curl 下单，逐步验证同步、异步、回调、分区、消费组、位移与事务。
 
 ## 版本说明
 
@@ -36,7 +37,7 @@ tag:
 
 ## 来源与许可
 
-本组 8 篇教程来自 [dunwu（钝悟）的 BIGDATA-TUTORIAL](https://dunwu.github.io/bigdata-tutorial/kafka/)，按 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) 转载；转载文章及其改编继续适用同一许可。原文引用的第三方资料保留原出处。
+目录中前 8 篇教程来自 [dunwu（钝悟）的 BIGDATA-TUTORIAL](https://dunwu.github.io/bigdata-tutorial/kafka/)，按 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) 转载；转载文章及其改编继续适用同一许可。原文引用的第三方资料保留原出处。Go 与 Sarama 实战单独提供可运行项目，并在正文标明学习与核验资料。
 
 导入时补充了站点元信息和版本说明，将 33 张配图保存到本地，修复了一个失效图片地址，并将原文手工目录替换为本站自动目录。技术正文与代码示例保留原版，未整体升级到 Kafka 4.x。
 
