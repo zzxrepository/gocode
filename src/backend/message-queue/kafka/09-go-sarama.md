@@ -746,24 +746,649 @@ if h.manualCommit {
 
 外层必须反复调用 `group.Consume(ctx, topics, handler)`。一次 Consume 对应一次 session；再均衡结束后，需要重新调用才能按新分配继续工作。程序还必须持续读取 `group.Errors()`，并在关闭时等待错误收集结束。[Sarama 消费组生命周期](https://github.com/IBM/sarama/blob/v1.60.2/consumer_group.go)
 
-### 8.5 亲眼观察两个组与两个实例
+### 8.5 四终端实验：把分区、消费组和续读连起来
 
-先停止之前启动的消费者，按第 4.6 节切换到一个新 Topic，并让所有进程加载同一份配置。下面以默认配置中的 Topic 为例，在三个终端启动：
+用少量可以手工计数的消息，可以同时观察三个问题：同组成员怎样分工，不同组为什么都能读到消息，以及消费者停止以后进度保存在谁名下。实验采用独立的纯文本 Topic，把 Key、分区和 offset 直接打印出来。
+
+命令按 Kafka 4.3 命令行工具编写；发行包中可能需要使用 `bin/kafka-topics.sh` 等带 `.sh` 后缀的命令。Broker 地址统一为 `127.0.0.1:9092`。实验使用新的 Topic `kafka-group-lab` 和两个新的组 `group-lab-a`、`group-lab-b`。重复实验时应同时替换为未使用的名称，并确认没有其他进程加入这两个组。
+
+这个 Topic 只用于下面的命令行实验。Go 订单消费者要求 `Event[OrderPayload]` JSON，不能直接读取这里的 `order-A1` 纯文本；订单项目继续使用自己的 `order-events-v1` 或独立实验配置。
+
+#### 一、先认识这几个角色
+
+| 概念 | 可以怎样理解 |
+|---|---|
+| Topic | 一类消息的集合，例如“订单消息” |
+| Partition（分区） | Topic 内的多个存储队列 |
+| Producer（生产者） | 往 Topic 发送消息的程序 |
+| Consumer（消费者） | 从 Topic 读取消息的程序 |
+| Consumer Group（消费组） | 一起分担消费任务的一组消费者 |
+| 消息 offset | 消息在某个分区中的位置 |
+| 消费组提交的 offset | 这个组下次从该分区的哪个位置继续读 |
+
+我们要搭出这样的结构：
+
+```text
+                         Topic：kafka-group-lab
+                       ┌────────┬────────┬────────┐
+生产者 ───────────────→ │ 分区 0 │ 分区 1 │ 分区 2 │
+                       └────────┴────────┴────────┘
+                                  │
+                    ┌─────────────┴─────────────┐
+                    ↓                           ↓
+             消费组：group-lab-a               消费组：group-lab-b
+          ┌──────────────────┐            ┌──────────────┐
+          │ 消费者 A1、A2    │            │ 消费者 B1    │
+          │ 两个人分担消息   │            │ 自己读全部消息│
+          └──────────────────┘            └──────────────┘
+```
+
+先记住：**同组分工，不同组各自消费。分工的单位是分区。** 本实验采用经典消费组协议，一个分区在同一时刻只分配给组内一个消费者；消费者加入或退出时会重新分配。[Kafka 官方消费组说明](https://kafka.apache.org/43/javadoc/org/apache/kafka/clients/consumer/KafkaConsumer.html)
+
+
+#### 二、准备 4 个终端窗口
+
+按下面用途区分，避免命令运行错地方：
+
+| 终端 | 用途 |
+|---|---|
+| 终端 1 | 创建 Topic、发送消息、查看状态 |
+| 终端 2 | 消费者 A1 |
+| 终端 3 | 消费者 A2 |
+| 终端 4 | 消费者 B1 |
+
+使用 zsh 时，**每个终端先执行一次**下面命令，让粘贴进去的 `#` 注释能被正确识别。Bash 无需执行此命令：
 
 ```bash
-# 终端 A
+setopt interactivecomments
+```
+
+下面代码中的 `#` 是解释文字，不会执行；行末的 `\` 表示“命令还没结束，下一行继续”，复制时请整块复制。
+
+
+#### 三、创建一个有 3 个分区的新 Topic
+
+在**终端 1**执行。
+
+为了让 offset 从 `0` 开始，使用新的练习 Topic：`kafka-group-lab`。
+
+```bash
+# kafka-topics：管理 Topic 的工具
+# --bootstrap-server：连接你本机的 Kafka
+# --create：创建 Topic
+# --topic：Topic 名字
+# --partitions 3：创建 3 个分区，编号为 0、1、2
+# --replication-factor 1：每个分区保存 1 份，适合本机单节点练习
+kafka-topics \
+  --bootstrap-server 127.0.0.1:9092 \
+  --create \
+  --topic kafka-group-lab \
+  --partitions 3 \
+  --replication-factor 1
+```
+
+如果提示已经存在，说明这个名字用过了。要严格复现下面从 `0` 开始的结果，可以把全文的 `kafka-group-lab` 换成一个没用过的名字。
+
+查看分区：
+
+```bash
+# --describe：查看 Topic 的详细信息
+kafka-topics \
+  --bootstrap-server 127.0.0.1:9092 \
+  --describe \
+  --topic kafka-group-lab
+```
+
+你应该找到：
+
+```text
+PartitionCount: 3
+```
+
+以及分别带有 `Partition: 0`、`Partition: 1`、`Partition: 2` 的三行。
+
+**3 个分区不是 3 份相同消息。一条消息只进入其中一个分区。**
+
+
+#### 四、发送 9 条带 key 的消息
+
+仍在**终端 1**执行：
+
+```bash
+# kafka-console-producer：启动命令行生产者
+# --topic：消息发送到哪个 Topic
+# parse.key=true：把输入拆成 key 和 value
+# key.separator=:：第一个冒号左边是 key，右边是 value
+kafka-console-producer \
+  --bootstrap-server 127.0.0.1:9092 \
+  --topic kafka-group-lab \
+  --reader-property parse.key=true \
+  --reader-property key.separator=:
+```
+
+启动后，粘贴下面 **9 行消息**，最后一行也要按回车：
+
+```text
+user-1:order-A1
+user-4:order-B1
+user-8:order-C1
+user-1:order-A2
+user-4:order-B2
+user-8:order-C2
+user-1:order-A3
+user-4:order-B3
+user-8:order-C3
+```
+
+这里第一条消息的：
+
+```text
+key   = user-1
+value = order-A1
+```
+
+确认九行都已输入并回车后，按 **Ctrl+D** 结束输入，让生产者完成关闭并回到命令提示符。若出现发送错误，应先排查，避免在消息未完整写入时对照后面的计数。
+
+使用 Kafka 4.3 命令行生产者的默认 Key 分区规则、UTF-8 字符串和 3 个分区时，这几个 key 的分配如下。命令行工具使用 Java 客户端，这张映射表不适用于项目中采用 `NewHashPartitioner` 的 Sarama 生产者：
+
+| Key | 分区 | 消息 |
+|---|---|---|
+| `user-8` | 0 | C1、C2、C3 |
+| `user-4` | 1 | B1、B2、B3 |
+| `user-1` | 2 | A1、A2、A3 |
+
+**Key 不是分区编号**，生产者会根据 key 计算分区。同 key 在分区数和分区规则不变时会落在同一分区；不同 key 也可能落在同一分区。
+
+
+#### 五、先观察“消息的 offset”
+
+在**终端 1**执行：
+
+```bash
+# 只查看 2 号分区的消息
+# --partition 2：指定读取分区 2
+# --offset earliest：从最早保留的消息开始读取
+# --max-messages 3：读到 3 条后自动退出
+# 三个 print 参数：显示分区、offset、key；value 默认显示
+kafka-console-consumer \
+  --bootstrap-server 127.0.0.1:9092 \
+  --topic kafka-group-lab \
+  --partition 2 \
+  --offset earliest \
+  --max-messages 3 \
+  --formatter-property print.partition=true \
+  --formatter-property print.offset=true \
+  --formatter-property print.key=true
+```
+
+预期结果：
+
+```text
+Partition:2    Offset:0    user-1    order-A1
+Partition:2    Offset:1    user-1    order-A2
+Partition:2    Offset:2    user-1    order-A3
+```
+
+此时整个 Topic 的存储情况是：
+
+```text
+分区 0：offset 0 = C1，offset 1 = C2，offset 2 = C3
+分区 1：offset 0 = B1，offset 1 = B2，offset 2 = B3
+分区 2：offset 0 = A1，offset 1 = A2，offset 2 = A3
+```
+
+**全新 Topic 中，每个分区都从自己的 offset 0 开始编号，没有整个 Topic 共用的统一 offset。** 旧 Topic 的早期消息可能已因保留策略被清理，最早可读 offset 不一定仍是 0。
+
+接着从 offset `1` 重新读取：
+
+```bash
+# 仍然读取分区 2
+# --offset 1：从 offset 1 开始，包含这一条
+# --max-messages 2：读取 2 条后退出
+kafka-console-consumer \
+  --bootstrap-server 127.0.0.1:9092 \
+  --topic kafka-group-lab \
+  --partition 2 \
+  --offset 1 \
+  --max-messages 2 \
+  --formatter-property print.partition=true \
+  --formatter-property print.offset=true \
+  --formatter-property print.key=true
+```
+
+这次只会看到：
+
+```text
+Partition:2    Offset:1    user-1    order-A2
+Partition:2    Offset:2    user-1    order-A3
+```
+
+这说明消息可以重新读取，**读取不会把消息立即删除**。本实验使用全新 Topic、普通非事务消息，实验期间不发生压缩清理和保留期删除，因此可以直接按连续 offset 对照消息条数；带事务控制记录或日志空洞时，offset 差值不一定等于业务消息数量。
+
+这一节是“手动指定分区读取”，用于观察消息位置，不推进稍后两个业务实验组的进度。消费组实验不再写 `--partition`，分区由组机制自动分配。
+
+
+#### 六、启动消费组 A，先只放一个消费者
+
+在**终端 2**启动消费者 A1：
+
+```bash
+# --group group-lab-a：加入名叫 group-lab-a 的消费组
+# 消费组不需要提前手动创建，消费者启动后会加入
+# --from-beginning：该组没有消费进度时，从最早保留的消息开始
+# client.id=a1：给这个消费者起一个便于识别的名字
+# group.protocol=classic：固定使用经典消费者组协议
+# partition.assignment.strategy：固定 Range 分配策略，便于观察分工
+# enable.auto.commit=true：自动保存消费进度
+# auto.commit.interval.ms=1000：自动提交间隔设为 1 秒
+kafka-console-consumer \
+  --bootstrap-server 127.0.0.1:9092 \
+  --topic kafka-group-lab \
+  --group group-lab-a \
+  --from-beginning \
+  --command-property client.id=a1 \
+  --command-property group.protocol=classic \
+  --command-property partition.assignment.strategy=org.apache.kafka.clients.consumer.RangeAssignor \
+  --command-property enable.auto.commit=true \
+  --command-property auto.commit.interval.ms=1000 \
+  --formatter-property print.partition=true \
+  --formatter-property print.offset=true \
+  --formatter-property print.key=true
+```
+
+**保持这个消费者运行，不要退出。**
+
+你会看到之前的全部 **9 条消息**。不同分区之间的显示顺序可能不同。
+
+为什么一个消费者能读 3 个分区？
+
+因为当前 `group-lab-a` 组里只有 A1，它负责全部分区：
+
+```text
+group-lab-a：
+  A1 → 分区 0、1、2
+```
+
+在**终端 1**查看它保存的进度。自动提交需要时间；如果尚未到达下方预期值，稍后再次执行，确认提交完成后再继续实验：
+
+```bash
+# kafka-consumer-groups：管理和查看消费组
+# --group group-lab-a：查看 group-lab-a 组
+# --describe：显示该组在各分区上提交的消费位置
+kafka-consumer-groups \
+  --bootstrap-server 127.0.0.1:9092 \
+  --describe \
+  --group group-lab-a
+```
+
+忽略其他列，重点看：
+
+```text
+PARTITION    CURRENT-OFFSET    LOG-END-OFFSET    LAG
+0            3                 3                 0
+1            3                 3                 0
+2            3                 3                 0
+```
+
+| 字段 | 含义 |
+|---|---|
+| `CURRENT-OFFSET` | 消费组已提交的位置，重启后从这里继续 |
+| `LOG-END-OFFSET` | 分区日志末尾的下一位置，不是最后一条消息的 offset |
+| `LAG` | 两者之间的差距；本实验中表示还没追上的消息数量 |
+
+每个分区都读完了 offset `0、1、2`，所以提交的位置是 `3`：
+
+```text
+已经读完：0 → 1 → 2
+下次读取：3
+```
+
+**保存的是下次读取的位置，不是最后一条已读消息的位置。** 进度的标识是 `(group.id, topic, partition)`，不属于某个 `client.id` 或终端窗口。更换消费者进程后，只要组名、Topic、分区不变，仍从有效的已提交位置恢复。[Kafka offset 说明](https://kafka.apache.org/43/javadoc/org/apache/kafka/clients/consumer/KafkaConsumer.html#offsets)
+
+
+#### 七、同一个组加入第二个消费者，观察分工
+
+在**终端 3**启动 A2：
+
+```bash
+# --group 仍然是 group-lab-a：A2 和 A1 属于同一个组
+# client.id=a2：让查看状态时可以区分 A1 和 A2
+# 其余配置与 A1 相同
+kafka-console-consumer \
+  --bootstrap-server 127.0.0.1:9092 \
+  --topic kafka-group-lab \
+  --group group-lab-a \
+  --from-beginning \
+  --command-property client.id=a2 \
+  --command-property group.protocol=classic \
+  --command-property partition.assignment.strategy=org.apache.kafka.clients.consumer.RangeAssignor \
+  --command-property enable.auto.commit=true \
+  --command-property auto.commit.interval.ms=1000 \
+  --formatter-property print.partition=true \
+  --formatter-property print.offset=true \
+  --formatter-property print.key=true
+```
+
+**保持终端 2、3 都运行。**
+
+A2 启动后，一般不会打印之前的 9 条消息。这是因为 **group-lab-a 已经提交过进度，A2 会接着这个组的进度读**。
+
+在**终端 1**查看分工：
+
+```bash
+# --members：查看组内有哪些消费者
+# --verbose：进一步显示每个消费者分到了哪些分区
+kafka-consumer-groups \
+  --bootstrap-server 127.0.0.1:9092 \
+  --describe \
+  --group group-lab-a \
+  --members \
+  --verbose
+```
+
+等待分配稳定后，你会看到类似分工：
+
+```text
+CLIENT-ID    #PARTITIONS    ASSIGNMENT
+a1           2             kafka-group-lab(0,1)
+a2           1             kafka-group-lab(2)
+```
+
+具体谁拿到哪个分区，以实际输出为准。
+
+这次变化叫 **Rebalance，重新分配分区**：
+
+```text
+加入前：
+  A1 → 0、1、2
+
+加入后，可能是：
+  A1 → 0、1
+  A2 → 2
+```
+
+现在在**终端 1**重新启动生产者：
+
+```bash
+# 向同一个 Topic 继续发送消息
+kafka-console-producer \
+  --bootstrap-server 127.0.0.1:9092 \
+  --topic kafka-group-lab \
+  --reader-property parse.key=true \
+  --reader-property key.separator=:
+```
+
+输入：
+
+```text
+user-1:order-A4
+user-4:order-B4
+user-8:order-C4
+```
+
+最后一行回车后，按 **Ctrl+D** 结束输入，等待生产者正常退出。
+
+观察终端 2、3：
+
+- A1 和 A2 **合起来读到这 3 条新消息**。
+- 一个消费者会读到其中 2 条，另一个读到 1 条，取决于分区分配。
+- 这 3 条消息在各自分区中的 offset 都是 `3`。
+
+**同组消费者分担的是分区，不是简单地“你一条、我一条”轮流拿消息。**
+
+这里观察的是正常、稳定运行时的分工；发生故障或进度尚未提交时，消息仍可能被重复处理。
+
+
+#### 八、启动另一个消费组，观察它能否读到旧消息
+
+在**终端 4**启动 B1：
+
+```bash
+# --group group-lab-b：这是一个新的消费组，与 group-lab-a 不同
+# --from-beginning：新组没有进度，因此从头读取
+# client.id=b1：消费者的识别名字
+kafka-console-consumer \
+  --bootstrap-server 127.0.0.1:9092 \
+  --topic kafka-group-lab \
+  --group group-lab-b \
+  --from-beginning \
+  --command-property client.id=b1 \
+  --command-property group.protocol=classic \
+  --command-property partition.assignment.strategy=org.apache.kafka.clients.consumer.RangeAssignor \
+  --command-property enable.auto.commit=true \
+  --command-property auto.commit.interval.ms=1000 \
+  --formatter-property print.partition=true \
+  --formatter-property print.offset=true \
+  --formatter-property print.key=true
+```
+
+**保持 B1 运行。**
+
+它会读到全部 **12 条消息**：
+
+```text
+第一批 9 条 + 第二批 3 条 = 12 条
+```
+
+虽然 `group-lab-a` 已经消费过这些消息，但 `group-lab-b` 有自己的进度。
+
+现在的结构是：
+
+```text
+group-lab-a：
+  A1、A2 分担 3 个分区
+  整个组累计读到 12 条
+
+group-lab-b：
+  B1 独自读取 3 个分区
+  整个组累计也读到 12 条
+```
+
+这对应实际业务：
+
+```text
+订单 Topic
+  ├── 库存消费组：扣减库存
+  └── 通知消费组：发送通知
+```
+
+同一个订单可以分别被两个业务处理。**生产者只需要发到 Topic，不需要指定消息属于哪个消费组。**
+
+
+#### 九、停止一个组，再看它如何从保存的 offset 续读
+
+先在终端 1 使用 `kafka-consumer-groups --bootstrap-server 127.0.0.1:9092 --describe --group group-lab-b`，确认三个分区的 `CURRENT-OFFSET` 和 `LOG-END-OFFSET` 均为 4、`LAG` 均为 0，再在**终端 4**按 **Ctrl+C** 停止 B1。以实际提交位置为准，不能仅凭屏幕已打印 12 行就认为进度已经保存。
+
+此时：
+
+```text
+group-lab-a：A1、A2 仍然运行
+group-lab-b：没有运行中的消费者
+```
+
+在**终端 1**启动生产者：
+
+```bash
+# 在 group-lab-b 停止期间，继续发送消息
+kafka-console-producer \
+  --bootstrap-server 127.0.0.1:9092 \
+  --topic kafka-group-lab \
+  --reader-property parse.key=true \
+  --reader-property key.separator=:
+```
+
+输入：
+
+```text
+user-1:order-A5
+user-4:order-B5
+user-8:order-C5
+```
+
+最后一行回车后，按 **Ctrl+D** 结束输入，等待生产者正常退出。
+
+你会看到：
+
+- 终端 2、3 的 A 组继续收到消息。
+- B1 已停止，所以终端 4 没有消费者输出。
+
+在**终端 1**查看 B 组进度：
+
+```bash
+# 即使组里暂时没有运行中的消费者，仍然可以查看保存的进度
+kafka-consumer-groups \
+  --bootstrap-server 127.0.0.1:9092 \
+  --describe \
+  --group group-lab-b
+```
+
+预期关键字段：
+
+```text
+PARTITION    CURRENT-OFFSET    LOG-END-OFFSET    LAG
+0            4                 5                 1
+1            4                 5                 1
+2            4                 5                 1
+```
+
+以分区 2 为例：
+
+```text
+已完成：offset 0 / A1 → 1 / A2 → 2 / A3 → 3 / A4
+待补读：offset 4 / A5
+已提交：4，也就是 group-lab-b 下次从 A5 所在位置继续
+```
+
+B 组之前读完了 offset `3`，保存的是 `4`。停止期间新增的 A5 位于 offset `4`，因此还差 1 条。
+
+现在回到**终端 4，重新执行第八步 B1 的完整命令**。
+
+它只会补读：
+
+```text
+order-A5
+order-B5
+order-C5
+```
+
+不会重读前面的 12 条，因为 `group-lab-b` 的进度已经保存。虽然命令里仍有 `--from-beginning`，**有效的已提交进度优先**。
+
+继续查看 B 组，等新的进度提交完成后，三个分区应变成：
+
+```text
+CURRENT-OFFSET = 5
+LOG-END-OFFSET = 5
+LAG = 0
+```
+
+本实验自动提交的是命令行读取进度；实际业务中，提交时机应与业务处理完成的时机配合。
+
+
+#### 十、停止同组中的一个消费者，观察谁来接班
+
+现在 A1、A2 应该仍在运行。
+
+在**终端 3**按 **Ctrl+C**，停止 A2。
+
+然后在**终端 1**查看 A 组成员：
+
+```bash
+# 查看 A2 退出后，分区是否转交给 A1
+# 如果还在重新分配，等几秒后再执行一次
+kafka-consumer-groups \
+  --bootstrap-server 127.0.0.1:9092 \
+  --describe \
+  --group group-lab-a \
+  --members \
+  --verbose
+```
+
+稳定后应该只剩 A1，并负责全部 3 个分区：
+
+```text
+CLIENT-ID    #PARTITIONS    ASSIGNMENT
+a1           3             kafka-group-lab(0,1,2)
+```
+
+再在终端 1 运行前面的生产者命令，发送：
+
+```text
+user-1:order-A6
+user-4:order-B6
+user-8:order-C6
+```
+
+你会看到：
+
+- **终端 2 的 A1 收到全部 3 条**，因为它接管了所有分区。
+- **终端 4 的 B1 也收到全部 3 条**，因为 B 组独立消费。
+- 新消息在各自分区中的 offset 都是 `5`。
+
+如果重新启动 A2，Kafka 会再次重新分配，让 A1、A2 分担分区。
+
+对于本实验这个 **3 分区、所有消费者订阅同一个 Topic** 的经典消费组，使用 Range 分配策略时，消费者数量与分工关系是：
+
+| 同组消费者数量 | 稳定后的分配情况 |
+|---|---|
+| 1 个 | 一个消费者负责 3 个分区 |
+| 2 个 | 一个负责 2 个，另一个负责 1 个 |
+| 3 个 | 每个负责 1 个 |
+| 4 个 | 只有 3 个能分到分区，另一个空闲 |
+
+**分区数量决定了这个组消费该 Topic 时，最多能有多少个消费者同时分担工作。** 实验结束后，在仍运行的消费者终端按 **Ctrl+C** 即可。
+
+#### 用一张进度表核对整个实验
+
+下面的位移对三个分区分别成立；同一组在不同分区各有一份进度，不是把三个分区合并成一个数字。
+
+| 时刻 | 每个分区已有消息数 | A 组提交位置 | B 组提交位置 | B 组 LAG |
+| --- | --- | --- | --- | --- |
+| 第一批 9 条消费并提交后 | 3 | 3 | 尚未启动 | — |
+| 第二批 3 条写入，B1 读完历史并提交后 | 4 | 4 | 4 | 0 |
+| B1 停止，第三批 3 条写入，A 组追平后 | 5 | 5 | 4 | 1 |
+| B1 重启并补读、提交后 | 5 | 5 | 5 | 0 |
+| A2 停止，第四批 3 条由 A1、B1 分别读完并提交后 | 6 | 6 | 6 | 0 |
+
+消费组中的成员会变化，组记录的每分区进度仍能用于接班。`client.id` 只是便于识别客户端的标识；生产者决定写哪个 Topic、哪个分区，消费者通过组名决定与谁分工，已提交 offset 决定这个组恢复时从哪里继续。
+
+### 8.6 在 Go 订单项目中观察同样的分工
+
+命令行实验中的三个角色，可以对应到项目中的三个 Sarama 消费者进程。先停止先前的订单消费者，确认 API 和以下进程读取同一份配置，再分别启动：
+
+```bash
+# 终端 A：订单进度组的第一个实例。
 sh run.sh ./cmd/consumer -group order-progress -client-id progress-a
 
-# 终端 B
+# 终端 B：订单进度组的第二个实例。
 sh run.sh ./cmd/consumer -group order-progress -client-id progress-b
 
-# 终端 C
+# 终端 C：独立的审计组。
 sh run.sh ./cmd/consumer -group order-audit -client-id audit-a
 ```
 
-另一个终端通过同步路由创建一笔新订单再支付。进度组 A、B 的处理日志合起来对应这两条事件；审计组 C 独立处理两条。成员加入退出期间可能出现再均衡及重复处理，因此不能把一次屏幕输出当作恰好一次保证。
+在另一个终端通过同步路由创建一笔新订单再支付。进度组 A、B 的处理日志合起来对应这两条事件；审计组 C 独立处理两条。**同一订单使用相同 Key，创建和支付会进入同一分区，因此在分配稳定时由同一个进度实例处理；另一个实例此时没有订单输出是正常现象。** 若要同时看到 A、B 工作，需要发送多个订单，并确认其 Key 实际分布到了两个实例各自负责的分区。
 
-启动第二个进度实例时，观察 `released` 与新的 `assigned`。停止其中一个后，再发送一批事件，存活实例应接管工作。实例数超过三个时，对这个三分区 Topic 而言，至少一个成员没有分区可分。
+| 命令行实验入口 | Go 项目中的对应入口 |
+| --- | --- |
+| `--group group-lab-a` | `-group order-progress` 或 YAML `kafka.consumer.group_id` |
+| `--command-property client.id=a1` | `-client-id progress-a` |
+| `--from-beginning` | 无有效组位移时使用 `initial_offset: oldest` |
+| `--members --verbose` 查看分区归属 | `Setup` 的 `assigned ... claims=...` 日志，也可继续使用命令行管理工具 |
+| `enable.auto.commit=true` | 本实验程序默认手动提交；需要自动提交时配置 `auto_commit: true` |
+
+查看 Go 进度组的分工和进度：
+
+```bash
+kafka-consumer-groups --bootstrap-server 127.0.0.1:9092 \
+  --describe --group order-progress --members --verbose
+
+kafka-consumer-groups --bootstrap-server 127.0.0.1:9092 \
+  --describe --group order-progress
+```
+
+启动第二个进度实例时，观察 `released` 与新的 `assigned`。停止其中一个后，再发送一批事件，存活实例应接管工作。同组实例数超过三个时，对这个三分区 Topic 而言，至少一个成员没有分区可分。成员加入退出期间可能出现再均衡及重复处理，因此不能把一次屏幕输出当作恰好一次保证。
+
+命令行消费者的自动提交只用于观察读取进度；订单程序在业务处理成功后才标记和提交。分工原理相同，可靠性仍取决于提交位置是否正确表达了已经完成的业务工作。
 
 ## 9. 位移提交：把“读到了”与“做完了”分开
 
