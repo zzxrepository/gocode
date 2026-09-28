@@ -1,9 +1,11 @@
 ---
 title: Linux 命令详解
 shortTitle: Linux 命令
-order: 1
+order: 2
+permalink: /tools/linux/Linux命令详解.html
 category:
-  - Linux 与 Shell
+  - 开发工具
+  - 开发环境
 tag:
   - Linux
   - 命令行

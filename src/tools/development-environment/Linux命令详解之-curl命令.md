@@ -1,9 +1,11 @@
 ---
 title: curl 命令详解
 shortTitle: curl 命令
-order: 2
+order: 3
+permalink: /tools/linux/Linux命令详解之-curl命令.html
 category:
-  - Linux 与 Shell
+  - 开发工具
+  - 开发环境
 tag:
   - curl
   - HTTP

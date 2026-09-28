@@ -1,9 +1,11 @@
 ---
 title: Shell 编程
 shortTitle: Shell 编程
-order: 3
+order: 4
+permalink: /tools/linux/Shell编程.html
 category:
-  - Linux 与 Shell
+  - 开发工具
+  - 开发环境
 tag:
   - Shell
   - Bash

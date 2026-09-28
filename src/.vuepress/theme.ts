@@ -135,6 +135,7 @@ export default hopeTheme({
 
     redirect: {
       config: {
+        "/tools/linux/": "/tools/development-environment/",
         "/backend/message-queue/A-消息队列.html": "/interview/message-queue.html",
         "/tree/": "/algorithm/",
         "/go/": "/backend/go/",
