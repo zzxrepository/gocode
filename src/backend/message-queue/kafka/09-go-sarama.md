@@ -43,7 +43,7 @@ Kafka 能把这些事实保存下来，让不同应用按自己的速度读取�
 
 ```mermaid
 flowchart LR
-    O[订单服务] -->|发布订单状态事件| K[Kafka: order-events]
+    O[订单服务] -->|发布订单状态事件| K[Kafka: order-events-v1]
     K --> P[进度服务组 order-progress]
     K --> A[审计服务组 order-audit]
 ```
@@ -76,7 +76,7 @@ flowchart LR
 可以把 Topic 理解为事件类别，把 Partition 理解为该类别中的一份追加日志。Broker 是保存这些日志并响应网络请求的服务节点。
 
 ```text
-Topic: order-events
+Topic: order-events-v1
   Partition 0: [offset 0] [offset 1] [offset 2] ...
   Partition 1: [offset 0] [offset 1] ...
   Partition 2: [offset 0] [offset 1] [offset 2] ...
@@ -88,7 +88,7 @@ Topic: order-events
 | --- | --- |
 | Event / Record / Message | 一条订单状态记录，传输时是字节 |
 | Producer | 将订单事件写入 Kafka 的 Go 代码 |
-| Topic | `order-events`，承载这类事件 |
+| Topic | `order-events-v1`，承载这类事件 |
 | Partition | 决定有序日志、并发处理和数据分布的单位 |
 | Offset | 分区内的位置；递增，但不应假设永远连续 |
 | Broker | 本地监听 `127.0.0.1:9092` 的 Kafka 服务 |
@@ -121,7 +121,8 @@ Topic: order-events
 | --- | --- |
 | Kafka | 在本地 Kafka 4.3.1 上验证，KRaft 模式 |
 | Go | 模块要求 Go 1.25.0 或更新版本 |
-| 客户端 | `github.com/IBM/sarama v1.60.0` |
+| 客户端 | `github.com/IBM/sarama v1.60.2` |
+| 配置库 | `github.com/spf13/viper v1.21.0` |
 | 连接 | `127.0.0.1:9092`，本地 PLAINTEXT |
 | Topic | 三分区、一副本，用于学习 |
 | 消费组协议 | 项目使用 Sarama 的经典消费者组流程和 Range 分配策略 |
@@ -176,7 +177,7 @@ kafka-console-consumer --bootstrap-server 127.0.0.1:9092 \
 
 ### 4.1 一个实验入口对应一份发送代码
 
-完整源码：[Sarama 订单事件实验项目](https://github.com/zzxrepository/gocode-examples/tree/32c6aea5d11b0e8934233c907aa5fc9b3287af8f/message-queue/kafka/go/01-sarama-order-demo)。业务请求通过 HTTP 路由选择发送示例，每个发送示例有独立的代码文件；消费服务另起进程。
+完整源码：[Sarama 订单事件实验项目](https://github.com/zzxrepository/gocode-examples/tree/77bec3214987678dca122df44e125fe19066c3e7/message-queue/kafka/go/01-sarama-order-demo)。业务请求通过 HTTP 路由选择发送示例，每个发送示例有独立的代码文件；消费服务另起进程。
 
 ```text
 01-sarama-order-demo/
@@ -190,8 +191,9 @@ kafka-console-consumer --bootstrap-server 127.0.0.1:9092 \
 │   ├── router/router.go            URL 与控制器绑定
 │   ├── controller/                 请求解码、响应与事务实验入口
 │   ├── service/order_service.go    订单规则、事件组装、内存状态
-│   ├── model/                      订单与订单事件结构
-│   ├── config/config.go            YAML 解析、校验、Sarama 配置转换
+│   ├── model/                      订单、OrderPayload 与事件别名
+│   ├── event/event.go              通用 Event[T] 信封
+│   ├── config/config.go            Viper 加载、校验、Sarama 配置转换
 │   ├── messaging/
 │   │   ├── message.go              通用 Record 与 ProducerMessage 转换
 │   │   ├── sync_producer.go        同步发送 demo
@@ -207,7 +209,7 @@ kafka-console-consumer --bootstrap-server 127.0.0.1:9092 \
 
 一次请求沿着 `router → controller → service → messaging → Kafka` 前进。router 只绑定入口；controller 处理 HTTP；service 检查订单状态并组装事件；messaging 负责传输字节，不理解订单业务。文件名没有框架强制标准，清晰的职责比统一叫 controller 或 handler 更重要。
 
-### 4.2 bootstrap.servers 在哪里
+### 4.2 用 Viper 加载配置与引导地址
 
 `configs/local.yaml` 包含可修改的应用配置：
 
@@ -217,7 +219,7 @@ http:
 kafka:
   bootstrap_servers:
     - "127.0.0.1:9092"
-  topic: "order-events"
+  topic: "order-events-v1"
   client_id: "order-demo"
   producer:
     required_acks: "all"
@@ -238,13 +240,51 @@ producer, err := sarama.NewSyncProducer(cfg.Kafka.BootstrapServers, kafkaCfg)
 
 YAML 的 `bootstrap_servers` 是应用自己约定的字段名，加载后传给 Sarama，功能对应 Java 的 `bootstrap.servers`。它不会因为没有写在 `sarama.Config` 里就消失。
 
+项目固定使用 Viper v1.21.0。Viper 适合同时处理配置文件、环境变量和默认值；只读取一份简单文件时，直接使用 YAML 解码库也可以。这里使用独立的 `viper.New()` 实例，避免不同组件或测试共享全局配置。[Viper 官方说明](https://github.com/spf13/viper/tree/v1.21.0)
+
+加载过程的关键调用如下，完整键列表与错误处理见 `internal/config/config.go`：
+
+```go
+v := viper.New()
+v.SetConfigFile(path)
+v.SetConfigType("yaml")
+v.SetEnvPrefix("ORDER_DEMO")
+v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+v.AutomaticEnv()
+
+// 所有已知键都注册默认值；这里只展示两项。
+v.SetDefault("http.address", "127.0.0.1:18080")
+v.SetDefault("kafka.bootstrap_servers", []string{"127.0.0.1:9092"})
+if err := v.ReadInConfig(); err != nil {
+    return cfg, fmt.Errorf("读取配置: %w", err)
+}
+if err := v.UnmarshalExact(&cfg); err != nil {
+    return cfg, fmt.Errorf("解析配置: %w", err)
+}
+```
+
+配置结构体使用 `mapstructure` 标签，例如 `BootstrapServers []string` 对应 `mapstructure:"bootstrap_servers"`。注册所有默认键有实际作用：即使某个键未出现在 YAML 中，环境变量也能参与结构体解码，不能只调用 `AutomaticEnv()` 就假定任意环境变量都会被枚举出来。
+
+这个项目的覆盖顺序是：**默认值 < YAML 文件 < 环境变量 < 消费者显式传入的对应命令行参数**。消费者的 `-group`、`-client-id` 在配置加载后赋值；没有绑定所有字段到命令行。
+
+```bash
+# 临时改变 HTTP 监听地址，不修改配置文件。
+ORDER_DEMO_HTTP_ADDRESS=127.0.0.1:18081 sh run.sh ./cmd/api
+
+# 多个引导地址用逗号分隔，解码为 []string。
+ORDER_DEMO_KAFKA_BOOTSTRAP_SERVERS=127.0.0.1:9092,127.0.0.1:19092 \
+  sh run.sh ./cmd/consumer -group order-audit
+```
+
+多个引导地址应填写实际存在的 Broker。其他字段按同样规则映射，例如 `kafka.consumer.auto_commit` 对应 `ORDER_DEMO_KAFKA_CONSUMER_AUTO_COMMIT`。配置文件仍必须存在；修改配置后重启进程，已经创建的 Sarama 客户端不会因为文件变化自动重建。
+
 配置加载器拒绝未知字段，并调用 Sarama 的 `Validate` 校验组合。例如保留幂等却把 `required_acks` 改成 `"0"`，应该在启动时报告错误，而不是静默降级。订单 API 额外要求 `required_acks: "all"`，保持成功响应的确认语义。
 
 ### 4.3 启动三个必要部分
 
 ```bash
 git clone https://github.com/zzxrepository/gocode-examples.git
-git -C gocode-examples checkout 32c6aea5d11b0e8934233c907aa5fc9b3287af8f
+git -C gocode-examples checkout 77bec3214987678dca122df44e125fe19066c3e7
 cd gocode-examples/message-queue/kafka/go/01-sarama-order-demo
 
 # 创建三分区、一副本 Topic。已存在时保留数据。
@@ -311,23 +351,56 @@ sh run.sh ./cmd/consumer -config configs/lab.yaml -group order-lab-progress
 
 ## 5. 把业务事实变成消息
 
-### 5.1 订单号和事件号为什么要分开
+### 5.1 公共事件信封与业务 Payload
 
-项目中的数据结构是：
+一条消息同时回答两个问题：这是什么事件，以及事件包含什么业务数据。公共信息由 `internal/event/event.go` 定义：
 
 ```go
-type OrderEvent struct {
-    EventID     string `json:"event_id"`
-    Version     int    `json:"version"`
+// T 表示当前事件的业务载荷类型。
+type Event[T any] struct {
+    ID         string    `json:"id"`
+    Type       string    `json:"type"`
+    Version    int       `json:"version"`
+    Source     string    `json:"source"`
+    OccurredAt time.Time `json:"occurred_at"`
+    Payload    T         `json:"payload"`
+}
+```
+
+订单业务只定义自己的 Payload，并用别名缩短代码中的类型名称：
+
+```go
+type OrderPayload struct {
     OrderID     string `json:"order_id"`
     Status      string `json:"status"`
     AmountCents int64  `json:"amount_cents"`
 }
+
+type OrderEvent = event.Event[OrderPayload]
 ```
 
-`order_id` 表示哪一笔订单，`event_id` 表示哪一次业务事实。同一订单的创建和支付是两个事件，因此消费者不能简单地“这个订单见过就全部忽略”。
+`OrderEvent` 是通用类型的别名，不是另一份重复定义的事件信封。也可以直接写 `event.Event[OrderPayload]`。发布一条订单创建事件时，Kafka Value 中的 JSON 类似：
 
-`version` 给后续结构演进留下识别入口；新增字段、修改字段语义和删除字段的兼容代价并不相同。金额使用整数分，避免把浮点舍入问题带进实验。
+```json
+{
+  "id": "sync-1001:created",
+  "type": "order.status_changed",
+  "version": 1,
+  "source": "order-service",
+  "occurred_at": "2026-09-28T02:00:00Z",
+  "payload": {
+    "order_id": "sync-1001",
+    "status": "created",
+    "amount_cents": 1200
+  }
+}
+```
+
+`payload.order_id` 表示哪一笔订单，外层 `id` 表示哪一次业务事实。同一订单的创建和支付是两个事件，因此消费者不能简单地“这个订单见过就全部忽略”。`type` 决定事件含义，`version` 标识该类型的载荷版本，`source` 标识来源，`occurred_at` 表示发生时间。金额使用整数分，避免浮点舍入问题。
+
+示例用“订单号:状态”生成事件 ID，只适用于这里不可重复迁移的单向状态机。`NewOrderEvent` 使用当前 UTC 时间组装事件；真实系统应在业务事实发生时持久化完整事件，重试复用同一个 ID、时间和 Payload。允许多次退款、反复变更等业务需要独立事件 ID，不能沿用这个简化规则。
+
+HTTP 下单请求仍然只传 `order_id`、`amount_cents`；公共事件字段由业务服务生成。客户端提交的是业务请求，Kafka 中保存的是服务处理后形成的事件。
 
 ### 5.2 序列化发生在客户端
 
@@ -339,7 +412,7 @@ if err != nil {
     return model.Order{}, err
 }
 err = s.publisher.Publish(ctx, messaging.Record{
-    Key: order.ID, Value: value, EventID: event.EventID,
+    Key: order.ID, Value: value, EventID: event.ID,
 })
 ```
 
@@ -361,48 +434,56 @@ JSON 便于观察。消息量和 schema 管理需求提高后，可以评估 Pro
 
 ### 5.3 反序列化也不等于业务合法
 
-消费者先执行 `json.Unmarshal`，再检查版本、事件 ID、订单号、Key 与订单号的一致性、金额及状态取值。合法 JSON 也可能是一条无法处理的业务记录。
+消费者先执行 `json.Unmarshal`，再检查类型、版本、来源、发生时间、事件 ID、Payload 中的订单号、Key 与订单号的一致性、金额及状态取值。合法 JSON 也可能是一条无法处理的业务记录。
 
 坏消息的处理策略是项目的一部分：本实验返回错误并停止实例，不标记该消息。这样便于观察失败恢复，但也意味着同一条坏消息会阻塞所在分区，需要修复、隔离或人工处置。直接打印错误然后继续标记后续位移，会把“失败”变成“被跳过”。
 
-### 5.4 增加支付、用户事件时，要不要再写一套发送代码
+### 5.4 新增业务时，只定义对应的 Payload
 
-事件类型由业务含义决定，传输方式由 Kafka 客户端决定。新增 `UserRegistered` 不需要重新实现同步发送、错误收集和连接关闭。它只需要自己的数据结构与编码逻辑，最终仍交给同一个 `Record` 传输接口。
-
-业务事件也不必全部挤进一个拥有几十个可选字段的大结构体。订单状态变化、支付成功和用户注册的数据含义不同，可以分别建模：
+订单、支付和用户注册都可以复用同一个 `Event[T]`。例如支付成功的业务数据与订单状态不同，可以定义：
 
 ```go
-// 这是多业务事件的设计示意，当前订单实验没有引入这些额外业务。
-type PaymentSucceeded struct {
+// 扩展业务的建模示例；当前可运行 HTTP demo 聚焦订单。
+type PaymentPayload struct {
     OrderID       string `json:"order_id"`
     TransactionID string `json:"transaction_id"`
-    Channel       string `json:"channel"`
     AmountCents   int64  `json:"amount_cents"`
 }
 
-type UserRegistered struct {
+type UserPayload struct {
     UserID string `json:"user_id"`
 }
 
-type Event[T any] struct {
-    ID      string    `json:"id"`
-    Type    string    `json:"type"`
-    Version int       `json:"version"`
-    Source  string    `json:"source"`
-    Time    time.Time `json:"time"`
-    Data    T         `json:"data"`
-}
+// 两者共享元数据，Payload 仍然保留编译期类型检查。
+type PaymentEvent = event.Event[PaymentPayload]
+type UserEvent = event.Event[UserPayload]
 ```
 
-这是“统一上下文、独立业务载荷”的一种表达。`Event[PaymentSucceeded]` 复用公共字段，同时保持支付数据的类型检查。若多个状态始终采用同一 schema，使用一个 `OrderStatusChanged` 搭配明确状态字段也合理；是否拆结构体，应看业务约束和演进方式，而不是看到一种状态就复制一个文件。
+别名可以按业务需要选择，不要求每种事件都额外建立一个 `XXXEvent` 文件。真正需要独立维护的是业务数据契约：支付、用户、库存有不同字段与校验规则，它们各自拥有 Payload 类型是有意义的。多个订单状态使用同一套字段，因此本项目用 `order.status_changed` 与 `payload.status` 表达，没有为 created、paid、cancelled 复制三份结构。
 
-消费端可以先读取包含 `json.RawMessage` 的公共信封，再依据事件类型和版本交给已注册处理器。处理器表让业务扩展不必修改一个越来越大的分支函数。未知版本、解码失败、没有处理器等情况必须有明确策略，不能默默确认并丢弃。
+将 Payload 写成 `any` 或 `map[string]any` 也能编码 JSON，但生产端容易把拼错的字段、错误的数据类型送出去，消费端又要补类型断言。已知业务结构使用 `Event[OrderPayload]` 更清晰；只有需要先识别事件类型的消费入口，才延迟解码：
 
-也可以按 Topic 为不同业务分别注册处理器。**事件类型、Topic、消费者组、HTTP 路由是四个不同维度**：一个 Topic 可以承载同一业务域的多个事件类型，一个事件类型也可能被多个组独立消费；HTTP 路由只是这个实验触发发送的入口。
+```go
+var envelope event.Event[json.RawMessage]
+if err := json.Unmarshal(msg.Value, &envelope); err != nil {
+    return err
+}
+// 校验公共字段，并根据 type + version 选择对应业务处理器。
+// 已确认这是订单 v1 后，业务处理器才执行下面的解码。
+var payload model.OrderPayload
+if err := json.Unmarshal(envelope.Payload, &payload); err != nil {
+    return err
+}
+// 解码成功后仍需校验订单号、状态、金额等业务约束。
+```
+
+多类型消费者可以用 `(type, version) → handler` 注册表分发，每个业务处理器拥有自己的载荷解码与校验。当前订单消费者只接受 `order.status_changed` v1，直接解码成 `model.OrderEvent` 即可。项目的 `internal/event/event_test.go` 验证了另一种用户 Payload 通过同一个信封编码，再用 `json.RawMessage` 分阶段解码。未知类型、未知版本和解码失败必须进入明确的失败处理流程，不能默默确认并丢弃。
+
+传输层仍只接收 `Record{Key, Value, EventID}`。新增业务不需要复制同步发送、错误收集和连接关闭代码；相同 Topic 可以复用生产者实例，不同 Topic 则在组装时绑定相应 Topic。**事件类型、Topic、消费者组、HTTP 路由是四个不同维度**：一个 Topic 可以承载同一业务域的多个事件类型，一个事件类型可以被多个组独立消费；HTTP 路由只是触发发送的入口。
 
 公开生态中，CloudEvents 将事件上下文与业务数据分开；Watermill 的通用 Message 使用 UUID、Metadata、Payload，Router 负责把消息交给业务 Handler。它们展示了可复用的边界，不能据此推断所有企业使用同一套规范。[CloudEvents 1.0.2](https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/spec.md)、[Watermill Message](https://watermill.io/docs/message/)、[Watermill Router](https://watermill.io/docs/messages-router/)
 
-上面的自定义 `Event[T]` 只是设计示意，不是完整的 CloudEvents 实现。若需要与其他平台互操作，应遵循标准的字段、编码和 Kafka 协议绑定，或采用官方 SDK。
+本项目的 `Event[T]` 是自定义格式：`payload` 不是 CloudEvents 标准的 `data`，`version` 也不是其 `specversion`。需要跨平台互操作时，应遵循完整标准及 Kafka 协议绑定，或采用官方 SDK。通用信封统一了元数据，并没有取消各业务 schema 的版本管理责任。
 
 ## 6. 生产者：先分清提交与确认
 
@@ -447,7 +528,7 @@ cfg.Producer.Return.Errors = true
 
 `Return.Successes` 的意思是让 Sarama 返回成功结果，不是让 Kafka 提高确认强度。后者由 `RequiredAcks` 控制。两个字段经常一起出现，却解决不同问题。同步生产者内部也依赖成功结果，所以同样要求启用该配置。
 
-幂等生产者需要配合确认、重试和在途请求限制。这里按固定 Sarama 版本使用 `WaitForAll`、非零重试和 `MaxOpenRequests=1`。不要把 Java 客户端某个版本允许的在途请求数直接照搬过来。[Sarama 配置定义与校验](https://github.com/IBM/sarama/blob/v1.60.0/config.go)
+幂等生产者需要配合确认、重试和在途请求限制。这里按固定 Sarama 版本使用 `WaitForAll`、非零重试和 `MaxOpenRequests=1`。不要把 Java 客户端某个版本允许的在途请求数直接照搬过来。[Sarama 配置定义与校验](https://github.com/IBM/sarama/blob/v1.60.2/config.go)
 
 ### 6.3 同步发送：让结果紧跟业务代码
 
@@ -493,7 +574,7 @@ case producer.Input() <- msg:
 
 此时 `queued` 只说明客户端接收了消息。它可能还没有组批，没有发到网络，更没有得到 Broker 确认。由于 channel 和内部缓冲存在背压，异步提交也可能等待；“异步”不意味着每次调用都绝不阻塞。
 
-`AsyncPublisher` 关闭逐条成功回传，但保留 `Errors()`，并在退出前等全部消息处理完成。它对应“调用方不逐条等待结果”的学习目标，同时避免把忽略错误当作推荐写法。
+`AsyncPublisher` 在后台读取成功与失败结果：成功只用于完成计数，失败记录日志；HTTP 调用方不逐条等待 Broker 确认。回调示例则进一步打印每条成功消息的分区和 offset。两者底层都使用 Sarama 异步生产者，区别在于应用如何使用结果。
 
 ### 6.5 异步回调：Sarama 用 channel 表达结果
 
@@ -537,11 +618,11 @@ for successes != nil || failures != nil {
 
 将已关闭通道置为 `nil`，可以让 `select` 不再选中它。否则对关闭通道的读取会立即返回，循环可能空转。
 
-更关键的是，开启了哪个结果通道，就必须持续消费哪个通道。提交完所有消息才开始读结果，可能在大批量发送时互相等待。用六条消息偶尔跑通，不能证明这种写法正确。[Sarama 异步生产者接口约定](https://github.com/IBM/sarama/blob/v1.60.0/async_producer.go)
+更关键的是，开启了哪个结果通道，就必须持续消费哪个通道。提交完所有消息才开始读结果，可能在大批量发送时互相等待。用六条消息偶尔跑通，不能证明这种写法正确。[Sarama 异步生产者接口约定](https://github.com/IBM/sarama/blob/v1.60.2/async_producer.go)
 
 ### 6.6 关闭过程也是发送流程的一部分
 
-同步生产者调用 `Close()`。异步路径在停止提交后调用 `AsyncClose()`，继续读取结果，直到成功和错误通道都关闭。项目通过 `done` channel 等待收集结束；出现错误时返回首个发送错误。回调发生在 HTTP 202 返回之后，不能再修改那个响应。日志只提供观察能力，持久化的发送状态、补偿与结果查询需要另外设计。
+同步生产者调用 `Close()`。项目的异步封装先停止接收新消息，用 `WaitGroup` 等待已受理消息全部得到成功或失败结果，再调用 `AsyncClose()`，继续读到两个结果通道关闭。先收齐结果可以避免在途重试因关闭开始而提前结束。`sync.Once` 保证重复关闭不会再次触发 Sarama 的关闭流程，关闭后的 Publish 返回错误。项目通过 `done` channel 等待收集结束；出现错误时返回首个发送错误。回调发生在 HTTP 202 返回之后，不能再修改那个响应。日志只提供观察能力，持久化的发送状态、补偿与结果查询需要另外设计。
 
 不要在 `AsyncClose()` 后立刻退出，也不要用固定 `Sleep(1s)` 猜测缓冲是否发送完。退出快慢取决于尚未完成的请求、重试与网络状态。
 
@@ -577,7 +658,7 @@ sh run.sh ./cmd/partition-reader -partition 0 -offset -2
 
 自定义分区器实现两个方法：`Partition(message, numPartitions)` 返回目标分区，`RequiresConsistency()` 说明是否需要使用一致的分区集合。若同 Key 必须固定路由，不能在目标分区不可写时随意转投其他分区。返回值必须处于 `[0, numPartitions)`，还要考虑没有分区、Key 编码失败等错误。
 
-扩容分区会改变常见哈希取模的映射；已有记录不会自动搬家。对历史和新消息的实体顺序有要求时，扩分区需要迁移方案。跨语言系统还必须统一哈希算法和 Key 编码；Sarama 默认哈希不等于 Java 客户端默认哈希。[Sarama 分区器实现](https://github.com/IBM/sarama/blob/v1.60.0/partitioner.go)
+扩容分区会改变常见哈希取模的映射；已有记录不会自动搬家。对历史和新消息的实体顺序有要求时，扩分区需要迁移方案。跨语言系统还必须统一哈希算法和 Key 编码；Sarama 默认哈希不等于 Java 客户端默认哈希。[Sarama 分区器实现](https://github.com/IBM/sarama/blob/v1.60.2/partitioner.go)
 
 ### 7.3 为什么批量对吞吐很重要
 
@@ -626,7 +707,7 @@ pc, err := consumer.ConsumePartition(topic, partition, startOffset)
 同一个 Group ID 表示多个实例共同完成一份工作。在本项目采用的经典消费者组模型中，同一分区在同一时刻分配给组内一个成员。一个成员可以负责多个分区，多出来的成员可能空闲。
 
 ```text
-order-events: P0  P1  P2
+order-events-v1: P0  P1  P2
 
 order-progress 组：实例 A 负责 P0、P1；实例 B 负责 P2
 order-audit    组：实例 C 负责 P0、P1、P2
@@ -663,11 +744,11 @@ if h.manualCommit {
 
 真正的实现还检查 session 取消和消息 channel 关闭。业务请求应该接收 `session.Context()`，确保失去分区所有权时能及时停止。多个 claim 会并发访问 handler 中的共享状态，若加入内存统计或缓存，需要同步保护。
 
-外层必须反复调用 `group.Consume(ctx, topics, handler)`。一次 Consume 对应一次 session；再均衡结束后，需要重新调用才能按新分配继续工作。程序还必须持续读取 `group.Errors()`，并在关闭时等待错误收集结束。[Sarama 消费组生命周期](https://github.com/IBM/sarama/blob/v1.60.0/consumer_group.go)
+外层必须反复调用 `group.Consume(ctx, topics, handler)`。一次 Consume 对应一次 session；再均衡结束后，需要重新调用才能按新分配继续工作。程序还必须持续读取 `group.Errors()`，并在关闭时等待错误收集结束。[Sarama 消费组生命周期](https://github.com/IBM/sarama/blob/v1.60.2/consumer_group.go)
 
 ### 8.5 亲眼观察两个组与两个实例
 
-先建一个新 Topic，再分别在三个终端启动：
+先停止之前启动的消费者，按第 4.6 节切换到一个新 Topic，并让所有进程加载同一份配置。下面以默认配置中的 Topic 为例，在三个终端启动：
 
 ```bash
 # 终端 A
@@ -732,7 +813,7 @@ sh run.sh ./cmd/consumer -config configs/auto-commit.yaml -group order-auto
 
 业务仍在处理成功后调用 `MarkMessage`，Sarama 定时提交已标记的位置。自动提交不意味着 Sarama 理解业务结果，也不意味着这里的写法会自动确认每条刚从 channel 取到的记录。项目固定版本的默认提交间隔为一秒，可通过 `Consumer.Offsets.AutoCommit.Interval` 配置。
 
-Java 的 `commitSync`、`commitAsync`、回调及轮询机制不能逐字翻译成 Sarama。对应用来说，关键是知道已处理的连续边界、提交动作的完成条件和失败反馈路径。[Sarama 位移管理实现](https://github.com/IBM/sarama/blob/v1.60.0/offset_manager.go)
+Java 的 `commitSync`、`commitAsync`、回调及轮询机制不能逐字翻译成 Sarama。对应用来说，关键是知道已处理的连续边界、提交动作的完成条件和失败反馈路径。[Sarama 位移管理实现](https://github.com/IBM/sarama/blob/v1.60.2/offset_manager.go)
 
 ### 9.4 为什么重试旧的异步提交可能让进度倒退
 
@@ -767,7 +848,7 @@ sh run.sh ./cmd/consumer -group "order-replay-$(date +%s)" -duration 10s
 
 ```bash
 kafka-consumer-groups --bootstrap-server 127.0.0.1:9092 \
-  --group order-progress --topic order-events \
+  --group order-progress --topic order-events-v1 \
   --reset-offsets --to-earliest --dry-run
 
 # 核对计划后，把 --dry-run 改为 --execute 才会修改组位移。
@@ -799,7 +880,7 @@ Kafka 4.x 还支持更新的消费者再均衡协议，与经典协议的客户�
 
 ### 10.3 心跳、session 超时和处理耗时
 
-在当前 Sarama 配置中，重点看：
+在当前经典组协议与 Range 策略配置中，重点看：
 
 - `Consumer.Group.Heartbeat.Interval`：发送心跳的间隔。
 - `Consumer.Group.Session.Timeout`：协调者判断成员失联的时间范围。
@@ -814,7 +895,7 @@ Sarama 有后台心跳逻辑，不能简单声称“业务不调用 poll 就不�
 
 ### 10.4 订阅多个 Topic 和匹配新 Topic
 
-`group.Consume(ctx, []string{"order-events", "payment-events"}, handler)` 可以订阅明确的 Topic 列表。Java 示例中的正则订阅，不应直接改成 Sarama 列表里的 `"order.*"` 并期待自动匹配。
+`group.Consume(ctx, []string{"order-events-v1", "payment-events"}, handler)` 可以订阅明确的 Topic 列表。Java 示例中的正则订阅，不应直接改成 Sarama 列表里的 `"order.*"` 并期待自动匹配。
 
 应用若要动态发现匹配的 Topic，需要明确元数据刷新、过滤、更新订阅列表及重建 session 的方案，或者采用支持对应能力的上层库。Topic 新增也可能带来再均衡；它不是一个只影响运维、不影响消费的操作。
 
@@ -848,12 +929,12 @@ Sarama 已有内部重试。应用再无条件套一个多次 `SendMessage` 循�
 
 Kafka 幂等生产者使用 Producer ID、epoch，以及各分区的序列信息识别协议层重复，防止重试把同一批记录重复追加。Producer ID 的初始化通过相关协议请求与 Broker 完成；事务生产者还涉及事务 ID 对应的协调与旧实例隔离，应用不应自行维护这些序号。
 
-`Producer.Idempotent=true` 不会检查 JSON 中的 `event_id` 是否出现过。再次调用发布接口，即使 Key 和 Value 完全相同，也可能是新的合法记录。API 进程重启后重新执行订单请求，更不能期待 Producer ID 替业务识别重试。[Sarama 事务与生产者状态实现](https://github.com/IBM/sarama/blob/v1.60.0/transaction_manager.go)
+`Producer.Idempotent=true` 不会检查 JSON 中的 `id` 是否出现过。再次调用发布接口，即使 Key 和 Value 完全相同，也可能是新的合法记录。API 进程重启后重新执行订单请求，更不能期待 Producer ID 替业务识别重试。[Sarama 事务与生产者状态实现](https://github.com/IBM/sarama/blob/v1.60.2/transaction_manager.go)
 
 业务去重需要自己的持久化约束，例如在同一个数据库事务中：
 
 ```text
-插入 processed_events(event_id)，有唯一约束
+插入 processed_events(event_id)，取消息外层 id，有唯一约束
     → 已存在：确认这是已经完成的事件，避免重复副作用
     → 新插入：更新订单状态
 提交数据库事务
@@ -954,7 +1035,7 @@ sh run.sh ./cmd/consumer -config configs/lab.yaml \
 
 ### 12.4 消费—转换—生产，为什么还要提交输入位移
 
-假设从 `order-events` 消费支付事件，计算后写入 `payment-summary`。只把输出放进事务，输入位移仍在另一个请求里提交，就还存在“输出已提交，但输入位移没提交”的窗口。重启后会再次处理输入。
+假设从 `order-events-v1` 消费支付事件，计算后写入 `payment-summary`。只把输出放进事务，输入位移仍在另一个请求里提交，就还存在“输出已提交，但输入位移没提交”的窗口。重启后会再次处理输入。
 
 完整的 consume-transform-produce 设计需要把输出记录和输入组的下一位置放进同一 Kafka 事务：
 
@@ -970,7 +1051,7 @@ sh run.sh ./cmd/consumer -config configs/lab.yaml \
 
 对于会再均衡的消费者组，还要保护组代次和成员身份。固定 Sarama 版本提供 `AddOffsetsToTxnWithGroupMetadata`、`AddMessageToTxnWithGroupMetadata` 等 API，用于携带对应的组元数据；只传 Group ID，不能自动获得完整的过期成员隔离。处理器失去 session 时必须停止事务工作，不能继续使用旧所有权。
 
-上述流程是架构说明，项目可运行事务 demo 演示的是“只有生产操作”的提交与中止，没有伪装成已实现完整 EOS 流处理器。只有消费操作而副作用发生在外部数据库时，应让数据库结果与去重或恢复位置保持原子性；Kafka 事务无法替外部系统完成这一步。[Sarama 事务 API](https://github.com/IBM/sarama/blob/v1.60.0/sync_producer.go)
+上述流程是架构说明，项目可运行事务 demo 演示的是“只有生产操作”的提交与中止，没有伪装成已实现完整 EOS 流处理器。只有消费操作而副作用发生在外部数据库时，应让数据库结果与去重或恢复位置保持原子性；Kafka 事务无法替外部系统完成这一步。[Sarama 事务 API](https://github.com/IBM/sarama/blob/v1.60.2/sync_producer.go)
 
 ## 13. 把配置放回它实际控制的位置
 
@@ -1121,7 +1202,9 @@ KAFKA_TEST_BROKER=127.0.0.1:9092 \
 
 未设置 `KAFKA_TEST_BROKER` 时跳过需要 Broker 的集成测试。开启后，测试创建独立 Topic 和消费组，只清理本次测试创建的资源，不清空已有实验数据。
 
-测试覆盖 HTTP 路由到真实 Kafka 的三种发送方式、GZIP 消息读回、参数和状态错误、异步超限错误回收、消费组提交与重启续读、不同组独立消费、处理失败不跳过记录，以及事务提交／中止在两种隔离级别下的可见性。
+单元测试验证 Viper 的配置覆盖顺序、地址列表解码、未知字段和无效参数组合，以及不同业务 Payload 的信封编码与分阶段解码。
+
+集成测试覆盖 HTTP 路由到真实 Kafka 的三种发送方式、GZIP 消息读回、参数和状态错误、异步超限错误回收、收齐结果后关闭与重复关闭、消费组提交与重启续读、不同组独立消费、处理失败不跳过记录，以及事务提交／中止在两种隔离级别下的可见性。
 
 这些验证不包含多 Broker 故障切换、真实支付副作用、数据库 Outbox、跨系统恰好一次和生产压测。它们验证的是示例承诺的具体行为。
 
@@ -1165,6 +1248,6 @@ kafka-topics --bootstrap-server 127.0.0.1:9092 \
 
 - [Go + Kafka 实战指南](https://developer.volcengine.com/articles/7621809593413206067)：业务场景与 Go 集成的入门参考。
 - [Kafka 快速入门](https://dunwu.github.io/bigdata-tutorial/kafka/Kafka快速入门.html)、[Kafka 生产者](https://dunwu.github.io/bigdata-tutorial/kafka/Kafka生产者.html)、[Kafka 消费者](https://dunwu.github.io/bigdata-tutorial/kafka/Kafka消费者.html)：学习主题参考；具体 API、配置及版本行为以文中对应的官方资料和固定版本源码为准。
-- [Kafka 4.3 文档](https://kafka.apache.org/43/)、[Sarama v1.60.0](https://github.com/IBM/sarama/tree/v1.60.0)：实验使用的服务端知识与 Go 客户端接口依据。
+- [Kafka 4.3 文档](https://kafka.apache.org/43/)、[Sarama v1.60.2](https://github.com/IBM/sarama/tree/v1.60.2)：实验使用的服务端知识与 Go 客户端接口依据。
 
 示例代码、命令与预期行为以本项目的固定版本实现和集成测试为准。
