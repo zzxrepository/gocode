@@ -137,6 +137,12 @@ export default hopeTheme({
       config: {
         "/tools/linux/": "/tools/development-environment/",
         "/backend/message-queue/A-消息队列.html": "/interview/message-queue.html",
+        "/backend/java/java-basics-interview.html": "/interview/java-basics-interview.html",
+        "/backend/java/java-collections-juc-interview.html": "/interview/java-collections-juc-interview.html",
+        "/backend/java/jvm-interview.html": "/interview/jvm-interview.html",
+        "/backend/microservices/spring-interview.html": "/interview/spring-interview.html",
+        "/database/relational/mysql-interview.html": "/interview/mysql-interview.html",
+        "/database/non-relational/redis-interview.html": "/interview/redis-interview.html",
         "/tree/": "/algorithm/",
         "/go/": "/backend/go/",
         "/go/basics.html": "/backend/go/basic/01-project-structure/",

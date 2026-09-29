@@ -1,8 +1,9 @@
 ---
 title: JVM 面试题
-shortTitle: JVM 面试
-order: 13
+shortTitle: JVM
+order: 3
 category:
+  - 面试题
   - Java
 tag:
   - Java
@@ -189,7 +190,7 @@ Java 是多线程语言，CPU 通过 “时间片轮转” 的方式调度线程
 - 指针碰撞：把指针向空闲空间方向挪动一段与对象大小相等的距离，如果没有发生碰撞，就将这段内存分配给实例对象，适用于新生代，Serial 和 ParNew 等不会产生内存碎片的垃圾收集器。
 - 空闲列表：虚拟机维护一个列表，记录上哪些内存块是可用的，分配的时候从列表中找到一块足够大的空间分配给实例对象，并更新列表上的记录，适用于老年代， CMS 可能产生内存碎片的垃圾收集器。
 
-![堆内存分配中的指针碰撞与空闲列表](./assets/JVM-堆内存分配-指针碰撞与空闲列表.png)
+![堆内存分配中的指针碰撞与空闲列表](./assets/java/JVM-堆内存分配-指针碰撞与空闲列表.png)
 
 ### 字符串常量池StringTable介绍一下？
 
@@ -212,23 +213,23 @@ Java 是多线程语言，CPU 通过 “时间片轮转” 的方式调度线程
 
 案例1：
 
-<img src="./assets/StringTable-intern先入池再声明字面量-JDK8.png" alt="QQ_1746180594904" style="zoom:50%;" />
+<img src="./assets/java/StringTable-intern先入池再声明字面量-JDK8.png" alt="QQ_1746180594904" style="zoom:50%;" />
 
 案例2：
 
-![运行时字符串拼接调用 intern 的结果](./assets/StringTable-先声明字面量再调用intern-JDK8.png)
+![运行时字符串拼接调用 intern 的结果](./assets/java/StringTable-先声明字面量再调用intern-JDK8.png)
 
 案例3：
 
-![变量字符串拼接调用 intern 的结果](./assets/StringTable-先声明字面量再调用intern-JDK6.png)
+![变量字符串拼接调用 intern 的结果](./assets/java/StringTable-先声明字面量再调用intern-JDK6.png)
 
 案例4：
 
-![新建字符串对象调用 intern 后入池](./assets/StringTable-先调用intern再声明字面量-JDK6.png)
+![新建字符串对象调用 intern 后入池](./assets/java/StringTable-先调用intern再声明字面量-JDK6.png)
 
 案例5：
 
-![编译期常量拼接与 intern 的结果](./assets/StringTable-常量拼接与运行时拼接对比.png)
+![编译期常量拼接与 intern 的结果](./assets/java/StringTable-常量拼接与运行时拼接对比.png)
 
 #### String s = new String（“abc”）执行过程中分别对应哪些内存区域？
 
@@ -1227,13 +1228,13 @@ JVM 的类加载机制，指的是将Class文件中描述类的数据结构（�
 
 **只有当父加载器反馈自己无法完成这个加载请求（它的搜索范围中没有找到所需的类）时，子加载器才会尝试自己去加载。**
 
-<img src="./assets/JVM-类加载器双亲委派层级.png" alt="QQ_1746278736713" style="zoom:50%;" />
+<img src="./assets/java/JVM-类加载器双亲委派层级.png" alt="QQ_1746278736713" style="zoom:50%;" />
 
 ### 🌟类加载过程
 
 一个类从被加载到虚拟机内存中开始，到从内存中卸载，**整个生命周期需要经过七个阶段**：加载 、验证、准备、解析、初始化、使用和卸载。
 
-<img src="./assets/JVM-类加载生命周期.png" alt="QQ_1746277463834" style="zoom:50%;" />
+<img src="./assets/java/JVM-类加载生命周期.png" alt="QQ_1746277463834" style="zoom:50%;" />
 
 **①、加载：将类的二进制字节码加载到内存中。**
 

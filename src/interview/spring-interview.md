@@ -1,8 +1,9 @@
 ---
 title: Spring 面试题
-shortTitle: Spring 面试
-order: 2
+shortTitle: Spring
+order: 6
 category:
+  - 面试题
   - Java
   - 微服务
 tag:
@@ -48,7 +49,7 @@ Spring它提供了一些重要的特性，帮助开发者构建高效、灵活�
 
 **IoC（控制反转） 是一种设计思想，这个思想的核心就是由容器来控制对象的生命周期和对象之间的依赖关系，控制对象生命周期的不再是引用它的对象，而是容器，这就叫控制反转（Inversion of Control）**
 
-<img src="./assets/Spring-IOC容器与传统对象依赖对比.png" alt="QQ_1756439174452" style="zoom: 67%;" />
+<img src="./assets/spring/Spring-IOC容器与传统对象依赖对比.png" alt="QQ_1756439174452" style="zoom: 67%;" />
 
 #### 为什么要使用 IoC 呢？
 
@@ -588,7 +589,7 @@ Spring IoC容器工作的过程，其实可以划分为两个阶段：**容器�
 - 最后，容器会将解析完成的`BeanDefinition`，通过`BeanDefinitionRegistry`（接口）的规范方法，注册到其实现类（如`DefaultListableBeanFactory`）中，这些实现类内部会用 Map集合存储`BeanDefinition`，既实现元数据统一管理。
 - 至此，容器启动阶段结束。此时容器中已保存了所有 Bean 的定义信息，但尚未创建具体的 Bean 实例，为后续的 Bean 实例化阶段做好了准备。
 
-<img src="./assets/Spring-Bean定义映射与注册.png" alt="QQ_1756460725964" style="zoom:50%;" />
+<img src="./assets/spring/Spring-Bean定义映射与注册.png" alt="QQ_1756460725964" style="zoom:50%;" />
 
 #### Bean的注册
 
@@ -786,7 +787,7 @@ public class AppConfig {
 
 ### 🌟Bean 的生命周期
 
-<img src="./assets/Spring-Bean生命周期与代理创建.png" alt="QQ_1745925750682" style="zoom:50%;" />
+<img src="./assets/spring/Spring-Bean生命周期与代理创建.png" alt="QQ_1745925750682" style="zoom:50%;" />
 
 从源码的角度分析Bean的生命周期大致分为以下几个阶段：
 
@@ -2213,7 +2214,7 @@ Spring Boot通过Spring框架的事务管理模块来支持事务操作。事务
   - **Controller**（控制器）是应用程序中处理用户交互的部分。通常控制器负责从视图读取数据，控制用户输入，并向模型发送数据。
 
 
-<img src="./assets/MVC-模型视图控制器交互.png" alt="QQ_1744678001489" style="zoom:50%;" />
+<img src="./assets/spring/MVC-模型视图控制器交互.png" alt="QQ_1744678001489" style="zoom:50%;" />
 
 ### 说说自己对于 SpringMVC 了解?
 
@@ -2246,7 +2247,7 @@ MVC 是一种设计模式，Spring MVC 是一款很优秀的 MVC 框架。Spring
 
 #### SpringMVC的标准工作流程
 
-<img src="./assets/SpringMVC-请求分发处理流程.png" alt="QQ_1744678278884" style="zoom:67%;" />
+<img src="./assets/spring/SpringMVC-请求分发处理流程.png" alt="QQ_1744678278884" style="zoom:67%;" />
 
 **SpringMVC工作原理：**
 
@@ -2555,7 +2556,7 @@ Spring Boot 提供了一系列条件注解，可以用来控制 Bean 的实例�
 
 第一步：创建`threadpool-spring-boot-starter`工程，下面完整项目目录及文件
 
-![Spring Boot Starter 项目结构](./assets/SpringBoot-Starter项目结构.png)
+![Spring Boot Starter 项目结构](./assets/spring/SpringBoot-Starter项目结构.png)
 
 第二步：引入Spring Boot相关依赖
 
@@ -2676,11 +2677,11 @@ org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
 
 第五步：通过 Maven 插件打包，**使用 `mvn clean install` 命令打包并安装 JAR 文件到本地 Maven 仓库**
 
-<img src="./assets/Maven-安装线程池Starter到本地仓库.png" alt="QQ_1753786970675" style="zoom: 67%;" />
+<img src="./assets/spring/Maven-安装线程池Starter到本地仓库.png" alt="QQ_1753786970675" style="zoom: 67%;" />
 
 第六步：新建一个工程用于测试，在新工程的中引入这个依赖，如下图所示：
 
-<img src="./assets/SpringBoot-引入自定义线程池Starter.png" alt="QQ_1753786760248" style="zoom:50%;" />
+<img src="./assets/spring/SpringBoot-引入自定义线程池Starter.png" alt="QQ_1753786760248" style="zoom:50%;" />
 
 第七步：在新工程中编写启动类。
 
@@ -2713,7 +2714,7 @@ public class SpringbootTestSelfThreadpoolApplication implements CommandLineRunne
 
 输出结果：
 
-<img src="./assets/SpringBoot-线程池核心线程数测试.png" alt="QQ_1753787012042" style="zoom:50%;" />
+<img src="./assets/spring/SpringBoot-线程池核心线程数测试.png" alt="QQ_1753787012042" style="zoom:50%;" />
 
 ## 补充
 

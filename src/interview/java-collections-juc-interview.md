@@ -1,8 +1,9 @@
 ---
 title: Java 集合与 JUC 面试题
-shortTitle: 集合与 JUC 面试
-order: 12
+shortTitle: Java 集合与 JUC
+order: 2
 category:
+  - 面试题
   - Java
 tag:
   - Java
@@ -1470,7 +1471,7 @@ JDK 8 使用了一种更加细粒度的锁（桶锁），再配合 CAS + synchro
   }
   ```
 
-<img src="./assets/ConcurrentHashMap-Segment分段锁结构.png" alt="QQ_1752543189306" style="zoom:50%;" />
+<img src="./assets/java/ConcurrentHashMap-Segment分段锁结构.png" alt="QQ_1752543189306" style="zoom:50%;" />
 
 `ConcurrentHashMap` 采用**分段锁设计**保证线程安全，将数据分成多个Segment进行存储，然后每个Segment继承了可重入锁ReentrantLock。当线程访问特定段中的数据时，仅对该段加锁，不同的线程可以同时操作不同的段，从而实现并发。这种机制显著降低了锁粒度，使得多线程操作不同段的数据时无需竞争锁，从而实现高并发性能。
 
@@ -2831,7 +2832,7 @@ thread.interrupt(); // 中断线程
 
 五种状态是从 **操作系统** 层面来描述的，有初始、可运行、运行、阻塞和终止。线程在运行过程中会根据状态的变化在这些阶段之间切换。
 
-<img src="./assets/操作系统-线程五态转换.png" alt="QQ_1746605316190" style="zoom:50%;" />
+<img src="./assets/java/操作系统-线程五态转换.png" alt="QQ_1746605316190" style="zoom:50%;" />
 
 - 【初始状态】仅是在语言层面创建了线程对象，还未与操作系统线程关联。
 - 【可运行状态】（就绪状态）指该线程已经被创建（与操作系统线程关联），可以由 CPU 调度执行。
@@ -2859,7 +2860,7 @@ Java线程在其生命周期中会经历以下六种状态：
 5. **TIMED_WAITING（计时等待）**：类似于WAITING状态，但该状态下的等待是有时间限制的（例如通过`sleep(long millis)`、`wait(long timeout)`等方法），超时后会自动返回可运行状态。
 6. **TERMINATED（终止）**：线程已完成执行，有可能是线程的**`run()`方法正常退出**或**发生了未捕获的异常终止了执行**。一旦线程终止，它的生命周期结束，不能再被重新启动。
 
-![Java 线程生命周期状态转换](./assets/Java线程-生命周期状态转换.png)
+![Java 线程生命周期状态转换](./assets/java/Java线程-生命周期状态转换.png)
 
 #### BLOCKED和WAITING有啥区别
 
@@ -3295,7 +3296,7 @@ class Main {
 - 通过 ThreadLocal 的 remove 方法从 ThreadLocalMap 中移除与该`ThreadLocal`对象关联的条目
 - ThreadLocalMap 的大小由 ThreadLocal 对象的多少决定。
 
-<img src="./assets/ThreadLocalMap-线程与键值条目结构.png" alt="QQ_1746513193091" style="zoom: 67%;" />
+<img src="./assets/java/ThreadLocalMap-线程与键值条目结构.png" alt="QQ_1746513193091" style="zoom: 67%;" />
 
 其中的引用关系链就是：
 
@@ -3734,7 +3735,7 @@ private void init(/* ... */) {
 
 > https://juejin.cn/post/6998552093795549191
 
-![TTL 在线程池中的上下文传递时序](./assets/TTL-线程池上下文传递时序.png)
+![TTL 在线程池中的上下文传递时序](./assets/java/TTL-线程池上下文传递时序.png)
 
 ## Java 内存模型
 
@@ -3976,7 +3977,7 @@ C 依赖于 A，同时 C 也依赖着 B。
     - 同样在 `volatile` 读操作之后，还会插入一个 LoadStore 屏障，用于**禁止下面的所有普通写操作和上面的 `volatile` 读操作重排序**。
         - 作用：确保 `volatile` 读之后的写操作不会被提前，从而维护正确的执行顺序。
 
-![volatile 读写的内存屏障](./assets/volatile-读写内存屏障.png)
+![volatile 读写的内存屏障](./assets/java/volatile-读写内存屏障.png)
 
 #### volatile可以保证线程安全吗？
 
@@ -4173,7 +4174,7 @@ ObjectMonitor() {
  +----------------------+
 ```
 
-![Monitor 中的 WaitSet 与 EntryList](./assets/Java监视器-等待集与锁竞争队列.png)
+![Monitor 中的 WaitSet 与 EntryList](./assets/java/Java监视器-等待集与锁竞争队列.png)
 
 - 刚开始 Monitor 中 Owner 为 null
 - 当 Thread-2 执行 synchronized(obj) 就会将 Monitor 的所有者 Owner 置为 Thread-2，Monitor中只能有一个 Owner
@@ -5679,7 +5680,7 @@ class ExchangerTest {
 
 在首页加载场景中（如 IndexRecommendHelper.buildIndexVo()），同时发起多个独立IO操作：
 
-![线程池异步任务调用关系](./assets/线程池-异步任务调用关系.png)
+![线程池异步任务调用关系](./assets/java/线程池-异步任务调用关系.png)
 
 其中 corePoolSize 为 CPU 核心数的两倍，因为技术派中的大多数任务都是 IO 密集型的，maxPoolSize 设置为 50，是一个比较理想的值，尤其是在本地环境中；阻塞队列为 SynchronousQueue，意味着任务被创建后可以直接提交给等待的线程处理。
 

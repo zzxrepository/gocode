@@ -1,7 +1,7 @@
 ---
 title: 消息队列面试题
 shortTitle: 消息队列
-order: 1
+order: 7
 category:
   - 面试题
   - 消息队列

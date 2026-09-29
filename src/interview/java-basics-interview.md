@@ -1,8 +1,9 @@
 ---
 title: Java 基础面试题
-shortTitle: Java 基础面试
-order: 11
+shortTitle: Java 基础
+order: 1
 category:
+  - 面试题
   - Java
 tag:
   - Java
@@ -1306,7 +1307,7 @@ public static String getStr() {
 
 
 
-<img src="./assets/Java-异常与错误继承体系.png" alt="QQ_1751964915256" style="zoom: 67%;" />
+<img src="./assets/java/Java-异常与错误继承体系.png" alt="QQ_1751964915256" style="zoom: 67%;" />
 
 ### ☘️异常的处理方式？
 

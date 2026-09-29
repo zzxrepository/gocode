@@ -682,7 +682,7 @@ sidebarSorter: ["readme", "order", "title", "filename"]
 
 ## 新增文章
 
-面试题按技术主题放入对应的学习栏目：Java、JVM 与并发题放在 `src/backend/java/`，MySQL 与 Redis 题放在 `src/database/` 的相应子栏目，Spring 题放在 `src/backend/microservices/`。跨技术主题的综合题可以放在 `src/interview/`。配图放在所属栏目的 `assets/` 目录，并使用相对路径引用。迁移文章时同步更新栏目首页链接；已有公开旧地址时，再在 `src/.vuepress/theme.ts` 中配置重定向。
+专题面试题统一放在 `src/interview/`，通过顶部「面试题」入口访问。Java 基础、集合与 JUC、JVM、MySQL、Redis、Spring 和消息队列分别作为该栏目下的叶子文章，不混入语言、数据库或框架教程目录。使用 `order` 控制排列顺序，配图放在 `src/interview/assets/<主题>/`，并以相对路径引用。Hot100 与数据结构专题仍放在各自的算法目录。迁移文章时同步更新栏目首页、共享图片引用，并在 `src/.vuepress/theme.ts` 中为旧网页地址配置重定向。
 
 最快路径：
 
