@@ -2859,7 +2859,7 @@ Java线程在其生命周期中会经历以下六种状态：
 5. **TIMED_WAITING（计时等待）**：类似于WAITING状态，但该状态下的等待是有时间限制的（例如通过`sleep(long millis)`、`wait(long timeout)`等方法），超时后会自动返回可运行状态。
 6. **TERMINATED（终止）**：线程已完成执行，有可能是线程的**`run()`方法正常退出**或**发生了未捕获的异常终止了执行**。一旦线程终止，它的生命周期结束，不能再被重新启动。
 
-![QQ_1753006872804](./assets/QQ_1753006872804.png)
+![Java 线程生命周期状态转换](./assets/Java线程-生命周期状态转换.png)
 
 #### BLOCKED和WAITING有啥区别
 
@@ -3734,7 +3734,7 @@ private void init(/* ... */) {
 
 > https://juejin.cn/post/6998552093795549191
 
-![QQ_1753087434868](./assets/QQ_1753087434868.png)
+![TTL 在线程池中的上下文传递时序](./assets/TTL-线程池上下文传递时序.png)
 
 ## Java 内存模型
 
@@ -3976,7 +3976,7 @@ C 依赖于 A，同时 C 也依赖着 B。
     - 同样在 `volatile` 读操作之后，还会插入一个 LoadStore 屏障，用于**禁止下面的所有普通写操作和上面的 `volatile` 读操作重排序**。
         - 作用：确保 `volatile` 读之后的写操作不会被提前，从而维护正确的执行顺序。
 
-![QQ_1753096891248](./assets/QQ_1753096891248.png)
+![volatile 读写的内存屏障](./assets/volatile-读写内存屏障.png)
 
 #### volatile可以保证线程安全吗？
 
@@ -4173,7 +4173,7 @@ ObjectMonitor() {
  +----------------------+
 ```
 
-![QQ_1746629287889](./assets/QQ_1746629287889.png)
+![Monitor 中的 WaitSet 与 EntryList](./assets/Monitor-WaitSet与EntryList.png)
 
 - 刚开始 Monitor 中 Owner 为 null
 - 当 Thread-2 执行 synchronized(obj) 就会将 Monitor 的所有者 Owner 置为 Thread-2，Monitor中只能有一个 Owner
@@ -5679,7 +5679,7 @@ class ExchangerTest {
 
 在首页加载场景中（如 IndexRecommendHelper.buildIndexVo()），同时发起多个独立IO操作：
 
-![QQ_1753173277554](./assets/QQ_1753173277554.png)
+![线程池异步任务调用关系](./assets/线程池-异步任务调用关系.png)
 
 其中 corePoolSize 为 CPU 核心数的两倍，因为技术派中的大多数任务都是 IO 密集型的，maxPoolSize 设置为 50，是一个比较理想的值，尤其是在本地环境中；阻塞队列为 SynchronousQueue，意味着任务被创建后可以直接提交给等待的线程处理。
 

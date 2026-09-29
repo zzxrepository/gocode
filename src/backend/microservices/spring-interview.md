@@ -2555,7 +2555,7 @@ Spring Boot 提供了一系列条件注解，可以用来控制 Bean 的实例�
 
 第一步：创建`threadpool-spring-boot-starter`工程，下面完整项目目录及文件
 
-![QQ_1753783427324](./assets/QQ_1753783427324.png)
+![Spring Boot Starter 项目结构](./assets/SpringBoot-Starter项目结构.png)
 
 第二步：引入Spring Boot相关依赖
 

@@ -77,7 +77,7 @@ tag:
 
 - 图解：
 
-![image-20240915220239068](./assets/image-20240915220239068.png)
+![MySQL 客户端、数据库管理系统与数据的关系](./assets/MySQL-客户端数据库服务器关系.png)
 
 - 注意：以后我们最常操作的是 `DML` 和 `DQL`  ，因为我们开发中最常操作的就是数据。
 - 还有单独将 COMMIT 、 ROLLBACK 取出来称为TCL （Transaction Control Language，事务控制语言）
