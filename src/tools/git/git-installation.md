@@ -93,7 +93,7 @@ tag:
 
 - 步骤11：配置行尾符号转换，选择默认的，点击Next
 
-![image-20240719220722771](./assets/image-20240719220722771.png)
+![Git 安装时的换行符配置](./assets/Git安装-换行符配置.png)
 
 - 步骤12：配置终端模拟器以与Git Bash一起使用，选择默认的，点击Next
 
@@ -109,7 +109,7 @@ tag:
 
 - 步骤15：配置额外的选项，选择默认的，点击Next
 
-![image-20240719221113682](./assets/image-20240719221113682.png)
+![Git 安装时的附加选项](./assets/Git安装-附加选项.png)
 
 - **步骤16：配置实验性选项**，不用勾选，点击Install
 
@@ -145,7 +145,7 @@ tag:
 
 - **步骤3：版本查看，输入`git -v`或者`git --version`后回车，可以查看当前版本，显示当前版本信息**
 
-![image-20240719222130823](./assets/image-20240719222130823.png)
+![Git 版本验证](./assets/Git安装-版本验证.png)
 
 ## 5. 配置 GitHub
 
@@ -165,7 +165,7 @@ git config --global user.name # 查看配置的用户名
 git config --global user.email # 查看配置的用户邮箱
 ```
 
-![image-20240720094953512](./assets/image-20240720094953512.png)
+![配置 Git 用户名与邮箱](./assets/Git配置-用户名与邮箱.png)
 
 ## 5.2 配置SSH公钥
 
@@ -175,7 +175,7 @@ git config --global user.email # 查看配置的用户邮箱
 ssh-keygen -t rsa -C "上面填写的邮箱"
 ```
 
-![image-20240720101142395](./assets/image-20240720101142395.png)
+![生成 SSH 密钥](./assets/Git配置-生成SSH密钥.png)
 
 **步骤2：获取密钥信息，有两种方式**
 
@@ -185,31 +185,31 @@ ssh-keygen -t rsa -C "上面填写的邮箱"
   cat ~/.ssh/id_rsa.pub
   ```
 
-![image-20240720102017088](./assets/image-20240720102017088.png)
+![在终端查看 SSH 公钥](./assets/Git配置-查看SSH公钥.png)
 
 - 方式2：按照上图中的文件路径`/c/Users/Administrator/.ssh/id_rsa.pub`，即可找到SSH密钥保存的文件。值得注意的是，SSH密钥分为公钥和密钥，只有公钥才是我们需要的，即后缀名为`.pub`的文件。**打开公钥文件（使用记事本打开即可）可以看到一串以`ssh-rsa`为开头，你注册的邮箱为结束的代码。将这串公钥从头到尾复制，下一步将使用这串公钥。**
 
-  ![image-20240720101456893](./assets/image-20240720101456893.png)
+![SSH 公钥文件的位置](./assets/Git配置-SSH公钥文件位置.png)
 
-  ![image-20240720102311551](./assets/image-20240720102311551.png)
+![在记事本中查看 SSH 公钥](./assets/Git配置-记事本查看SSH公钥.png)
 
   步骤3：进入Github，点击右上角的头像，然后点击设置
 
-![image-20240720102533376](./assets/image-20240720102533376.png)
+![进入 GitHub 账户设置](./assets/GitHub-进入账户设置.png)
 
 **步骤4：选择SSH与GPG密钥配置页面`SSH and GPG keys`，建立新SSH密钥`New SSH key`**
 
-![image-20240720102813173](./assets/image-20240720102813173.png)
+![GitHub 添加 SSH 密钥入口](./assets/GitHub-添加SSH密钥入口.png)
 
 **步骤5：给新建的密钥创建一个名称方便管理，并将刚刚复制的公钥粘贴在`Key`对话框，点击`Add SSH key`**
 
-![image-20240720103148909](./assets/image-20240720103148909.png)
+![在 GitHub 中填写 SSH 密钥](./assets/GitHub-填写SSH密钥.png)
 
 **步骤6：输入Github密码确认添加，即可添加成功**
 
-![image-20240720103433709](./assets/image-20240720103433709.png)
+![GitHub 的敏感操作确认](./assets/GitHub-确认访问.png)
 
-![image-20240720103506718](./assets/image-20240720103506718.png)
+![GitHub 中的 SSH 密钥添加结果](./assets/GitHub-SSH密钥添加结果.png)
 
 ## 5.3 绑定SSH连接
 
@@ -223,7 +223,7 @@ ssh -T git@github.com
 
 步骤2：输入命令后，过程中会需要用户确定绑定，输入yes即可确定，返回以下结果即代表已成功绑定！！！
 
-![image-20240720104337984](./assets/image-20240720104337984.png)
+![SSH 认证测试成功](./assets/GitHub-SSH认证测试.png)
 
 > 对于已经绑定好的Github，接下来还需要进行克隆（下载)到本地和上传到Github两方面的测试来确定一下功能是否可以正常使用，后面毛毛张会继续发布整理的Git使用教程，由于内容比较多，还在整理过程中，如果整理完，会第一时间发布
 
