@@ -25,7 +25,7 @@ tag:
 
 ## 1. 逻辑存储
 
-![](./assets/dunwu/kafka-03.png)
+![Broker 的 Leader、Follower 与消费读取](./assets/dunwu/Kafka-Broker主从副本同步.png)
 
 ## 2. 持久化
 
@@ -60,7 +60,7 @@ Partiton 命名规则为 Topic 名称 + 有序序号，第一个 Partiton 序号
 
 ### 3.2. Log Segment
 
-![](./assets/dunwu/kafka-04.png)
+![Topic、分区与 Log Segment 层级](./assets/dunwu/Kafka-Topic分区日志段层级.png)
 
 因为在一个大文件中查找和删除消息是非常耗时且容易出错的。所以，Kafka 将每个 Partition 切割成若干个片段，即日志段（Log Segment）。**默认每个 Segment 大小不超过 1G，且只包含 7 天的数据**。如果 Segment 的消息量达到 1G，那么该 Segment 会关闭，同时打开一个新的 Segment 进行写入。
 
@@ -84,7 +84,7 @@ Kafka 的消息和偏移量保存在文件里。保存在磁盘上的数据格�
 
 如果生产者发送的是压缩的消息，那么批量发送的消息会压缩在一起，以“包装消息”（wrapper message）来发送，如下所示：
 
-![img](./assets/dunwu/kafka-05.png)
+![Kafka Message 与压缩 Wrapper 格式](./assets/dunwu/Kafka-消息与压缩包装格式.png)
 
 如果生产者使用了压缩功能，发送的批次越大，就意味着能获得更好的网络传输效率，并且节省磁盘存储空间。
 
@@ -100,7 +100,7 @@ Kafka 允许消费者从任意有效的偏移量位置开始读取消息。Kafka
 
 有了偏移量索引文件，通过它，Kafka 就能够根据指定的偏移量快速定位到消息的实际物理位置。具体的做法是，根据指定的偏移量，使用二分法查询定位出该偏移量对应的消息所在的分段索引文件和日志数据文件。然后通过二分查找法，继续查找出小于等于指定偏移量的最大偏移量，同时也得出了对应的 position（实际物理位置），根据该物理位置在分段的日志数据文件中顺序扫描查找偏移量与指定偏移量相等的消息。下面是 Kafka 中分段的日志数据文件和偏移量索引文件的对应映射关系图（其中也说明了如何按照起始偏移量来定位到日志数据文件中的具体消息）。
 
-![](./assets/dunwu/kafka-06.png)
+![Offset 索引到日志位置的映射](./assets/dunwu/Kafka-偏移量索引与日志映射.png)
 
 ## 6. 清理
 
@@ -109,7 +109,7 @@ Kafka 允许消费者从任意有效的偏移量位置开始读取消息。Kafka
 - **干净的部分**：这部分消息之前已经被清理过，每个键只存在一个值。
 - **污浊的部分**：在上一次清理后写入的新消息。
 
-![img](./assets/dunwu/kafka-07.png)
+![日志清理中的 Clean 与 Dirty Segment](./assets/dunwu/Kafka-日志清理脏段.png)
 
 如果在 Kafka 启动时启用了清理功能（通过 `log.cleaner.enabled` 配置），每个 Broker 会启动一个清理管理器线程和若干个清理线程，每个线程负责一个 Partition。
 
@@ -121,7 +121,7 @@ Kafka 允许消费者从任意有效的偏移量位置开始读取消息。Kafka
 
 对于一个段，清理前后的效果如下：
 
-![img](./assets/dunwu/kafka-08.png)
+![日志压缩前后的分区记录](./assets/dunwu/Kafka-日志压缩前后对比.png)
 
 ## 7. 删除事件
 

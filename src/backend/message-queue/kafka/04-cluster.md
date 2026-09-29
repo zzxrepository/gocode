@@ -30,7 +30,7 @@ tag:
 
 在 Broker 停机、出现网络分区或长时间垃圾回收停顿时，Broker 会与 ZooKeeper 断开连接，此时 Broker 在启动时创建的临时节点会自动被 ZooKeeper 移除。监听 Broker 列表的 Kafka 组件会被告知 Broker 已移除。
 
-![](./assets/dunwu/kafka-25.png)
+![Kafka 在 ZooKeeper 中的元数据布局](./assets/dunwu/Kafka-ZooKeeper元数据布局.png)
 
 Kafka 在 ZooKeeper 的关键存储信息：
 
@@ -53,7 +53,7 @@ Kafka 在 ZooKeeper 的关键存储信息：
 
 控制器（Controller），是 Apache Kafka 的核心组件。它的主要作用是在 ZooKeeper 的帮助下管理和协调整个 Kafka 集群。控制器其实就是一个 Broker，只不过它除了具有一般 Broker 的功能以外，还负责 Leader 的选举。
 
-![](./assets/dunwu/kafka-26.png)
+![Kafka 副本的 Leader 与 Follower 拓扑](./assets/dunwu/Kafka-副本主从拓扑.png)
 
 ### 2.1. 如何选举控制器
 
@@ -61,7 +61,7 @@ Kafka 在 ZooKeeper 的关键存储信息：
 
 选举控制器的详细流程：
 
-![](./assets/dunwu/kafka-27.png)
+![Kafka Controller 选举过程](./assets/dunwu/Kafka-Controller选举.png)
 
 1. 第一个在 ZooKeeper 中成功创建 `/controller` 临时节点的 Broker 会被指定为控制器。
 
@@ -127,7 +127,7 @@ Preferred 领导者选举主要是 Kafka 为了避免部分 Broker 负载过重�
 
 Kafka 使用 Topic 来组织数据，每个 Topic 被分为若干个 Partition，每个 Partition 有多个副本。每个 Broker 可以保存成百上千个属于不同 Topic 和 Partition 的副本。**Kafka 副本的本质是一个只能追加写入的提交日志**。
 
-![](./assets/dunwu/kafka-28.png)
+![Kafka 副本分布](./assets/dunwu/Kafka-副本分布.png)
 
 Kafka 副本有两种角色：
 
@@ -135,7 +135,7 @@ Kafka 副本有两种角色：
 - **Follower 副本（从）**：Leader 副本以外的副本都是 Follower 副本。**Follower 唯一的任务就是从 Leader 那里复制消息，保持与 Leader 一致的状态**。
 - 如果 Leader 宕机，其中一个 Follower 会被选举为新的 Leader。
 
-![](./assets/dunwu/kafka-29.png)
+![Follower 从 Leader 拉取副本](./assets/dunwu/Kafka-Follower副本拉取.png)
 
 为了与 Leader 保持同步，Follower 向 Leader 发起获取数据的请求，这种请求与消费者为了读取消息而发送的请求是一样的。请求消息里包含了 Follower 想要获取消息的偏移量，而这些偏移量总是有序的。
 
@@ -171,7 +171,7 @@ broker 会在它所监听的每一个端口上运行一个 Acceptor 线程，这
 
 当请求放进请求队列后，IO 线程负责进行处理。
 
-![](./assets/dunwu/kafka-30.png)
+![Kafka Broker 请求处理](./assets/dunwu/Kafka-Broker请求处理.png)
 
 生产请求和获取请求都需要发送给 Partition 的 Leader 副本处理。如果 Broker 收到一个针对特定分区的请求，而该分区的 Leader 在另一个 Broker 上，那么发送请求的客户端会收到一个“非分区 Leader”的错误响应。Kafka 客户端要自己负责把生成请求和获取请求发送到正确的 Broker 上。
 
@@ -181,7 +181,7 @@ broker 会在它所监听的每一个端口上运行一个 Acceptor 线程，这
 
 客户端会把这些信息缓存起来，并直接往目标 Broker 上发送生产请求和获取请求。它们需要时不时地通过发送元数据请求来刷新这些信息（刷新的时间间隔通过 `metadata.max.age.ms` 来配置），从而知道元数据是否发生了变化。
 
-![img](./assets/dunwu/kafka-31.png)
+![Kafka 客户端元数据请求](./assets/dunwu/Kafka-客户端元数据请求.png)
 
 ### 5.2. 生产请求
 
@@ -209,7 +209,7 @@ Leader 处理拉取请求和处理生产请求的方式很相似：
 
 **客户端可以指定 Broker 返回数据量的上限和下限，防止数据量过大造成客户端内存溢出**。同时，**客户端也可以指定返回的最小数据量**，当消息数据量没有达到最小数据量时，请求会一直阻塞直到有足够的数据返回。指定最小的数据量在负载不高的情况下非常有用，通过这种方式**可以减轻网络往返的额外开销**。当然请求也不能永远的阻塞，客户端可以指定最大的阻塞时间，如果到达指定的阻塞时间，即便没有足够的数据也会返回。
 
-![img](./assets/dunwu/kafka-32.png)
+![Kafka Fetch 长轮询](./assets/dunwu/Kafka-Fetch长轮询.png)
 
 不是所有 Leader 的数据都能够被读取。**消费者只能读取已提交的消息**。**只有当消息被写入分区的若干同步副本时，才被认为是已提交的**。为什么是若干个 Broker 呢？这取决于你对“已提交”的定义。你可以选择只要 Leader 成功保存该消息就算是已提交，也可以是令所有 Broker 都成功保存该消息才算是已提交。
 
@@ -217,7 +217,7 @@ Leader 处理拉取请求和处理生产请求的方式很相似：
 
 这也意味着，如果 Broker 间的消息复制因为某些原因变慢了，那么消息到达消费者的时间也会随之变长。延迟时间可以通过 `replica.lag.time.max.ms` 来配置，它指定了副本在复制消息时可被允许的最大延迟时间。
 
-![img](./assets/dunwu/kafka-33.png)
+![高水位线限定消费者可见消息](./assets/dunwu/Kafka-消费者可见消息.png)
 
 ### 5.4. 其他请求
 

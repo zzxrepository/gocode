@@ -28,7 +28,7 @@ tag:
 - push 模式：MQ 推送数据给消费者
 - pull 模式：消费者主动向 MQ 请求数据
 
-![](./assets/dunwu/kafka-12.png)
+![Kafka 的 Pull 消费模型](./assets/dunwu/Kafka-Pull消费模型.png)
 
 Kafka 消费者（Consumer）以 pull 方式从 Broker 拉取消息。相比于 push 方式，pull 方式灵活度和扩展性更好，因为消费的主动性由消费者自身控制。
 
@@ -47,7 +47,7 @@ push 模式的优缺点：
 
 **一条消息只有被提交，才会被消费者获取到**。如下图，只能消费 Message0、Message1、Message2：
 
-![img](./assets/dunwu/kafka-13.png)
+![高水位线与副本同步进度](./assets/dunwu/Kafka-高水位线与副本进度.png)
 
 ### 1.2. 消费者群组
 
@@ -61,11 +61,11 @@ Kafka 消费者从属于消费者群组，**一个群组里的 Consumer 订阅�
 
 同一时刻，**一条消息只能被同一消费者组中的一个消费者实例消费**。
 
-![](./assets/dunwu/kafka-14.png)
+![消费者组的分区分配](./assets/dunwu/Kafka-消费者组分区分配.png)
 
 **不同消费者群组之间互不影响**。
 
-![](./assets/dunwu/kafka-15.png)
+![多个消费者组的分区分配](./assets/dunwu/Kafka-多消费者组分区分配.png)
 
 ### 1.3. 消费流程
 
@@ -74,7 +74,7 @@ Kafka 消费者通过 `poll` 来获取消息，但是获取消息时并不是立
 - 消费者通过 `customer.poll(time)` 中设置等待时间
 - Broker 会等待累计一定量数据，然后发送给消费者。这样可以减少网络开销。
 
-![](./assets/dunwu/kafka-16.png)
+![消费者轮询与提交 Offset 流程](./assets/dunwu/Kafka-消费者轮询流程.png)
 
 poll 除了获取消息外，还有其他作用：
 
@@ -359,7 +359,7 @@ try {
 
 （2）消费者通过向被指派为群组协调器（Coordinator）的 Broker 定期发送心跳来维持它们和群组的从属关系以及它们对分区的所有权。
 
-![](./assets/dunwu/kafka-17.png)
+![消费者组再均衡流程](./assets/dunwu/Kafka-消费者组再均衡.png)
 
 （3）群主从群组协调器获取群组成员列表，然后给每一个消费者进行分配分区 Partition。有两种分配策略：Range 和 RoundRobin。
 
@@ -439,11 +439,11 @@ try {
 
 （1）**如果提交的偏移量小于客户端处理的最后一个消息的偏移量，那么处于两个偏移量之间的消息就会被重复处理**。
 
-![](./assets/dunwu/kafka-18.png)
+![Offset 提交与消息重复](./assets/dunwu/Kafka-偏移量提交与消息重复.png)
 
 （2）**如果提交的偏移量大于客户端处理的最后一个消息的偏移量，那么处于两个偏移量之间的消息将会丢失**。
 
-![](./assets/dunwu/kafka-19.png)
+![分区再均衡期间的 Offset](./assets/dunwu/Kafka-分区再均衡期间的偏移量.png)
 
 由此可知，处理偏移量，会对客户端处理数据产生影响。
 

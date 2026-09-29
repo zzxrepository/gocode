@@ -817,12 +817,15 @@ src/backend/go/advanced/06-network-programming/
 1. 全站公用图片放在 `src/.vuepress/public/`。
 2. 某个栏目专用图片放在该栏目自己的 `assets/` 目录。
 
-文件名建议使用英文、小写和连字符，例如：
+图片文件名应使用中文语义，按“主题-图意[-序号]”命名；技术专有名词可以保留原写法。例如：
 
 ```text
-go-channel-flow.png
-binary-tree-traversal.png
+Go-通道发送流程.png
+二叉树-前序遍历.png
+Kafka-消费者组再均衡.png
 ```
+
+不要将截图工具生成的名称直接提交到仓库，例如 `image-202405...png`、`QQ_...png`、`wps1.jpg` 或 `img.png`。同一主题有多张图时，在末尾添加能区分图意的词；只有图意完全相同、仅表示步骤顺序时才使用 `-步骤1`、`-步骤2`。Markdown 的替代文本也应描述图片内容，并在重命名时同步更新所有引用。
 
 文章中引用 `public` 下的图片时，路径从站点根开始：
 
@@ -844,18 +847,18 @@ binary-tree-traversal.png
 src/.vuepress/public/assets/image/
 ```
 
-文件名建议使用栏目和主题组合，例如：
+文件名建议使用栏目和主题的中文组合，例如：
 
 ```text
-go-context-cover.png
-go-struct-cover.png
-go-reflect-cover.png
+Go-context源码解析-封面.png
+Go-结构体-封面.png
+Go-反射-封面.png
 ```
 
 引用栏目内图片时，可以使用相对路径：
 
 ```md
-![二叉树遍历](../assets/binary-tree-traversal.png)
+![二叉树前序遍历](../assets/二叉树-前序遍历.png)
 ```
 
 ## 本地预览和构建

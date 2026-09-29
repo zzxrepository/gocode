@@ -54,14 +54,14 @@ Kafka 生产者发送消息流程：
 - 如果**成功**，则返回一个 `RecordMetaData` 对象，它包含了主题、分区、偏移量；
 - 如果**失败**，则返回一个错误。生产者在收到错误后，可以进行重试，重试次数可以在配置中指定。失败一定次数后，就返回错误消息。
 
-![img](./assets/dunwu/kafka-20.png)
+![Kafka 生产者记录发送流程](./assets/dunwu/Kafka-生产者记录发送流程.png)
 
 生产者向 Broker 发送消息时是怎么确定向哪一个 Broker 发送消息？
 
 - 生产者会向任意 broker 发送一个元数据请求（`MetadataRequest`），获取到每一个分区对应的 Leader 信息，并缓存到本地。
 - 生产者在发送消息时，会指定 Partition 或者通过 key 得到到一个 Partition，然后根据 Partition 从缓存中获取相应的 Leader 信息。
 
-![img](./assets/dunwu/kafka-21.png)
+![Kafka 生产者的元数据路由](./assets/dunwu/Kafka-生产者元数据路由.png)
 
 ## 2. 生产者 API
 
@@ -219,7 +219,7 @@ Kafka 的数据结构采用三级结构，即：主题（Topic）、分区（Par
 
 在 Kafka 中，任意一个 Topic 维护了一组 Partition 日志，如下所示：
 
-![img](./assets/dunwu/kafka-22.png)
+![Kafka Topic、分区与日志](./assets/dunwu/Kafka-Topic分区日志.png)
 
 每个 Partition 都是一个单调递增的、不可变的日志记录，以不断追加的方式写入数据。Partition 中的每条记录会被分配一个单调递增的 id 号，称为偏移量（Offset），用于唯一标识 Partition 内的每条记录。
 
@@ -361,10 +361,10 @@ Producer<String, String> producer = new KafkaProducer<>(props);
 
 Broker 端在缓存中保存了这 seq number，对于接收的每条消息，如果其序号比 Broker 缓存中序号大于 1 则接受它，否则将其丢弃。这样就可以实现了消息重复提交了。但是，只能保证单个 Producer 对于同一个 `<Topic, Partition>` 的 Exactly Once 语义。不能保证同一个 Producer 一个 topic 不同的 partion 幂等。
 
-![img](./assets/dunwu/kafka-23.png)
+![确认丢失导致的消息重复](./assets/dunwu/Kafka-确认重试消息重复.png)
 实现幂等之后：
 
-![img](./assets/dunwu/kafka-24.png)
+![幂等生产者的 PID 与序列号](./assets/dunwu/Kafka-幂等生产者PID与序列号.png)
 
 ### 7.4. 生成 PID 的流程
 
