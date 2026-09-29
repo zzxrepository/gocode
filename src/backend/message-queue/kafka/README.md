@@ -33,13 +33,13 @@ tag:
 
 ## 版本说明
 
-以下转载教程保留原版内容，其中 Kafka 2.x、Java 8、ZooKeeper 及旧版客户端配置仅适用于对应版本。Kafka 4.x 使用 KRaft，已移除 ZooKeeper 模式；当前版本操作请参考 [Kafka 官方快速入门](https://kafka.apache.org/43/getting-started/quickstart/)。
+[快速入门](./01-quickstart.html) 已于 2026-09-29 保留原结构修订为 Kafka 4.3.1 / KRaft 命令与 Go（Sarama）示例。第 2～8 篇仍保留原版技术内容，其中 Kafka 2.x、Java 8、ZooKeeper 及旧版客户端配置仅适用于对应版本。Kafka 4.x 使用 KRaft，已移除 ZooKeeper 模式；当前版本操作也可参考 [Kafka 官方快速入门](https://kafka.apache.org/43/getting-started/quickstart/)。
 
 ## 来源与许可
 
 目录中前 8 篇教程来自 [dunwu（钝悟）的 BIGDATA-TUTORIAL](https://dunwu.github.io/bigdata-tutorial/kafka/)，按 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) 转载；转载文章及其改编继续适用同一许可。原文引用的第三方资料保留原出处。Go 与 Sarama 实战单独提供可运行项目，并在正文标明学习与核验资料。
 
-导入时补充了站点元信息和版本说明，将 33 张配图保存到本地，修复了一个失效图片地址，并将原文手工目录替换为本站自动目录。技术正文与代码示例保留原版，未整体升级到 Kafka 4.x。
+导入时补充了站点元信息和版本说明，将 33 张配图保存到本地，修复了一个失效图片地址，并将原文手工目录替换为本站自动目录。目前仅第一篇完成 Kafka 4.x 与 Go 示例修订，其余转载文章尚未整体升级。
 
 - [原始 Markdown 快照](https://github.com/dunwu/bigdata-tutorial/tree/b3f38146d8ce7613aca819a628683a87ff513765/docs/kafka)
 - <a :href="$withBase('/downloads/kafka/CC-BY-SA-4.0.txt')">许可全文</a>
