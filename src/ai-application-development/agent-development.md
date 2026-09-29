@@ -55,7 +55,7 @@ LLM Agent 是 AI Agent 的一种：它以大语言模型作为理解自然语言
 
 ## LLM Agent 的概念架构
 
-![LLM Agent 的感知、思考、规划、记忆、执行与反馈闭环](/assets/image/ai-agent-architecture.svg)
+![LLM Agent 的感知、思考、规划、记忆、执行与反馈闭环](/assets/image/LLM智能体-感知规划与行动反馈闭环.svg)
 
 *图中展示的是 LLM Agent，而不是所有类型 Agent 的通用架构：大模型是决策核心，记忆与核心双向读写；任务主线由“环境 → 感知 → 思考与规划 → 执行 → 工具与环境”组成，执行结果再以反馈回到感知。本图为面向本文的重新绘制，结构参考 Lilian Weng 的 [LLM-powered Autonomous Agents](https://lilianweng.github.io/posts/2023-06-23-agent/)（2023）。*
 

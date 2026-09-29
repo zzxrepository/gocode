@@ -26,7 +26,7 @@ tag:
 
 |                        数据库存储数据                        |
 | :----------------------------------------------------------: |
-| ![image-20240221133238015](./assets/image-20240221133238015.png) |
+| ![JDBC-表数据持久化存储](./assets/JDBC-表数据持久化存储.png) |
 
 #### 6.1.1.2 数据的操作
 
@@ -34,7 +34,7 @@ tag:
 
 |                      Java程序读取数据库                      |
 | :----------------------------------------------------------: |
-| ![image-20240221133525927](./assets/image-20240221133525927.png) |
+| ![JDBC-Java访问数据库表](./assets/JDBC-Java访问数据库表.png) |
 
 
 
@@ -49,7 +49,7 @@ tag:
 
 |                       JDBC简单执行过程                       |
 | :----------------------------------------------------------: |
-| ![image-20240221134431944](./assets/image-20240221134431944-7460499.png) |
+| ![JDBC-统一接口与数据库驱动](./assets/JDBC-统一接口与数据库驱动.png) |
 
 > 我们开发的同一套Java代码是无法操作不同的关系型数据库，因为每一个关系型数据库的底层实现细节都不一样。如果这样，问题就很大了，在公司中可以在开发阶段使用的是MySQL数据库，而上线时公司最终选用oracle数据库，我们就需要对代码进行大批量修改，这显然并不是我们想看到的。我们要做到的是同一套Java代码操作不同的关系型数据库，而此时sun公司就指定了一套标准接口（JDBC），JDBC中定义了所有操作关系型数据库的规则。众所周知接口是无法直接使用的，我们需要使用接口的实现类，而这套实现类（称之为：驱动）就由各自的数据库厂商给出。
 
@@ -168,7 +168,7 @@ public class JdbcQuick {
 
 先来看看通过Java操作数据库的流程
 
-<img src="./assets/image-20210725163745153.png" alt="image-20210725163745153" style="zoom:80%;" />
+<img src="./assets/JDBC-Java与MySQL交互.png" alt="image-20210725163745153" style="zoom:80%;" />
 
 第一步：编写Java代码
 
@@ -182,7 +182,7 @@ public class JdbcQuick {
 
 * 创建工程，导入驱动jar包
 
-  <img src="./assets/image-20210725133015535.png" alt="image-20210725133015535" style="zoom:90%;" />
+  <img src="./assets/JDBC-MySQL驱动依赖包.png" alt="image-20210725133015535" style="zoom:90%;" />
 
 * 注册驱动
 
@@ -508,7 +508,7 @@ public class JdbcQuick {
 > 1. SQL语句有错误，检查SQL语句！建议SQL语句在SQL工具中测试后再复制到Java程序中！
 > 2. 连接数据库的URL中，数据库名称编写错误，也会报该异常！
 >
-> ![image-20240223143826507](./assets/image-20240223143826507.png)
+> ![JDBC-SQL语法错误异常](./assets/JDBC-SQL语法错误异常.png)
 
 
 
@@ -518,7 +518,7 @@ public class JdbcQuick {
 >
 > 在使用预编译SQL语句时，如果有?占位符，要为每一个占位符赋值，否则报该错误！
 >
-> ![image-20240223143947558](./assets/image-20240223143947558.png)
+> ![JDBC-未绑定预编译参数异常](./assets/JDBC-未绑定预编译参数异常.png)
 
 
 
@@ -526,7 +526,7 @@ public class JdbcQuick {
 
 > 连接数据库时，如果用户名或密码输入错误，也会报SQLException，容易混淆！所以一定要看清楚异常后面的原因描述
 >
-> ![image-20240223144345939](./assets/image-20240223144345939.png)
+> ![JDBC-数据库访问被拒绝异常](./assets/JDBC-数据库访问被拒绝异常.png)
 
 
 
@@ -536,7 +536,7 @@ public class JdbcQuick {
 >
 > com.mysql.cj.jdbc.exceptions.CommunicationsException: Communications link failure
 >
-> ![image-20240227234754309](./assets/image-20240227234754309.png)
+> ![JDBC-数据库通信连接失败](./assets/JDBC-数据库通信连接失败.png)
 
 
 
@@ -742,15 +742,15 @@ JDBC 的数据库连接池使用 javax.sql.DataSource接口进行规范，所有
 
 |                     主流连接池的功能对比                     |
 | :----------------------------------------------------------: |
-| ![image-20240228090209040](./assets/image-20240228090209040.png) |
+| ![数据库连接池-特性对比](./assets/数据库连接池-特性对比.png) |
 
 |                   mock性能数据（单位：ms）                   |
 | :----------------------------------------------------------: |
-| ![image-20240228205157212](./assets/image-20240228205157212.png) |
+| ![数据库连接池-性能对比表一](./assets/数据库连接池-性能对比表一.png) |
 
 |                   mysql性能数据 (单位：ms)                   |
 | :----------------------------------------------------------: |
-| ![image-20240228205242420](./assets/image-20240228205242420.png) |
+| ![数据库连接池-性能对比表二](./assets/数据库连接池-性能对比表二.png) |
 
 
 
@@ -1064,7 +1064,7 @@ JDBC 的数据库连接池使用 javax.sql.DataSource接口进行规范，所有
 
 
 
-![image-20240223104919548](./assets/image-20240223104919548.png)
+![ThreadLocal-线程隔离与连接管理](./assets/ThreadLocal-线程隔离与连接管理.png)
 
 #### 9.4 JDBC工具类封装V2.0
 
@@ -1545,7 +1545,7 @@ DriverManager（驱动管理类）作用：
 
 * 注册驱动
 
-  ![image-20210725171339346](./assets/image-20210725171339346.png)
+  ![JDBC-注册数据库驱动方法](./assets/JDBC-注册数据库驱动方法.png)
 
   registerDriver方法是用于注册驱动的，但是我们之前做的入门案例并不是这样写的。而是如下实现
 
@@ -1555,7 +1555,7 @@ DriverManager（驱动管理类）作用：
 
   我们查询MySQL提供的Driver类，看它是如何实现的，源码如下：
 
-  <img src="./assets/image-20210725171635432.png" alt="image-20210725171635432" style="zoom:70%;" />
+  <img src="./assets/JDBC-驱动静态初始化注册.png" alt="image-20210725171635432" style="zoom:70%;" />
 
   在该类中的静态代码块中已经执行了 `DriverManager` 对象的 `registerDriver()` 方法进行驱动的注册了，那么我们只需要加载 `Driver` 类，该静态代码块就会执行。而 `Class.forName("com.mysql.jdbc.Driver");` 就可以加载 `Driver` 类。
 
@@ -1566,7 +1566,7 @@ DriverManager（驱动管理类）作用：
 
 * 获取数据库连接
 
-  ![image-20210725171355278](./assets/image-20210725171355278.png)
+  ![JDBC-获取数据库连接方法](./assets/JDBC-获取数据库连接方法.png)
 
   参数说明：
 
@@ -1634,17 +1634,17 @@ Connection几口中定义了3个对应的方法：
 
 * 开启事务
 
-  ![image-20210725173444628](./assets/image-20210725173444628.png)
+  ![JDBC-设置自动提交方法](./assets/JDBC-设置自动提交方法.png)
 
   参与autoCommit 表示是否自动提交事务，true表示自动提交事务，false表示手动提交事务。而开启事务需要将该参数设为为false。
 
 * 提交事务
 
-  ![image-20210725173618636](./assets/image-20210725173618636.png)
+  ![JDBC-提交事务方法](./assets/JDBC-提交事务方法.png)
 
 * 回滚事务
 
-  ![image-20210725173648674](./assets/image-20210725173648674.png)
+  ![JDBC-回滚事务方法](./assets/JDBC-回滚事务方法.png)
 
 具体代码实现如下：
 
@@ -1706,11 +1706,11 @@ Statement对象的作用就是用来执行SQL语句。而针对不同类型的SQ
 
 * 执行DDL、DML语句
 
-  ![image-20210725175151272](./assets/image-20210725175151272.png)
+  ![JDBC-executeUpdate更新方法](./assets/JDBC-executeUpdate更新方法.png)
 
 * 执行DQL语句
 
-  <img src="./assets/image-20210725175131533.png" alt="image-20210725175131533" style="zoom:80%;" />
+  <img src="./assets/JDBC-executeQuery查询方法.png" alt="image-20210725175131533" style="zoom:80%;" />
 
   该方法涉及到了 `ResultSet` 对象，而这个对象我们还没有学习，一会再重点讲解。
 
@@ -1822,7 +1822,7 @@ ResultSet  executeQuery(sql)：执行DQL 语句，返回 ResultSet 对象
 
 如下图为执行SQL语句后的结果
 
-<img src="./assets/image-20210725181320813.png" alt="image-20210725181320813" style="zoom:80%;" />
+<img src="./assets/JDBC-账户表查询结果.png" alt="image-20210725181320813" style="zoom:80%;" />
 
 一开始光标指定于第一行前，如图所示红色箭头指向于表头行。当我们调用了 `next()` 方法后，光标就下移到第一行数据，并且方法返回true，此时就可以通过 `getInt("id")` 获取当前行id字段的值，也可以通过 `getString("name")` 获取当前行name字段的值。如果想获取下一行的数据，继续调用 `next()`  方法，以此类推。
 
@@ -1888,7 +1888,7 @@ public void testResultSet() throws  Exception {
 
 * 需求：查询account账户表数据，封装为Account对象中，并且存储到ArrayList集合中
 
-  <img src="./assets/image-20210725182352433.png" alt="image-20210725182352433" style="zoom:80%;" />
+  <img src="./assets/JDBC-查询结果封装对象集合.png" alt="image-20210725182352433" style="zoom:80%;" />
 
 * 代码实现
 
@@ -1979,25 +1979,25 @@ create database test;
 
 在命令提示符中运行今天资料下的 `day03-JDBC\资料\2. sql注入演示\sql.jar` 这个jar包。
 
-<img src="./assets/image-20210725184701026.png" alt="image-20210725184701026" style="zoom:80%;" />
+<img src="./assets/SpringBoot-命令行启动JAR.png" alt="image-20210725184701026" style="zoom:80%;" />
 
 此时我们就能在数据库中看到user表
 
-<img src="./assets/image-20210725184817731.png" alt="image-20210725184817731" style="zoom:80%;" />
+<img src="./assets/JDBC-登录测试用户表.png" alt="image-20210725184817731" style="zoom:80%;" />
 
 接下来在浏览器的地址栏输入 `localhost:8080/login.html` 就能看到如下页面
 
-<img src="./assets/image-20210725185024731.png" alt="image-20210725185024731" style="zoom:80%;" />
+<img src="./assets/JDBC-登录测试表单.png" alt="image-20210725185024731" style="zoom:80%;" />
 
 我们就可以在如上图中输入用户名和密码进行登陆。用户名和密码输入正确就登陆成功，跳转到首页。用户名和密码输入错误则给出错误提示，如下图
 
-<img src="./assets/image-20210725185320875.png" alt="image-20210725185320875" style="zoom:80%;" />
+<img src="./assets/JDBC-登录失败示例.png" alt="image-20210725185320875" style="zoom:80%;" />
 
 但是我可以通过输入一些特殊的字符登陆到首页。
 
 用户名随意写，密码写成 `' or '1' ='1`
 
-<img src="./assets/image-20210725185603112.png" alt="image-20210725185603112" style="zoom:80%;" />
+<img src="./assets/JDBC-登录SQL注入示例.png" alt="image-20210725185603112" style="zoom:80%;" />
 
 这就是SQL注入漏洞，也是很危险的。当然现在市面上的系统都不会存在这种问题了，所以大家也不要尝试用这种方式去试其他的系统。
 
@@ -2137,7 +2137,7 @@ select * from tb_user where username = 'sjdljfld' and password = '\'or \'1\' = \
 > * 预编译SQL，性能更高
 > * 防止SQL注入：==将敏感字符进行转义==
 
-<img src="./assets/image-20210725195756848.png" alt="image-20210725195756848" style="zoom:80%;" />
+<img src="./assets/JDBC-预编译SQL执行流程.png" alt="image-20210725195756848" style="zoom:80%;" />
 
 Java代码操作数据库流程如图所示：
 
@@ -2237,7 +2237,7 @@ Java代码操作数据库流程如图所示：
 
 * 执行SQL语句，查看 `D:\mysql.log` 日志如下:
 
-  ![image-20210725202829738](./assets/image-20210725202829738.png)
+  ![JDBC-预编译语句执行日志](./assets/JDBC-预编译语句执行日志.png)
 
   上图中第三行中的 `Prepare` 是对SQL语句进行预编译。第四行和第五行是执行了两次SQL语句，而第二次执行前并没有对SQL进行预编译。
 
@@ -2265,7 +2265,7 @@ Java代码操作数据库流程如图所示：
 
 而数据库使用了数据库连接池后，就能达到Connection对象的复用，如下图
 
-<img src="./assets/image-20210725210432985.png" alt="image-20210725210432985" style="zoom:80%;" />
+<img src="./assets/JDBC-数据库连接池原理.png" alt="image-20210725210432985" style="zoom:80%;" />
 
 连接池是在一开始就创建好了一些连接（Connection）对象存储起来。用户需要连接数据库时，不需要自己创建连接，而只需要从连接池中获取一个连接进行使用，使用完毕后再将连接对象归还给连接池；这样就可以起到资源重用，也节省了频繁创建连接销毁连接所花费的时间，从而提升了系统响应的速度。
 
@@ -2305,11 +2305,11 @@ Java代码操作数据库流程如图所示：
 
 现在通过代码实现，首先需要先将druid的jar包放到项目下的lib下并添加为库文件
 
-<img src="./assets/image-20210725212911980.png" alt="image-20210725212911980" style="zoom:80%;" />
+<img src="./assets/Druid-添加连接池依赖.png" alt="image-20210725212911980" style="zoom:80%;" />
 
 项目结构如下：
 
-<img src="./assets/image-20210725213210091.png" alt="image-20210725213210091" style="zoom:80%;" />
+<img src="./assets/Druid-示例与配置文件位置.png" alt="image-20210725213210091" style="zoom:80%;" />
 
 编写配置文件如下：
 

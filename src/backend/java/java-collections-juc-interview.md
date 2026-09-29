@@ -1470,7 +1470,7 @@ JDK 8 使用了一种更加细粒度的锁（桶锁），再配合 CAS + synchro
   }
   ```
 
-<img src="./assets/QQ_1752543189306.png" alt="QQ_1752543189306" style="zoom:50%;" />
+<img src="./assets/ConcurrentHashMap-Segment分段锁结构.png" alt="QQ_1752543189306" style="zoom:50%;" />
 
 `ConcurrentHashMap` 采用**分段锁设计**保证线程安全，将数据分成多个Segment进行存储，然后每个Segment继承了可重入锁ReentrantLock。当线程访问特定段中的数据时，仅对该段加锁，不同的线程可以同时操作不同的段，从而实现并发。这种机制显著降低了锁粒度，使得多线程操作不同段的数据时无需竞争锁，从而实现高并发性能。
 
@@ -2831,7 +2831,7 @@ thread.interrupt(); // 中断线程
 
 五种状态是从 **操作系统** 层面来描述的，有初始、可运行、运行、阻塞和终止。线程在运行过程中会根据状态的变化在这些阶段之间切换。
 
-<img src="./assets/QQ_1746605316190.png" alt="QQ_1746605316190" style="zoom:50%;" />
+<img src="./assets/操作系统-线程五态转换.png" alt="QQ_1746605316190" style="zoom:50%;" />
 
 - 【初始状态】仅是在语言层面创建了线程对象，还未与操作系统线程关联。
 - 【可运行状态】（就绪状态）指该线程已经被创建（与操作系统线程关联），可以由 CPU 调度执行。
@@ -3295,7 +3295,7 @@ class Main {
 - 通过 ThreadLocal 的 remove 方法从 ThreadLocalMap 中移除与该`ThreadLocal`对象关联的条目
 - ThreadLocalMap 的大小由 ThreadLocal 对象的多少决定。
 
-<img src="./assets/QQ_1746513193091.png" alt="QQ_1746513193091" style="zoom: 67%;" />
+<img src="./assets/ThreadLocalMap-线程与键值条目结构.png" alt="QQ_1746513193091" style="zoom: 67%;" />
 
 其中的引用关系链就是：
 
@@ -4173,7 +4173,7 @@ ObjectMonitor() {
  +----------------------+
 ```
 
-![Monitor 中的 WaitSet 与 EntryList](./assets/Monitor-WaitSet与EntryList.png)
+![Monitor 中的 WaitSet 与 EntryList](./assets/Java监视器-等待集与锁竞争队列.png)
 
 - 刚开始 Monitor 中 Owner 为 null
 - 当 Thread-2 执行 synchronized(obj) 就会将 Monitor 的所有者 Owner 置为 Thread-2，Monitor中只能有一个 Owner

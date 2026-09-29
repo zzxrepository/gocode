@@ -19,7 +19,7 @@ tag:
 
 # 01. context
 
-![Go context 源码解析封面](/assets/image/go-context-cover.png)
+![Go context 源码解析封面](/assets/image/Go-context源码解析-封面.png)
 
 学习 Go 后端基本绕不开 `context`。
 

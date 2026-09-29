@@ -931,7 +931,7 @@ binlog 默认是没有启用的。如果要搭建主从复制，则需要开启�
   - **ROW 的缺点是每行数据的变化结果都会被记录，比如执行批量 update 语句，更新多少行数据就会产生多少条记录**，使 binlog 文件过大，而在 STATEMENT 格式下只会记录一个 update 语句而已。
 - MIXED：binlog 的混合日志格式，会根据 SQL 语句特性自动在 STATEMENT 和 ROW 模式间切换：优先以 STATEMENT 模式记录确定性操作（如普通增删改 SQL），保持日志简洁；**当检测到可能导致数据不一致的操作**（如含 NOW ()、RAND () 等非确定性函数，或依赖执行计划的语句）时，自动切换为 ROW 模式记录行数据变化，以此平衡日志效率与同步准确性。
 
-<img src="./assets/QQ_1756085204333.png" alt="QQ_1756085204333" style="zoom:50%;" />
+<img src="./assets/MySQL-查询Binlog格式.png" alt="QQ_1756085204333" style="zoom:50%;" />
 
 生产环境中是一定要启用的，可以通过在 my.cnf 文件中配置 log_bin 参数，以启用 binlog。
 
@@ -1146,7 +1146,7 @@ redo log 文件采用**循环写入模式**，类似一个环形缓冲区，其�
   - 一方面，它是一种机制，负责主动将内存中未持久化的脏页（已修改但未写入磁盘的数据页）刷写到磁盘，并同步更新日志的安全标记；
   - 另一方面，它也指 redo log 中一个具体的位置点，这个位置由对应的 LSN（即 checkpoint LSN）来标识，代表 “最后一次确保数据完成持久化的边界”。
 
-<img src="./assets/mysql-20250314161732.png" alt="mysql-20250314161732" style="zoom: 33%;" />
+<img src="./assets/InnoDB-LSN与Redo刷盘检查点时间线.png" alt="mysql-20250314161732" style="zoom: 33%;" />
 
 上图从时间维度，展示了事务执行过程中，**内存中数据、磁盘上数据、redo log（重做日志）、checkpoint（检查点）** 各自的 LSN（日志序列号）是如何变化和关联的，我们可以分步骤拆解来看：
 
@@ -1262,9 +1262,9 @@ MySQL 在启动后会向操作系统申请一块连续的内存空间作为 Redo
 
 于此同时，InnoDB 还提供了一个全局变量 buf_free，来控制后续的 redo log 记录应该写入到 block 中的哪个位置。
 
-<img src="./assets/QQ_1756088327611.png" alt="QQ_1756088327611" style="zoom:50%;" />
+<img src="./assets/InnoDB-Redo日志缓冲区块结构.png" alt="QQ_1756088327611" style="zoom:50%;" />
 
-<img src="./assets/QQ_1756088352468.png" alt="QQ_1756088352468" style="zoom:50%;" />
+<img src="./assets/InnoDB-日志缓冲块头主体与尾部.png" alt="QQ_1756088352468" style="zoom:50%;" />
 
 #### buf_next_to_write 了解吗？
 
@@ -1300,7 +1300,7 @@ buf_next_to_write 指向 Redo Log Buffer 中下一次需要写入硬盘的起始
 - 随后写入 binlog；
 - 最后 redo log 标记为 `commit` 状态。
 
-<img src="./assets/QQ_1756045047938.png" alt="QQ_1756045047938" style="zoom: 50%;" />
+<img src="./assets/MySQL-Server层Binlog与引擎层Redo.png" alt="QQ_1756045047938" style="zoom: 50%;" />
 
 ### 🌟为什么要两阶段提交呢？
 
@@ -1310,7 +1310,7 @@ buf_next_to_write 指向 Redo Log Buffer 中下一次需要写入硬盘的起始
 
 两阶段提交简单来说：通过先 prepare redo log、再写 binlog、最后 commit redo log 的流程，确保两者要么全部持久化成功，要么全部失败，从而避免逻辑不一致。
 
-<img src="./assets/QQ_1756045009878.png" alt="QQ_1756045009878" style="zoom: 25%;" />
+<img src="./assets/MySQL-Redo与Binlog两阶段提交.png" alt="QQ_1756045009878" style="zoom: 25%;" />
 
 ### 🌟两阶段提交过程是怎么样的？
 
@@ -2663,7 +2663,7 @@ UPDATE innodb_table SET name='new' WHERE name='old'; -- 全表扫描，退化为
 
 举个例子，假设事务 A 已经对表加了一个范围 id 为（3，5）间隙锁。
 
-![img](https://cdn.xiaolincoding.com/gh/xiaolincoder/mysql/%E9%94%81/gap%E9%94%81.drawio.png)
+![gap锁.drawio](https://cdn.xiaolincoding.com/gh/xiaolincoder/mysql/%E9%94%81/gap%E9%94%81.drawio.png)
 
 当事务 A 还没提交的时候，事务 B 向该表插入一条 id = 4 的新记录，这时会判断到插入的位置已经被事务 A 加了间隙锁，于是事物 B 会生成一个插入意向锁，然后将锁的状态设置为等待状态（*PS：MySQL 加锁时，是先生成锁结构，然后设置锁的状态，如果锁状态是等待状态，并不是意味着事务成功获取到了锁，只有当锁状态为正常状态时，才代表事务成功获取到了锁*），此时事务 B 就会发生阻塞，直到事务 A 提交了事务。
 
@@ -2800,7 +2800,7 @@ UPDATE innodb_table SET name='new' WHERE name='old'; -- 全表扫描，退化为
 
 当两个事务分别持有表 1 和表 2 的锁，并等待对方释放锁时，就会触发死锁。
 
-<img src="./assets/QQ_1756174856350.png" alt="QQ_1756174856350" style="zoom: 33%;" />
+<img src="./assets/MySQL-双会话交叉加锁死锁.png" alt="QQ_1756174856350" style="zoom: 33%;" />
 
 **死锁的排查步骤：**
 
@@ -3219,12 +3219,12 @@ InnoDB 根据操作类型将 `undo log` 分为两类：
 - **`insert undo log`（插入回滚日志）**：仅在 `INSERT` 操作中生成，用于记录新增记录的原始信息。由于插入的记录仅对当前事务可见（其他事务在事务提交前无法看到），因此当事务提交后，该 `undo log` 就失去了作用，会被直接删除，无需后续清理。
   - **示例**：当事务执行 `INSERT INTO t (id, name) VALUES (1, '菜花')` 时，`insert undo log` 会记录这条新增记录的信息，若事务回滚，可通过该日志删除这条记录。
 
-<img src="./assets/QQ_1754812877194.png" alt="QQ_1754812877194" style="zoom:50%;" />
+<img src="./assets/MySQL-插入记录的事务隐藏字段.png" alt="QQ_1754812877194" style="zoom:50%;" />
 
 - **`update undo log`（更新回滚日志）**：在 执行更新`UPDATE` 或删除 `DELETE` 操作中生成（`DELETE` 在 InnoDB 内部被视为特殊的更新，仅标记记录为 “删除”）。这类 `undo log` 不仅用于事务回滚，还可能被 MVCC 机制引用（供其他事务读取历史版本），因此事务提交后不能立即删除，而是会被放入 `undo log` 链表中，等待 `purge` 线程（后台清理线程）判断：当确认没有事务再需要访问这些历史版本时，才会被最终删除。
   - **版本链形成**：多次修改同一行记录时，每次修改都会生成新的 `update undo log`，并通过聚簇索引记录的 `roll_ptr`（回滚指针）串联成 “版本链”。链首是数据的最新版本，链尾是最早的旧版本，供不同事务根据可见性规则读取对应版本。如下图所示：
 
-<img src="./assets/QQ_1754813607243.png" alt="QQ_1754813607243" style="zoom: 67%;" />
+<img src="./assets/MySQL-连续更新形成Undo版本链.png" alt="QQ_1754813607243" style="zoom: 67%;" />
 
 #### 数据可见性算法
 

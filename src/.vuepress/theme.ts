@@ -11,8 +11,8 @@ export default hopeTheme({
   },
 
   // 用于导航栏、浏览器标签页与收藏夹的站点图标
-  logo: "/maomao-zhang-logo-clean.png",
-  favicon: "/maomao-zhang-logo-clean.png",
+  logo: "/站点标志-相机少年-无边框.png",
+  favicon: "/站点标志-相机少年-无边框.png",
 
   repo: "zzxrepository/gocode",
 
@@ -168,39 +168,39 @@ export default hopeTheme({
 
     // 如果你需要 PWA。安装 @vuepress/plugin-pwa 并取消下方注释
     // pwa: {
-    //   favicon: "/favicon.ico",
+    //   favicon: "/站点标志-霓虹字母Z-浏览器图标.ico",
     //   cacheHTML: true,
     //   cacheImage: true,
     //   appendBase: true,
     //   apple: {
-    //     icon: "/assets/icon/apple-icon-152.png",
+    //     icon: "/assets/icon/VuePress主题标志-苹果触摸图标152.png",
     //     statusBarColor: "black",
     //   },
     //   msTile: {
-    //     image: "/assets/icon/ms-icon-144.png",
+    //     image: "/assets/icon/VuePress主题标志-磁贴图标144.png",
     //     color: "#ffffff",
     //   },
     //   manifest: {
     //     icons: [
     //       {
-    //         src: "/assets/icon/chrome-mask-512.png",
+    //         src: "/assets/icon/VuePress主题标志-遮罩图标512.png",
     //         sizes: "512x512",
     //         purpose: "maskable",
     //         type: "image/png",
     //       },
     //       {
-    //         src: "/assets/icon/chrome-mask-192.png",
+    //         src: "/assets/icon/VuePress主题标志-遮罩图标192.png",
     //         sizes: "192x192",
     //         purpose: "maskable",
     //         type: "image/png",
     //       },
     //       {
-    //         src: "/assets/icon/chrome-512.png",
+    //         src: "/assets/icon/VuePress主题标志-浏览器图标512.png",
     //         sizes: "512x512",
     //         type: "image/png",
     //       },
     //       {
-    //         src: "/assets/icon/chrome-192.png",
+    //         src: "/assets/icon/VuePress主题标志-浏览器图标192.png",
     //         sizes: "192x192",
     //         type: "image/png",
     //       },
@@ -212,7 +212,7 @@ export default hopeTheme({
     //         url: "/demo/",
     //         icons: [
     //           {
-    //             src: "/assets/icon/guide-maskable.png",
+    //             src: "/assets/icon/指南-灯泡图标.png",
     //             sizes: "192x192",
     //             purpose: "maskable",
     //             type: "image/png",

@@ -17,7 +17,7 @@ tag:
 
 # 09. 方法
 
-![Go methods 方法详解封面](/assets/image/go-methods-cover.png)
+![Go methods 方法详解封面](/assets/image/Go-方法详解-封面.png)
 
 前面学习结构体时，我们已经知道：结构体负责把一组相关数据组织成一个清晰的类型。比如 `User` 保存用户信息，`Account` 保存账户余额，`Point` 保存二维坐标。
 

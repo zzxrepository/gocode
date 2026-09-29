@@ -8,7 +8,7 @@ category:
 tag:
   - 个人网站
   - GoCode
-heroImage: /maomao-zhang-logo-clean.png
+heroImage: /站点标志-相机少年-无边框.png
 bgImage: https://theme-hope-assets.vuejs.press/bg/6-light.svg
 bgImageDark: https://theme-hope-assets.vuejs.press/bg/6-dark.svg
 bgImageStyle:
@@ -33,7 +33,7 @@ actions:
 highlights:
   - header: 推荐阅读
     description: 按路线学习，比零散收藏更容易形成体系。
-    image: /assets/image/features.svg
+    image: /assets/image/主题插画-立体功能模块.svg
     highlights:
       - title: Java 学习路线
         icon: mug-hot
@@ -46,7 +46,7 @@ highlights:
 
   - header: 后端开发
     description: 从语言基础到真实服务，建立完整的后端知识体系。
-    image: /assets/image/advanced.svg
+    image: /assets/image/主题插画-显示器与设置齿轮.svg
     highlights:
       - title: GO
         icon: terminal
@@ -63,7 +63,7 @@ highlights:
 
   - header: 数据库
     description: 按数据模型学习 SQL、缓存与文档数据库的使用边界。
-    image: /assets/image/features.svg
+    image: /assets/image/主题插画-立体功能模块.svg
     highlights:
       - title: 关系型数据库
         icon: table-cells
@@ -76,7 +76,7 @@ highlights:
 
   - header: 基础能力
     description: 夯实解决实际问题所需的通用技术基础。
-    image: /assets/image/features.svg
+    image: /assets/image/主题插画-立体功能模块.svg
     highlights:
       - title: 算法与数据结构
         icon: diagram-project
@@ -97,7 +97,7 @@ highlights:
 
   - header: AI 应用开发
     description: 面向真实场景，学习构建大模型与 Agent 应用。
-    image: /assets/image/blog.svg
+    image: /assets/image/主题插画-博客页面与个人资料.svg
     highlights:
       - title: 大模型应用
         icon: brain
@@ -114,7 +114,7 @@ highlights:
 
   - header: 项目与实践
     description: 把学习沉淀为真正可以使用的产品。
-    image: /assets/image/blog.svg
+    image: /assets/image/主题插画-博客页面与个人资料.svg
     highlights:
       - title: 个人网站
         icon: blog

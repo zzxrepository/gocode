@@ -212,23 +212,23 @@ Java 是多线程语言，CPU 通过 “时间片轮转” 的方式调度线程
 
 案例1：
 
-<img src="./assets/QQ_1746180594904.png" alt="QQ_1746180594904" style="zoom:50%;" />
+<img src="./assets/StringTable-intern先入池再声明字面量-JDK8.png" alt="QQ_1746180594904" style="zoom:50%;" />
 
 案例2：
 
-![运行时字符串拼接调用 intern 的结果](./assets/StringTable-intern-运行时拼接.png)
+![运行时字符串拼接调用 intern 的结果](./assets/StringTable-先声明字面量再调用intern-JDK8.png)
 
 案例3：
 
-![变量字符串拼接调用 intern 的结果](./assets/StringTable-intern-变量拼接.png)
+![变量字符串拼接调用 intern 的结果](./assets/StringTable-先声明字面量再调用intern-JDK6.png)
 
 案例4：
 
-![新建字符串对象调用 intern 后入池](./assets/StringTable-intern-对象入池.png)
+![新建字符串对象调用 intern 后入池](./assets/StringTable-先调用intern再声明字面量-JDK6.png)
 
 案例5：
 
-![编译期常量拼接与 intern 的结果](./assets/StringTable-编译期常量拼接.png)
+![编译期常量拼接与 intern 的结果](./assets/StringTable-常量拼接与运行时拼接对比.png)
 
 #### String s = new String（“abc”）执行过程中分别对应哪些内存区域？
 
@@ -1227,13 +1227,13 @@ JVM 的类加载机制，指的是将Class文件中描述类的数据结构（�
 
 **只有当父加载器反馈自己无法完成这个加载请求（它的搜索范围中没有找到所需的类）时，子加载器才会尝试自己去加载。**
 
-<img src="./assets/QQ_1746278736713.png" alt="QQ_1746278736713" style="zoom:50%;" />
+<img src="./assets/JVM-类加载器双亲委派层级.png" alt="QQ_1746278736713" style="zoom:50%;" />
 
 ### 🌟类加载过程
 
 一个类从被加载到虚拟机内存中开始，到从内存中卸载，**整个生命周期需要经过七个阶段**：加载 、验证、准备、解析、初始化、使用和卸载。
 
-<img src="./assets/QQ_1746277463834.png" alt="QQ_1746277463834" style="zoom:50%;" />
+<img src="./assets/JVM-类加载生命周期.png" alt="QQ_1746277463834" style="zoom:50%;" />
 
 **①、加载：将类的二进制字节码加载到内存中。**
 

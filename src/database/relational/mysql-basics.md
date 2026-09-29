@@ -27,11 +27,11 @@ tag:
 - 数据库管理系统：英文名是DataBase Management System，简称DBMS，它是管理数据库的大型软件，我们平时所说的MySQL数据库其实就是MySQL数据库管理系统
 - 在电脑上安装了数据库管理系统后，就可以通过数据库管理系统创建数据库来存储数据，也可以通过该系统对数据库中的数据进行数据的增删改查相关的操作。
 
-![image-20240915214635056](./assets/image-20240915214635056.png)
+![数据库-DBMS管理多个数据库](./assets/数据库-DBMS管理多个数据库.png)
 
 ## 1.3 常见的DBMS
 
-![image-20240915214701810](./assets/image-20240915214701810.png)
+![数据库-产品排名与模型比较表](./assets/数据库-产品排名与模型比较表.png)
 
 接下来对上面列举的数据库管理系统进行简单的介绍：
 
@@ -43,7 +43,7 @@ tag:
 * SQLite：嵌入式的微型数据库。如：作为 Android 内置数据库
 * MariaDB：开源免费中小型的数据库
 
-![image-20240915214750607](./assets/image-20240915214750607.png)
+![数据库-SQL通过DBMS访问数据](./assets/数据库-SQL通过DBMS访问数据.png)
 
 我们可以通过数据库管理系统操作数据库，对数据库中的数据进行增删改查操作，而怎么样让用户跟数据库管理系统打交道呢？就可以通过一门编程语言（SQL）来实现。
 
@@ -62,7 +62,7 @@ tag:
 - SQL 的两个重要标准是 SQL92 和 SQL99，现代 SQL 语言仍遵循这些标准。
 - 不同数据库可能会对 SQL 做出一些修改，这些修改被称为“方言”。
 
-![image-20240916143453175](./assets/image-20240916143453175.png)
+![SQL-标准语法与数据库方言](./assets/SQL-标准语法与数据库方言.png)
 
 ## 2.2 SQL分类
 
@@ -309,7 +309,7 @@ C. 撤销 'heima'@'%' 用户的itcast数据库的所有权限
 
 - 那么，怎样才能把用户各种经营相关的、纷繁复杂的数据，有序、高效地存储起来呢？ 在 MySQL 中，一个完整的数据存储过程总共有 4 步，分别是创建数据库、确认字段、创建数据表、插入数据。
 
-![image-20240916104918014](./assets/image-20240916104918014.png)
+![数据库-建库建表与插入数据步骤](./assets/数据库-建库建表与插入数据步骤.png)
 
 - 我们要先创建一个数据库，而不是直接创建数据表呢？
   - 因为从系统架构的层次上看，MySQL 数据库系统从大到小依次是 数据库服务器 、 数据库 、 数据表 、数据表的 行与列 。
@@ -361,7 +361,7 @@ C. 撤销 'heima'@'%' 用户的itcast数据库的所有权限
   SHOW DATABASES; #有一个S，代表多个数据库,下面查询到的是的这些数据库是mysql安装好自带的数据库
   ```
 
-<img src="./assets/image-20210721221107014.png" alt="image-20210721221107014" style="zoom:80%;" />
+<img src="./assets/MySQL-查看系统数据库列表.png" alt="image-20210721221107014" style="zoom:80%;" />
 
 - **查看当前正在使用的数据库**
 
@@ -450,7 +450,7 @@ C. 撤销 'heima'@'%' 用户的itcast数据库的所有权限
 
   - 查看mysql数据库中func表的结构，运行语句如下：
 
-<img src="./assets/image-20210721230332428.png" alt="image-20210721230332428" style="zoom:80%;" />
+<img src="./assets/MySQL-查看func表结构.png" alt="image-20210721230332428" style="zoom:80%;" />
 
 > 其中，各个字段的含义分别解释如下：
 >
@@ -506,7 +506,7 @@ CREATE TABLE [IF NOT EXISTS] 表名 (
   DESC emp;
   ```
 
-![image-20240916092458266](./assets/image-20240916092458266.png)
+![MySQL-员工字段类型定义](./assets/MySQL-员工字段类型定义.png)
 
 > MySQL在执行建表语句时，将id字段的类型设置为int(11)，这里的11实际上是int类型指定的显示宽度，默认的显示宽度为11。也可以在创建数据表的时候指定数据的显示宽度。
 
@@ -524,7 +524,7 @@ CREATE TABLE [IF NOT EXISTS] 表名 (
   DESCRIBE dept;
   ```
 
-![image-20240916092553235](./assets/image-20240916092553235.png)
+![MySQL-部门表自增主键定义](./assets/MySQL-部门表自增主键定义.png)
 
 > 在MySQL 8.x版本中，不再推荐为INT类型指定显示长度，并在未来的版本中可能去掉这样的语法。
 
@@ -557,7 +557,7 @@ CREATE TABLE [IF NOT EXISTS] 表名 (
   DESCRIBE dept80;
   ```
 
-![image-20240916093556653](./assets/image-20240916093556653.png)
+![数据库-员工表字段与非空约束](./assets/数据库-员工表字段与非空约束.png)
 
 
 
@@ -584,7 +584,7 @@ ALTER TABLE 表名 ADD 【COLUMN】 字段名 字段类型 【FIRST|AFTER 字段
 ALTER TABLE dept80 ADD job_id varchar(15);
 ```
 
-![image-20240916094049453](./assets/image-20240916094049453.png)
+![SQL-新增职位字段前后对比](./assets/SQL-新增职位字段前后对比.png)
 
 #### 3.2.3.2 修改一个列
 
@@ -663,7 +663,7 @@ ALTER TABLE dept80 DROP COLUMN job_id;
 
 - 运行语句效果如下：
 
-<img src="./assets/image-20210721235108267.png" alt="image-20210721235108267" style="zoom:80%;" />
+<img src="./assets/MySQL-删除不存在表与IFEXISTS.png" alt="image-20210721235108267" style="zoom:80%;" />
 
 ### 3.2.5 清空表
 
@@ -700,7 +700,7 @@ ALTER TABLE dept80 DROP COLUMN job_id;
 
 - MySQL 支持多种类型，根据可以分为三类，如下图所示
 
-![image-20240916105314686](./assets/image-20240916105314686.png)
+![MySQL-数据类型大小与范围总表](./assets/MySQL-数据类型大小与范围总表.png)
 
 | 类型             | 类型举例                                                     |
 | ---------------- | ------------------------------------------------------------ |
@@ -816,7 +816,7 @@ create table student (
   - 【参考】合适的字符存储长度，不但节约数据库表空间、节约索引存储，更重要的是提升检索速度。
     - 正例：无符号值可以避免误存负数，且扩大了表示范围。
 
-  ![image-20240916104538613](./assets/image-20240916104538613.png)
+  ![MySQL-整数类型字节与年龄范围示例](./assets/MySQL-整数类型字节与年龄范围示例.png)
 
 - **拓展2：如何理解清空表、删除表等操作需谨慎？！**
   - 表删除 操作将把表的定义和表中的数据一起删除，并且MySQL在执行删除操作时，不会有任何的确认信息提示，因此执行删除操时应当慎重。在删除表前，最好对表中的数据进行 备份 ，这样当操作失误时可以对数据进行恢复，以免造成无法挽回的后果。
@@ -992,7 +992,7 @@ INSERT INTO stu VALUES
 
   - 报错：说明：不存在 55 号部门
 
-    ![image-20240916103637048](./assets/image-20240916103637048.png)
+    ![MySQL-外键约束失败错误](./assets/MySQL-外键约束失败错误.png)
 
 
 ## 4.3 删除数据
@@ -1248,7 +1248,7 @@ SELECT 字段列表 FROM 表名 WHERE 条件列表;
   * 条件列表可以使用以下运算符
 
 
-<img src="./assets/image-20210722190508272.png" alt="image-20210722190508272" style="zoom:60%;" />
+<img src="./assets/SQL-条件运算符与逻辑运算符表.png" alt="image-20210722190508272" style="zoom:60%;" />
 
 * 查询年龄大于20岁的学员信息
 
@@ -1368,7 +1368,7 @@ ORDER BY 排序字段名1 [排序方式1],排序字段名2 [排序方式2] …;
   ORDER BY hire_date ;
   ```
 
-  ![image-20240916114149461](./assets/image-20240916114149461.png)
+  ![SQL-员工岗位部门与入职日期查询](./assets/SQL-员工岗位部门与入职日期查询.png)
 
 - 案例2：
 
@@ -1378,7 +1378,7 @@ ORDER BY 排序字段名1 [排序方式1],排序字段名2 [排序方式2] …;
   ORDER BY hire_date DESC ;
   ```
 
-  ![image-20240916114317063](./assets/image-20240916114317063.png)
+  ![SQL-员工信息查询与空部门记录](./assets/SQL-员工信息查询与空部门记录.png)
 
 - 案例3：
 
@@ -1388,7 +1388,7 @@ ORDER BY 排序字段名1 [排序方式1],排序字段名2 [排序方式2] …;
   ORDER BY annsal;
   ```
 
-  ![image-20240916114341555](./assets/image-20240916114341555.png)
+  ![SQL-员工年薪升序查询结果](./assets/SQL-员工年薪升序查询结果.png)
 
 ### 5.3.3 多列排序
 
@@ -1400,7 +1400,7 @@ ORDER BY 排序字段名1 [排序方式1],排序字段名2 [排序方式2] …;
   ORDER BY department_id, salary DESC;
   ```
 
-![image-20240916114534651](./assets/image-20240916114534651.png)
+![SQL-员工部门与工资查询结果](./assets/SQL-员工部门与工资查询结果.png)
 
 - 说明：
   - 可以使用不在SELECT列表中的列排序
@@ -1416,7 +1416,7 @@ ORDER BY 排序字段名1 [排序方式1],排序字段名2 [排序方式2] …;
 
 如下图所示，大家在很多网站都见过类似的效果，如京东、百度、淘宝等。分页查询是将数据一页一页的展示给用户看，用户也可以通过点击查看下一页的数据。
 
-<img src="./assets/image-20210722230330366.png" alt="image-20210722230330366" style="zoom:80%;" />
+<img src="./assets/数据查询-结果列表分页控件.png" alt="image-20210722230330366" style="zoom:80%;" />
 
 接下来我们先说分页查询的语法。
 
@@ -1499,7 +1499,7 @@ WHERE rownum < 10;
 - **多表查询，也称为关联查询，指两个或更多个表一起完成查询操作。**
   - **前提条件：** 这些一起查询的表之间是有关系的（一对一、一对多），它们之间一定是有关联字段，这个关联字段可能建立了外键，也可能没有建立外键。比如：员工表和部门表，这两个表依靠“部门编号”进行关联。
 
-![image-20240916153336077](./assets/image-20240916153336077.png)
+![数据库-员工部门位置三表字段](./assets/数据库-员工部门位置三表字段.png)
 
 - 我们假设一共有107名员工，部门一共有27个，并不是所有的员工都有部门，也不是所有的部门都有员工，现在我想查询所有员工的姓名及其所在的部门名称，那么必然涉及到两个表，员工表和部门表，并且员工表和部门表是依靠部门编号进行关联，根据之前的学习知识，会很容易写出如下查询语句：
 
@@ -1512,7 +1512,7 @@ WHERE rownum < 10;
 
 - 笛卡尔积(或交叉连接)的理解：笛卡尔乘积是一个数学运算。假设我有两个集合 X 和 Y，那么 X 和 Y 的笛卡尔积就是 X 和 Y 的所有可能组合，也就是第一个对象来自于 X，第二个对象来自于 Y 的所有可能。组合的个数即为两个集合中元素个数的乘积数。
 
-![image-20240916154336112](./assets/image-20240916154336112.png)
+![SQL-多表笛卡尔积示例](./assets/SQL-多表笛卡尔积示例.png)
 
 - SQL92中，笛卡尔积也称为 交叉连接 ，英文是`CROSS JOIN`。在 SQL99中也是使用`CROSS JOIN`表示交叉连接。它的作用就是可以把任意表进行连接，即使这两张表不相关。
 
@@ -1568,11 +1568,11 @@ WHERE employees.`department_id` = departments.`department_id`;
   >
   > 职级表 `job_grades` 如图所示：
   >
-  > ![image-20220702083358269](./assets/remote-2c4c6095194d60924f425c05f02836d8.png)
+  > ![MySQL-薪资等级区间数据表](./assets/MySQL-薪资等级区间数据表.png)
   >
   > 员工表 `employees` 如下图所示：
   >
-  > ![image-20220702084035508](./assets/remote-43f79e78efad51e7b189b5ee8168798a.png)
+  > ![MySQL-员工编号姓名与薪资查询结果](./assets/MySQL-员工编号姓名与薪资查询结果.png)
   >
   > 【分析】员工表 `employees` 和职级表 `job_grades` 之间没有相同的字段以供等值连接。唯一有关系的就是工资，那我们就可以通过非等值连接来查询这两个表。如下代码所示：
   >
@@ -1584,7 +1584,7 @@ WHERE employees.`department_id` = departments.`department_id`;
   >
   > 查询结果：
   >
-  > ![image-20220702083837006](./assets/remote-076cfe46232beae7fea857e762da2813.png)
+  > ![MySQL-员工薪资等级查询结果](./assets/MySQL-员工薪资等级查询结果.png)
 
 #### 5.5.2.2 分类2：自连接 和 非自连接
 
@@ -1593,11 +1593,11 @@ WHERE employees.`department_id` = departments.`department_id`;
 
 【例子】根据管理者的员工编号 `manager_id` ，查询员工表 `employees` 中每一个员工对应的管理者姓名和ID。员工表 `employees` 如下图所示：
 
-![image-20220702085055033](./assets/remote-ffa9832b0d70afc167a7f0f73242af13.png)
+![MySQL-员工及直属管理者编号查询结果](./assets/MySQL-员工及直属管理者编号查询结果.png)
 
 【分析】管理者的员工编号 `manager_id` 也必定是公司员工，对应着公司的员工编号 `employee_id` 。因此，我们可以把员工表复制为两份，一份看作员工表 (起别名为 `emp` )；另一份看作管理者表 (起别名为 `mgr` ) ，如下图所示，通过 `emp` 的管理者编号 `manager_id` 与 `mgr` 员工编号 `employee_id` 连接起来。
 
-![image-20220702090033021](./assets/remote-2b1b454b7833b4d3e8366f2a4bb4aefd.png)
+![MySQL-员工表自连接关联示意](./assets/MySQL-员工表自连接关联示意.png)
 
 如下代码所示：
 
@@ -1609,7 +1609,7 @@ WHERE emp.`manager_id` = mgr.`employee_id`;
 
 查询结果：
 
-![image-20220702090748568](./assets/remote-c2d6ce44b44e0c31e980f6c2e92c4d4b.png)
+![MySQL-员工与管理者姓名关联查询结果](./assets/MySQL-员工与管理者姓名关联查询结果.png)
 
 
 
@@ -1723,7 +1723,7 @@ WHERE emp.`manager_id` = mgr.`employee_id`;
   LEFT OUTER JOIN departments d ON (e.department_id = d.department_id) ;
   ```
 
-![image-20240916163409378](./assets/image-20240916163409378.png)
+![SQL-员工部门外连接查询结果](./assets/SQL-员工部门外连接查询结果.png)
 
 #### 5.5.3.4 右外连接(RIGHT OUTER JOIN)的实现
 
@@ -1765,7 +1765,7 @@ WHERE emp.`manager_id` = mgr.`employee_id`;
 
 - **UNION操作符：返回两个查询的结果集的并集，去除重复记录**
 
-![image-20240916163924191](./assets/image-20240916163924191.png)
+![集合-两个相交集合示意](./assets/集合-两个相交集合示意.png)
 
 - **UNION ALL操作符：** 返回两个查询的结果集的并集。对于两个结果集的重复部分，不去重。
 
@@ -1795,7 +1795,7 @@ WHERE emp.`manager_id` = mgr.`employee_id`;
 
 #### 5.5.3.7 5种SQL JOINS的实现
 
-![image-20240916164517500](./assets/image-20240916164517500.png)
+![SQL-七种连接方式集合图](./assets/SQL-七种连接方式集合图.png)
 
 代码实现：
 
@@ -1975,7 +1975,7 @@ WHERE e.`department_id` IS NULL
 - 聚合函数作用于一列数据，并对一列数据进行计算返回一个值
 - 举例：现有一需求让我们求表中所有数据的数学成绩的总和。这就是对math字段进行纵向求和。
 
-<img src="./assets/image-20210722194410628.png" alt="image-20210722194410628" style="zoom:80%;" />
+<img src="./assets/SQL-学生信息与成绩示例数据.png" alt="image-20210722194410628" style="zoom:80%;" />
 
 ### 5.6.2 聚合函数分类
 
@@ -2115,7 +2115,7 @@ GROUP BY 分组字段名;
 
 - 举例：
 
-![image-20240916175216811](./assets/image-20240916175216811.png)
+![SQL-部门职位多字段分组聚合](./assets/SQL-部门职位多字段分组聚合.png)
 
 ```mysql
 SELECT department_id dept_id, job_id, SUM(salary)
@@ -2123,7 +2123,7 @@ FROM employees
 GROUP BY department_id, job_id ;
 ```
 
-![image-20240916175246970](./assets/image-20240916175246970.png)
+![SQL-部门职位分组工资汇总结果](./assets/SQL-部门职位分组工资汇总结果.png)
 
 
 
@@ -2210,7 +2210,7 @@ HAVING MAX(salary) > 10000 ;
 
 * 总结：
 
-![image-20240916181601331](./assets/image-20240916181601331.png)
+![SQL-WHERE与HAVING优缺点对比](./assets/SQL-WHERE与HAVING优缺点对比.png)
 
 - **开发中的选择：** WHERE 和 HAVING 也不是互相排斥的，我们可以在一个查询里面同时使用 WHERE 和 HAVING。包含分组统计函数的条件用 HAVING，普通条件用 WHERE。这样，我们就既利用了 WHERE 条件的高效快速，又发挥了 HAVING 可以使用包含分组统计函数的查询条件的优点。当数据量特别大的时候，运行效率会有很大的差别。
 
@@ -2266,7 +2266,7 @@ LIMIT [位置偏移量,] 行数
   FROM -> WHERE -> GROUP BY -> HAVING -> SELECT 的字段 -> DISTINCT -> ORDER BY -> LIMIT
   ```
 
-![image-20240916173344186](./assets/image-20240916173344186.png)
+![SQL-查询逻辑执行顺序](./assets/SQL-查询逻辑执行顺序.png)
 
 - 举例：
 
@@ -2428,7 +2428,7 @@ SQL 中子查询的使用大大增强了 SELECT 查询的能力，因为很多�
   - **列级约束**：只能作用在一个列上，跟在列的定义后面
   - **表级约束**：可以作用在多个列上，不与列一起，而是单独定义
 
-![image-20240917092949563](./assets/image-20240917092949563.png)
+![数据库-列级与表级约束比较](./assets/数据库-列级与表级约束比较.png)
 
 - **根据约束起的作用**，约束可分为：
   1. **NOT NULL（非空约束）**：
@@ -2907,7 +2907,7 @@ ALTER TABLE 表名 DROP PRIMARY KEY;
 
 如何理解上面的概念呢？如下图有两张表，员工表和部门表：
 
-<img src="./assets/image-20210724120904180.png" alt="image-20210724120904180" style="zoom:80%;" />
+<img src="./assets/数据库-员工与部门示例数据.png" alt="image-20210724120904180" style="zoom:80%;" />
 
 员工表中的dep_id字段是部门表的id字段关联，也就是说1号学生张三属于1号部门研发部的员工。现在我要删除1号部门，就会出现错误的数据（员工表中属于1号部门的数据）。而我们上面说的两张表的关系只是我们认为它们有关系，此时需要通过外键让这两张表产生数据库层面的关系，这样你要删除部门表中的1号部门的数据将无法删除。
 
@@ -3003,7 +3003,7 @@ alter table emp add CONSTRAINT fk_emp_dept FOREIGN key(dep_id) REFERENCES dept(i
 
 * 软件的研发步骤
 
-  <img src="./assets/image-20210724130925801.png" alt="image-20210724130925801" style="zoom:80%;" />
+  <img src="./assets/软件工程-开发角色流程与交付物.png" alt="image-20210724130925801" style="zoom:80%;" />
 
 * 数据库设计概念
 
@@ -3019,7 +3019,7 @@ alter table emp add CONSTRAINT fk_emp_dept FOREIGN key(dep_id) REFERENCES dept(i
 
     如下图就是ER(Entity/Relation)图：
 
-    <img src="./assets/image-20210724131210759.png" alt="image-20210724131210759" style="zoom:80%;" />
+    <img src="./assets/数据库-论坛用户版块帖子ER图.png" alt="image-20210724131210759" style="zoom:80%;" />
 
   * 物理设计（根据数据库自身的特点把逻辑设计转换为物理设计）
 
@@ -3032,7 +3032,7 @@ alter table emp add CONSTRAINT fk_emp_dept FOREIGN key(dep_id) REFERENCES dept(i
     * 如：用户 和 用户详情
     * **一对一关系多用于表拆分，将一个实体中经常使用的字段放一张表，不经常使用的字段放另一张表，用于提升查询性能**
 
-    <img src="./assets/image-20210724133015129.png" alt="image-20210724133015129" style="zoom:80%;" />
+    <img src="./assets/社交应用-资料编辑与用户列表.png" alt="image-20210724133015129" style="zoom:80%;" />
 
     上图左边是用户的详细信息，而我们真正在展示用户信息时最长用的则是上图右边红框所示，所以我们会将详细信息查分成两周那个表。
 
@@ -3042,7 +3042,7 @@ alter table emp add CONSTRAINT fk_emp_dept FOREIGN key(dep_id) REFERENCES dept(i
 
     * 一个部门对应多个员工，一个员工对应一个部门。如下图：
 
-      <img src="./assets/image-20210724133443094.png" alt="image-20210724133443094" style="zoom:90%;" />
+      <img src="./assets/数据库-员工部门外键关联数据.png" alt="image-20210724133443094" style="zoom:90%;" />
 
   * 多对多
 
@@ -3050,7 +3050,7 @@ alter table emp add CONSTRAINT fk_emp_dept FOREIGN key(dep_id) REFERENCES dept(i
 
     * 一个商品对应多个订单，一个订单包含多个商品。如下图：
 
-      <img src="./assets/image-20210724133704682.png" alt="image-20210724133704682" style="zoom:80%;" />
+      <img src="./assets/电商-订单确认与商品清单页面.png" alt="image-20210724133704682" style="zoom:80%;" />
 
 ### 2.2  表关系(一对多)
 
@@ -3067,11 +3067,11 @@ alter table emp add CONSTRAINT fk_emp_dept FOREIGN key(dep_id) REFERENCES dept(i
 
   我们还是以 `员工表` 和 `部门表` 举例:
 
-  <img src="./assets/image-20210724134145803.png" alt="image-20210724134145803" style="zoom:70%;" />
+  <img src="./assets/数据库-员工与部门多对一关系.png" alt="image-20210724134145803" style="zoom:70%;" />
 
   经过分析发现，员工表属于多的一方，而部门表属于一的一方，此时我们会在员工表中添加一列（dep_id），指向于部门表的主键（id）：
 
-  <img src="./assets/image-20210724134318685.png" alt="image-20210724134318685" style="zoom:70%;" />
+  <img src="./assets/数据库-员工部门外键连接.png" alt="image-20210724134318685" style="zoom:70%;" />
 
   建表语句如下：
 
@@ -3100,7 +3100,7 @@ alter table emp add CONSTRAINT fk_emp_dept FOREIGN key(dep_id) REFERENCES dept(i
 
   查看表结构模型图：
 
-  <img src="./assets/image-20210724140456921.png" alt="image-20210724140456921" style="zoom:80%;" />
+  <img src="./assets/数据库-员工部门一对多ER图.png" alt="image-20210724140456921" style="zoom:80%;" />
 
 ### 2.3  表关系(多对多)
 
@@ -3117,11 +3117,11 @@ alter table emp add CONSTRAINT fk_emp_dept FOREIGN key(dep_id) REFERENCES dept(i
 
   我们以 `订单表` 和 `商品表` 举例：
 
-  <img src="./assets/image-20210724134735939.png" alt="image-20210724134735939" style="zoom:70%;" />
+  <img src="./assets/数据库-订单与商品多对多关系.png" alt="image-20210724134735939" style="zoom:70%;" />
 
   经过分析发现，订单表和商品表都属于多的一方，此时需要创建一个中间表，在中间表中添加订单表的外键和商品表的外键指向两张表的主键：
 
-  <img src="./assets/image-20210724135054834.png" alt="image-20210724135054834" style="zoom:70%;" />
+  <img src="./assets/数据库-订单商品中间表关联.png" alt="image-20210724135054834" style="zoom:70%;" />
 
   建表语句如下：
 
@@ -3161,7 +3161,7 @@ alter table emp add CONSTRAINT fk_emp_dept FOREIGN key(dep_id) REFERENCES dept(i
 
   查看表结构模型图：
 
-  <img src="./assets/image-20210724140307910.png" alt="image-20210724140307910" style="zoom:80%;" />
+  <img src="./assets/数据库-订单商品多对多ER图.png" alt="image-20210724140307910" style="zoom:80%;" />
 
 ### 2.4  表关系(一对一)
 
@@ -3178,11 +3178,11 @@ alter table emp add CONSTRAINT fk_emp_dept FOREIGN key(dep_id) REFERENCES dept(i
 
   我们以 `用户表` 举例：
 
-  <img src="./assets/image-20210724135346913.png" alt="image-20210724135346913" style="zoom:70%;" />
+  <img src="./assets/数据库-用户信息单表设计.png" alt="image-20210724135346913" style="zoom:70%;" />
 
   而在真正使用过程中发现 id、photo、nickname、age、gender 字段比较常用，此时就可以将这张表查分成两张表。
 
-​	<img src="./assets/image-20210724135649341.png" alt="image-20210724135649341" style="zoom:70%;" />
+​	<img src="./assets/数据库-用户与详情表一对一拆分.png" alt="image-20210724135649341" style="zoom:70%;" />
 
 ​
 
@@ -3212,7 +3212,7 @@ create table tb_user (
 
 ​	查看表结构模型图：
 
-<img src="./assets/image-20210724141445785.png" alt="image-20210724141445785" style="zoom:80%;" />
+<img src="./assets/数据库-用户详情一对一ER图.png" alt="image-20210724141445785" style="zoom:80%;" />
 
 
 
@@ -3220,11 +3220,11 @@ create table tb_user (
 
 根据下图设计表及表和表之间的关系：
 
-<img src="./assets/image-20210724141822204.png" alt="image-20210724141822204" style="zoom:80%;" />
+<img src="./assets/音乐平台-专辑信息与评论页面.png" alt="image-20210724141822204" style="zoom:80%;" />
 
 经过分析，我们分为 `专辑表`  `曲目表`  `短评表`  `用户表`   4张表。
 
-<img src="./assets/image-20210724141550446.png" alt="image-20210724141550446" style="zoom:80%;" />
+<img src="./assets/数据库建模-音乐专辑曲目与评论标注.png" alt="image-20210724141550446" style="zoom:80%;" />
 
 一个专辑可以有多个曲目，一个曲目只能属于某一张专辑，所以专辑表和曲目表的关系是==一对多==。
 
@@ -3232,7 +3232,7 @@ create table tb_user (
 
 一个用户可以发多个短评，一个短评只能是某一个人发的，所以用户表和短评表的关系是 ==一对多==。
 
-<img src="./assets/image-20210724142550839.png" alt="image-20210724142550839" style="zoom:80%;" />
+<img src="./assets/数据库建模-专辑曲目用户评论关系.png" alt="image-20210724142550839" style="zoom:80%;" />
 
 
 

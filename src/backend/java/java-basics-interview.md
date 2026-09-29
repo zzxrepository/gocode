@@ -1306,7 +1306,7 @@ public static String getStr() {
 
 
 
-<img src="./assets/QQ_1751964915256.png" alt="QQ_1751964915256" style="zoom: 67%;" />
+<img src="./assets/Java-异常与错误继承体系.png" alt="QQ_1751964915256" style="zoom: 67%;" />
 
 ### ☘️异常的处理方式？
 

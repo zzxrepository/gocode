@@ -23,11 +23,11 @@ tag:
 
 - Git的下载也比较简单，只需要到Git官网(<https://git-scm.com/>)点击下载即可，如下图
 
-<img src="./assets/image-20240719212957803.png" alt="image-20240719212957803" />
+<img src="./assets/Git安装-官网Windows下载入口.png" alt="image-20240719212957803" />
 
 - **跳转到如下界面，点击下面任意一处即可下载**
 
-<img src="./assets/image-20240719213616488.png" alt="image-20240719213616488" />
+<img src="./assets/Git安装-选择Windows64位安装包.png" alt="image-20240719213616488" />
 
 > **如此下载的就是Git的最新版本**
 
@@ -37,51 +37,51 @@ tag:
 
 - 步骤1：双击下载的安装包
 
-<img src="./assets/image-20240719213836326.png" alt="image-20240719213836326" />
+<img src="./assets/Git安装-Windows64位安装文件.png" alt="image-20240719213836326" />
 
 - 步骤2：开始安装，这个界面主要展示了GPL第 2 版协议的内容，点击`next`进入下一步
 
-<img src="./assets/image-20240719214015011.png" alt="image-20240719214015011" />
+<img src="./assets/Git安装-许可协议页面.png" alt="image-20240719214015011" />
 
 - 步骤3：选择安装目录，可点击`Browse…`更换目录，也可直接在方框里面改，点击 [next] 到下一步
 
-<img src="./assets/image-20240719215720759.png" alt="image-20240719215720759" />
+<img src="./assets/Git安装-选择目标安装目录.png" alt="image-20240719215720759" />
 
 
 
 - **步骤4：选择安装组件**，图中这些英文都比较简单，我已经把大概意思翻译出来了，大家根据自己的需要选择勾选。点击 [next] 到下一步。
 
-<img src="./assets/image-20240719215845510.png" alt="image-20240719215845510" />
+<img src="./assets/Git安装-选择安装组件.png" alt="image-20240719215845510" />
 
 - **选项说明：** 最后一个选项打勾的话，需要下载Windows Terminal配合 Git Bash使用，如下图所示
 
-<img src="./assets/image-20240719215913671.png" alt="image-20240719215913671" />
+<img src="./assets/Git安装-组件选项功能注释.png" alt="image-20240719215913671" />
 
-<img src="./assets/image-20240719220032308.png" alt="image-20240719220032308" />
+<img src="./assets/GitBash-WindowsTerminal启动入口.png" alt="image-20240719220032308" />
 
 
 
 - **步骤5：选择开始菜单文件夹**，方框内 Git 可改为其他名字，也可点击 “`Browse...`” 选择其他文件夹或者给"`Don't create a Start Menu folder`" 打勾不要文件夹，**点击 [next] 到下一步**。
 
-<img src="./assets/image-20240719220104311.png" alt="image-20240719220104311" />
+<img src="./assets/Git安装-开始菜单文件夹设置.png" alt="image-20240719220104311" />
 
 - **步骤6：选择 Git 默认编辑器**，**下图为默认编辑器 `Vim`，可直接点击 [next] 。**
 
-<img src="./assets/image-20240719220141076.png" alt="image-20240719220141076" />
+<img src="./assets/Git安装-默认编辑器选择.png" alt="image-20240719220141076" />
 
 - **步骤7：决定初始化新项目(仓库)的主干名字**，第一种是让 Git 自己选择，名字是 `master` ，但是未来也有可能会改为其他名字；第二种是我们自行决定，默认是 `main`，当然，你也可以改为其他的名字。**一般默认第一种，点击 Next到下一步。**
 
-<img src="./assets/image-20240719220215250.png" alt="image-20240719220215250" />
+<img src="./assets/Git安装-初始分支名称设置.png" alt="image-20240719220215250" />
 
 > **注：**  第二个选项下面有个 NEW！ ，说很多团队已经重命名他们的默认主干名为 main . 这是因为2020 年非裔男子乔治·弗洛伊德因白人警察暴力执法惨死而掀起的 Black Lives Matter(黑人的命也是命)运动，很多人认为master不尊重黑人，呼吁改为 main.
 
 - **步骤8：调整你的 path 环境变量**，选择默认推荐的那一个即可，点击Next
 
-<img src="./assets/image-20240719220248940.png" alt="image-20240719220248940" />
+<img src="./assets/Git安装-PATH环境变量配置.png" alt="image-20240719220248940" />
 
 - 步骤9：选择ssh可执行文件，选择默认的，点击Next
 
-<img src="./assets/image-20240719220327051.png" alt="image-20240719220327051" />
+<img src="./assets/Git安装-SSH可执行程序选择.png" alt="image-20240719220327051" />
 
 
 
@@ -97,15 +97,15 @@ tag:
 
 - 步骤12：配置终端模拟器以与Git Bash一起使用，选择默认的，点击Next
 
-<img src="./assets/image-20240719220739357.png" alt="image-20240719220739357" />
+<img src="./assets/Git安装-Bash终端模拟器选择.png" alt="image-20240719220739357" />
 
 - 步骤13：选择默认的，点击Next
 
-<img src="./assets/image-20240719220855026.png" alt="image-20240719220855026" />
+<img src="./assets/Git安装-pull默认行为设置.png" alt="image-20240719220855026" />
 
 - 步骤14：选择默认的，点击Next
 
-<img src="./assets/image-20240719221058599.png" alt="image-20240719221058599" />
+<img src="./assets/Git安装-凭据管理器选择.png" alt="image-20240719221058599" />
 
 - 步骤15：配置额外的选项，选择默认的，点击Next
 
@@ -117,11 +117,11 @@ tag:
 
 - 步骤17： 等待安装
 
-<img src="./assets/image-20240719221225102.png" alt="image-20240719221225102" />
+<img src="./assets/Git安装-文件安装进度.png" alt="image-20240719221225102" />
 
 - 步骤18：取消勾选，点击Finish即安装成功
 
-<img src="./assets/image-20240719221257510.png" alt="image-20240719221257510" />
+<img src="./assets/Git安装-安装完成向导.png" alt="image-20240719221257510" />
 
 ## 4. 验证安装成功
 
@@ -129,7 +129,7 @@ tag:
 
 - **这是Git安装成功后开始菜单里面的图：**
 
-<img src="./assets/image-20240719221529402.png" alt="image-20240719221529402" />
+<img src="./assets/Git安装-开始菜单快捷方式列表.png" alt="image-20240719221529402" />
 
 - **其中，Git Bash，是Git配套的一个控制台；Git CMD (弃用)，是通过CMD使用Git（不推荐使用）；Git GUI，是Git的可视化操作工具**
 
@@ -137,11 +137,11 @@ tag:
 
 - 步骤1： 运行上面的`Git Bash`执行程序，或者在桌面空白处右击，选择`Git Bash Here`
 
-<img src="./assets/image-20240719222001716.png" alt="image-20240719222001716" />
+<img src="./assets/GitBash-资源管理器右键启动入口.png" alt="image-20240719222001716" />
 
 - 步骤2：点击后，会打开``Git`编辑窗口
 
-<img src="./assets/image-20240719222010709.png" alt="image-20240719222010709" />
+<img src="./assets/GitBash-首次启动终端窗口.png" alt="image-20240719222010709" />
 
 - **步骤3：版本查看，输入`git -v`或者`git --version`后回车，可以查看当前版本，显示当前版本信息**
 

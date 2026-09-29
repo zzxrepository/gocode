@@ -3,7 +3,7 @@
 GoCode 是个人编程学习网站，使用 VuePress 2 与 VuePress Theme Hope 搭建，并通过 GitHub Pages 部署在：
 
 ```text
-https://gocode.mmzhang.cn/
+https://zzxrepository.github.io/gocode/
 ```
 
 站点用于沉淀编程学习笔记、官方文档入口、AI 应用开发资料、后端开发知识、算法与数据结构、计算机基础、前端基础、开发工具、资源导航和网站维护说明。
@@ -15,7 +15,7 @@ https://gocode.mmzhang.cn/
 - Vite 打包器
 - Markdown 内容，统一放在 `src/` 下
 - GitHub Pages 静态站部署，发布分支是 `gh-pages`
-- 自定义域名通过 `src/.vuepress/public/CNAME` 维护
+- 使用 GitHub Pages 项目页，不设置自定义域名或 `CNAME`
 - 评论系统使用 Giscus，基于 GitHub Discussions
 - 站内搜索使用 SlimSearch 本地全文搜索
 - 访问统计使用 Umami Cloud
@@ -41,7 +41,7 @@ gocode/
 │       ├── theme.ts               # 主题、插件、搜索、评论、重定向
 │       ├── navbar.ts              # 顶部导航
 │       ├── sidebar.ts             # 侧边栏入口规则
-│       ├── public/                # 静态资源、CNAME、.nojekyll
+│       ├── public/                # 静态资源、.nojekyll
 │       └── styles/                # 主题样式覆盖
 ├── package.json
 ├── package-lock.json
@@ -61,13 +61,12 @@ npm run docs:build      # 发布前构建检查
 ## 站点配置
 
 ```text
-src/.vuepress/config.ts       base: "/"
-src/.vuepress/theme.ts        hostname: "https://gocode.mmzhang.cn"
-src/.vuepress/public/CNAME    gocode.mmzhang.cn
-gocode.mmzhang.cn             CNAME -> zzxrepository.github.io
+src/.vuepress/config.ts       base: "/gocode/"
+src/.vuepress/theme.ts        hostname: "https://zzxrepository.github.io"
+GitHub Pages                 gh-pages 分支、/(root)，Custom domain 留空
 ```
 
-除非部署域名发生变化，不要随意修改 `base`、`hostname` 和 `CNAME`。搜索配置在 `src/.vuepress/theme.ts`，评论配置在同一文件，Umami Cloud 脚本配置在 `src/.vuepress/config.ts`。完整的建站、发布和维护说明位于 `src/site-guide/README.md`。
+保持上述 GitHub Pages 项目页配置，不恢复旧自定义域名或 `CNAME` 文件。搜索配置在 `src/.vuepress/theme.ts`，评论配置在同一文件，Umami Cloud 脚本配置在 `src/.vuepress/config.ts`。完整的建站、发布和维护说明位于 `src/site-guide/README.md`。
 
 ## 开始前
 
@@ -101,7 +100,7 @@ gocode.mmzhang.cn             CNAME -> zzxrepository.github.io
 - 新增资源链接时，检查整个分类的质量、语言、重复情况和使用价值；有官方中文资料时优先使用。
 - `src/resources/README.md` 的一级分类使用手工锚点侧边栏；新增、删除或改名一级分类时，必须同步更新 `src/.vuepress/sidebar.ts` 中的 `/resources/` 配置。
 - 仅在新增真正的顶级栏目时修改 `src/.vuepress/navbar.ts` 和 `src/.vuepress/sidebar.ts`。
-- 保留 `src/.vuepress/public/CNAME` 和 `src/.vuepress/public/.nojekyll`。搜索引擎验证文件应保留在 `src/.vuepress/public/`，确保它们进入部署产物。
+- 保留 `src/.vuepress/public/.nojekyll`，部署产物不得包含 `CNAME`。搜索引擎验证文件应保留在 `src/.vuepress/public/`，确保它们进入部署产物。
 - 修改会影响后续维护方式的站点配置时，同步更新 `src/site-guide/README.md`。
 
 ## 验证与发布
@@ -112,6 +111,6 @@ gocode.mmzhang.cn             CNAME -> zzxrepository.github.io
 2. 只提交当前任务相关的源码改动到 `master`，使用清晰的提交信息；不要暂存无关工作区改动。
 3. 推送 `master` 到 `origin`。
 4. 运行 `./deploy.sh` 构建并强制推送静态站点到 `gh-pages`。
-5. 确认远端 `master`、`gh-pages` 和本地工作区状态；确认部署产物仍包含 `CNAME`、`.nojekyll` 与必要的验证文件。
+5. 确认远端 `master`、`gh-pages` 和本地工作区状态；确认部署产物没有 `CNAME`，保留 `.nojekyll` 与必要的验证文件，并核验 GitHub Pages 项目页可访问。
 
 `./deploy.sh` 只负责构建和发布静态文件，不能替代源码的提交与推送步骤。

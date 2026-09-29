@@ -20,7 +20,7 @@ tag:
 
 ## 前言
 
-![Go encoding JSON 与 XML 封面](/assets/image/go-encoding-cover.png)
+![Go encoding JSON 与 XML 封面](/assets/image/Go-JSON与XML编解码-封面.png)
 
 写后端服务时，我们几乎每天都在和“数据格式”打交道。
 

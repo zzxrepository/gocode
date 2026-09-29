@@ -127,7 +127,7 @@ MAC 头部是以太网使用的头部，它包含了接收方和发送方的 MAC
 
 ----
 
-![QQ_1753530787624](./assets/QQ_1753530787624.png)
+![网络协议-MTU与MSS封装结构](./assets/网络协议-MTU与MSS封装结构.png)
 
 如果 HTTP 请求消息比较长，超过了 `MSS` 的长度，这时 TCP 就需要把 HTTP 的数据拆解成一块块的数据发送，而不是一次性发送所有数据。
 
@@ -153,11 +153,11 @@ MAC 头部是以太网使用的头部，它包含了接收方和发送方的 MAC
 
 HTTP报文格式：
 
-![QQ_1753530863819](./assets/QQ_1753530863819.png)
+![HTTP-请求行响应行与报文主体](./assets/HTTP-请求行响应行与报文主体.png)
 
 TCP报文段格式：
 
-![QQ_1753530880410](./assets/QQ_1753530880410.png)
+![TCP-报文头部字段格式](./assets/TCP-报文头部字段格式.png)
 
 ----
 
@@ -284,7 +284,7 @@ Cache-control 选项更多一些，设置更加精细，所以建议使用 Cache
 
 下图是强制缓存和协商缓存的工作流程：
 
-![img](https://cdn.xiaolincoding.com/gh/xiaolincoder/network/http/http%E7%BC%93%E5%AD%98.png)
+![http缓存](https://cdn.xiaolincoding.com/gh/xiaolincoder/network/http/http%E7%BC%93%E5%AD%98.png)
 
 当使用 ETag 字段实现的协商缓存的过程：
 
@@ -354,7 +354,7 @@ HTTPS 采用的是**对称加密**和**非对称加密**结合的「混合加密
 
 那么，在计算机里会**用摘要算法（哈希函数）来计算出内容的哈希值**，也就是内容的「指纹」，这个**哈希值是唯一的，且无法通过哈希值推导出内容**。
 
-![img](https://cdn.xiaolincoding.com/gh/xiaolincoder/ImageHost/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/HTTP/%E6%91%98%E8%A6%81%E7%AE%97%E6%B3%95.png)
+![摘要算法](https://cdn.xiaolincoding.com/gh/xiaolincoder/ImageHost/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/HTTP/%E6%91%98%E8%A6%81%E7%AE%97%E6%B3%95.png)
 
 通过哈希算法可以确保内容不会被篡改，**但是并不能保证「内容 + 哈希值」不会被中间人替换，因为这里缺少对客户端收到的消息是否来源于服务端的证明**。
 
@@ -380,7 +380,7 @@ HTTPS 采用的是**对称加密**和**非对称加密**结合的「混合加密
 
 所以非对称加密的用途主要在于**通过「私钥加密，公钥解密」的方式，来确认消息的身份**，我们常说的**数字签名算法**，就是用的是这种方式，不过私钥加密内容不是内容本身，而是**对内容的哈希值加密**。
 
-![img](https://cdn.xiaolincoding.com/gh/xiaolincoder/ImageHost/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/HTTP/%E6%95%B0%E5%AD%97%E7%AD%BE%E5%90%8D.png)
+![数字签名](https://cdn.xiaolincoding.com/gh/xiaolincoder/ImageHost/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/HTTP/%E6%95%B0%E5%AD%97%E7%AD%BE%E5%90%8D.png)
 
 私钥是由服务端保管，然后服务端会向客户端颁发对应的公钥。如果客户端收到的信息，能被公钥解密，就说明该消息是由服务器发送的。
 

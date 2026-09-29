@@ -18,7 +18,7 @@ tag:
 
 # 02. reflect：反射
 
-![Go reflect 反射详解封面](/assets/image/go-reflect-cover.png)
+![Go reflect 反射详解封面](/assets/image/Go-反射详解-封面.png)
 
 刚开始学 Go 的时候，很多同学一听到“反射”就觉得它有点神秘。
 

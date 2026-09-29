@@ -191,8 +191,8 @@ export default hopeTheme({
     name: "神马都会亿点点的毛毛张",
   },
 
-  logo: "/maomao-zhang-logo-clean.png",
-  favicon: "/maomao-zhang-logo-clean.png",
+  logo: "/站点标志-相机少年-无边框.png",
+  favicon: "/站点标志-相机少年-无边框.png",
 
   repo: "zzxrepository/gocode",
   docsBranch: "master",
@@ -327,7 +327,7 @@ export default sidebar({
 home: true
 icon: house
 title: 跟着毛毛张学 Go
-heroImage: /maomao-zhang-logo-clean.png
+heroImage: /站点标志-相机少年-无边框.png
 heroText: GoCode · 毛毛张
 tagline: 跟着毛毛张学 Go，系统学习软件开发与 AI 应用开发
 actions:
@@ -400,7 +400,7 @@ src/.vuepress/public/
 `public` 下的资源会被复制到站点根路径。文章中引用时从根路径开始写：
 
 ```md
-![Go Gopher](/go-gopher.png)
+![Go Gopher](/Go-地鼠头像.png)
 ```
 
 如果是某个栏目独有的图片，也可以放在栏目自己的 `assets/` 目录里，然后使用相对路径引用。
@@ -628,6 +628,8 @@ https://zzxrepository.github.io/gocode/robots.txt
 
 GitHub Pages 的发布来源应为 `gh-pages` 分支、`/(root)` 目录。若将来切换到独立域名，需要在 GitHub Pages 的 Custom domain 中设置域名、配置 DNS，并重新将 `base` 改为 `/`；不再使用的 DNS 记录应及时删除，避免留下悬空子域名。
 
+使用项目页时，Custom domain 必须留空，源码和部署产物都不保留 `CNAME` 文件。否则 GitHub Pages 仍可能将项目页重定向到旧域名。发布后检查实际地址为 `https://zzxrepository.github.io/gocode/`，并确认静态资源链接带有 `/gocode/` 前缀。
+
 ## 文件和网页地址
 
 | 本地文件 | 网页地址 |
@@ -830,7 +832,7 @@ Kafka-消费者组再均衡.png
 文章中引用 `public` 下的图片时，路径从站点根开始：
 
 ```md
-![Go Gopher](/go-gopher.png)
+![Go Gopher](/Go-地鼠头像.png)
 ```
 
 长教程或重点文章建议在一级标题下方放一张 16:9 封面图，写法和 `context` 文章保持一致：
@@ -838,7 +840,7 @@ Kafka-消费者组再均衡.png
 ```md
 # 01. context
 
-![Go context 源码解析封面](/assets/image/go-context-cover.png)
+![Go context 源码解析封面](/assets/image/Go-context源码解析-封面.png)
 ```
 
 封面图建议统一放在：

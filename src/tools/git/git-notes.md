@@ -25,11 +25,11 @@ tag:
 
 - 版本控制其实最重要的是可以记录文件修改历史记录，从而让用户能够查看历史版本，方便版本切换。
 
-  ![‘img’](./assets/wps1.jpg)
+  ![‘img’](./assets/Git-主分支线性提交历史.jpg)
 
 > **为什么需要版本控制：** 个人开发过渡到团队协作。
 >
-> ![img](./assets/wps2.jpg)
+> ![版本控制-多人修改文件并合并版本](./assets/版本控制-多人修改文件并合并版本.jpg)
 
 
 
@@ -47,7 +47,7 @@ tag:
 
   - 示意图：
 
-    ![img](./assets/wps3.jpg)
+    ![版本控制-集中式服务器协作结构](./assets/版本控制-集中式服务器协作结构.jpg)
 
 * **分布式版本控制工具**
 
@@ -59,13 +59,13 @@ tag:
 
   -  **示意图：**
 
-    ![img](./assets/wps4.png)
+    ![版本控制-分布式节点协作结构](./assets/版本控制-分布式节点协作结构.png)
 
 
 
 ## 1.3 Git简史
 
-![img](./assets/wps5.jpg)
+![Git-诞生与GitHub发展时间线](./assets/Git-诞生与GitHub发展时间线.jpg)
 
 
 
@@ -75,7 +75,7 @@ tag:
 
 - **示意图：**
 
-  ![image-20240406155233837](./assets/image-20240406155233837.png)
+  ![Git-远程本地暂存区与工作区流程](./assets/Git-远程本地暂存区与工作区流程.png)
 
 - **四个区域：**
 
@@ -187,7 +187,7 @@ cat ~/.gitconfig  # cat linux中查看文本的命令
 
 1. 打开用户目录，创建`.bashrc`文件。部分windows系统不允许用户创建点号开头的文件，可以打开Git Bash，执行`touch ~/.bashrc`
 
-   ![image-20240406195813729](./assets/image-20240406195813729.png)
+   ![GitBash-创建bashrc配置文件](./assets/GitBash-创建bashrc配置文件.png)
 
 2. 在`.bashrc`文件中输入如下内容：
 
@@ -200,7 +200,7 @@ cat ~/.gitconfig  # cat linux中查看文本的命令
 
 3. 打开GitBash，执行`source ~/.bashrc`
 
-![image-20240406200016961](./assets/image-20240406200016961.png)
+![GitBash-加载bashrc配置文件](./assets/GitBash-加载bashrc配置文件.png)
 
 ### 3.1.2 解决Git Bash乱码问题
 
@@ -239,11 +239,11 @@ cat ~/.gitconfig  # cat linux中查看文本的命令
 
   5. **熟悉Linux命令的也可以直接在任意位置右键打开Git Bash，然后使用命令行进行上述操作，如下图：**
 
-     ![image-20240406202044997](./assets/image-20240406202044997.png)
+     ![Git-创建目录与初始化仓库步骤](./assets/Git-创建目录与初始化仓库步骤.png)
 
 - 结果查看（文件夹下面会增加一个`.git`的隐藏文件夹，需要打开查看隐藏文件夹设置）
 
-  ![image-20240406201347605](./assets/image-20240406201347605.png)
+  ![Git-初始化后的隐藏仓库目录](./assets/Git-初始化后的隐藏仓库目录.png)
 
 ## 3.3 基础操作指令
 
@@ -252,7 +252,7 @@ cat ~/.gitconfig  # cat linux中查看文本的命令
 - **图解：**
 
 
-![image-20240406202739100](./assets/image-20240406202739100.png)
+![Git-文件状态与三区流转关系](./assets/Git-文件状态与三区流转关系.png)
 
 ### 3.3.1 查看修改的状态
 
@@ -374,47 +374,47 @@ git reset commitID --hard
 
 ### 3.4.1 首次查看（工作区没有文件）
 
-![image-20230627132109306](./assets/image-20230627132109306.png)
+![Git-status查看空仓库状态](./assets/Git-status查看空仓库状态.png)
 
 ### 3.4.2 新增文件
 
-![image-20230627132215734](./assets/image-20230627132215734.png)
+![Git-Vim创建示例文本文件命令](./assets/Git-Vim创建示例文本文件命令.png)
 
-![image-20230627132317963](./assets/image-20230627132317963.png)
+![Vim-编辑两行示例文本](./assets/Vim-编辑两行示例文本.png)
 
 ###  3.4.3 再次查看（检测到未追踪文件）
 
-![image-20230627132547573](./assets/image-20230627132547573.png)
+![Git-status查看未跟踪新文件](./assets/Git-status查看未跟踪新文件.png)
 
 ### 3.4.4 将工作区的文件添加到暂存区 | 查看状态（检测到暂存区有新文件）
 
-![image-20230627132954523](./assets/image-20230627132954523.png)
+![Git-add暂存新增文件](./assets/Git-add暂存新增文件.png)
 
-![image-20230627133040699](./assets/image-20230627133040699.png)
+![Git-status查看已暂存新文件](./assets/Git-status查看已暂存新文件.png)
 
 ### 3.4.5 暂存区文件提交到本地库 | 查看状态（没有文件需要提交）
 
-![image-20230627133335748](./assets/image-20230627133335748.png)
+![Git-创建首次文件提交](./assets/Git-创建首次文件提交.png)
 
-![image-20230627133425162](./assets/image-20230627133425162.png)
+![Git-status确认工作区干净](./assets/Git-status确认工作区干净.png)
 
 ### 3.4.6 修改文件（hello.txt）| 查看状态（检测到工作区有文件被修改）
 
-![image-20230627133644105](./assets/image-20230627133644105.png)
+![Git-status查看已修改未暂存文件](./assets/Git-status查看已修改未暂存文件.png)
 
 ### 3.4.7 将修改的文件再次添加暂存区  | 查看状态（工作区的修改添加到了暂存区）
 
-![image-20230627133907417](./assets/image-20230627133907417.png)
+![Git-add暂存文件修改](./assets/Git-add暂存文件修改.png)
 
-![image-20230627133937432](./assets/image-20230627133937432.png)
+![Git-status查看已暂存修改](./assets/Git-status查看已暂存修改.png)
 
 ### 3.4.8 将暂存区文件提交到本地库
 
-![image-20230627134046013](./assets/image-20230627134046013.png)
+![Git-创建第二次文件提交](./assets/Git-创建第二次文件提交.png)
 
 ### 3.4.9 查看历史版本
 
-![image-20230627134228811](./assets/image-20230627134228811.png)
+![Git-reflog查看两次提交记录](./assets/Git-reflog查看两次提交记录.png)
 
 
 
@@ -422,19 +422,19 @@ git reset commitID --hard
 
 1. 首先查看当前的历史记录，可以看到当前是在48f4e22这个版本
 
-![image-20230627134422376](./assets/image-20230627134422376.png)
+![Git-reflog定位第二次提交哈希](./assets/Git-reflog定位第二次提交哈希.png)
 
 2. 切换到之前版本，8ca80d7版本，也就是我们第一次提交的版本
 
-![image-20230627134533136](./assets/image-20230627134533136.png)
+![Git-reset硬重置到首次提交示例](./assets/Git-reset硬重置到首次提交示例.png)
 
 3. 切换完毕之后再查看历史记录，当前成功切换到了8ca80d7版本
 
-![image-20230627134618381](./assets/image-20230627134618381.png)
+![Git-reflog查看重置后的历史](./assets/Git-reflog查看重置后的历史.png)
 
 4. 然后查看文件hello.txt，发现文件内容已经变化
 
-![image-20230627134649667](./assets/image-20230627134649667.png)
+![Git-重置后查看文本文件内容](./assets/Git-重置后查看文本文件内容.png)
 
 >  Git切换版本，底层其实是移动的HEAD指针。
 
@@ -445,7 +445,7 @@ git reset commitID --hard
 
 ### 3.5.1 各分支功能介绍
 
-![img](./assets/wps13111.jpg)
+![GitFlow-开发功能发布与热修复分支](./assets/GitFlow-开发功能发布与热修复分支.jpg)
 
 - 主干分支 master：主要负责管理正在运行的生产环境代码，永远保持与正在运行的生产环境完全一致。为了保持稳定性一般不会直接在这个分支上修改代码，都是通过其他分支合并过来的。
 - 开发分支 develop：主要负责管理正在开发过程中的代码。一般情况下应该是最新的代码。
@@ -477,11 +477,11 @@ git reset commitID --hard
 
 - 你在使用 Git 合并分支时只会使用 `git merge` 吗？有时使用 `git rebase` 可以比 `git merge` 做出更优雅的操作
 
-<img src="./assets/image-20241019211145242.png" alt="image-20241019211145242" style="zoom:50%;" />
+<img src="./assets/Git-分支分叉后重新合并示意.png" alt="image-20241019211145242" style="zoom:50%;" />
 
 - `git rebase`和 `git merge` 理解的是它解决了同样的问题，这两个命令都旨在将更改从一个分支合并到另一个分支，但二者的合并方式却有很大的不同。当你在专用分支上开发新 feature 时，然后另一个团队成员在 `master` 分支提交了新的 commits，这会发生什么？这会导致分叉的历史记录，对于这个问题，使用 Git 作为协作工具的任何人来说都应该很熟悉。现在，假设在 `master` 分支上的新提交与你正在开发的 feature 相关。需要将新提交合并到你的 `feature` 分支中，你可以有两个选择：merge 或者 rebase
 
-<img src="./assets/image-20241019211303835.png" alt="image-20241019211303835" style="zoom:33%;" />
+<img src="./assets/Git-主分支与功能分支独立提交.png" alt="image-20241019211303835" style="zoom:33%;" />
 
 - `git merge`基本功能：用于将一个分支的历史记录合并到当前分支中。它会创建一个新的“合并提交”（merge commit），保留所有原始的历史记录，并生成一个包含所有父分支的合并结果。
 
@@ -577,7 +577,7 @@ git reset commitID --hard
 
 - 这会在 `feature` 分支中创建一个新的 **merge commit**，它将两个分支的历史联系在一起，请看如下所示的分支结构：
 
-<img src="./assets/image-20241019211443402.png" alt="image-20241019211443402" style="zoom: 50%;" />
+<img src="./assets/Git-将主分支合并到功能分支.png" alt="image-20241019211443402" style="zoom: 50%;" />
 
 - 优缺点：
   - 使用 merge 是很好的方式，因为它是一种 **非破坏性的** 操作。现有分支不会以任何方式被更改。这避免了 rebase 操作所产生的潜在缺陷（下面讨论）。
@@ -600,7 +600,7 @@ git reset commitID --hard
 
 - 这会将整个 `feature` 分支移动到 `master` 分支的顶端，从而有效地整合了所有 `master` 分支上的提交。但是，与 merge 提交方式不同，rebase 通过为原始分支中的每个提交创建全新的 commits 来 **重写** 项目历史记录
 
-<img src="./assets/image-20241019211706615.png" alt="image-20241019211706615" style="zoom: 50%;" />
+<img src="./assets/Git-功能分支变基到主分支.png" alt="image-20241019211706615" style="zoom: 50%;" />
 
 - 优缺点：
   - rebase 的主要好处是可以获得更清晰的项目历史。首先，它消除了 `git merge` 所需的不必要的合并提交；其次，正如你在上图中所看到的，rebase 会产生完美线性的项目历史记录，你可以在 `feature`分支上没有任何分叉的情况下一直追寻到项目的初始提交。这样可以通过命令 `git log`，`git bisect` 和 `gitk` 更容易导航查看项目。
@@ -831,7 +831,7 @@ https://blog.csdn.net/weixin_42310154/article/details/119004977
 
   - 冲突部分的内容处理如下所示：
 
-    ![image-20240406195409713](./assets/image-20240406195409713.png)
+    ![Git-命令行解决分支合并冲突](./assets/Git-命令行解决分支合并冲突.png)
 
 ### 3.5.4 分支实操
 
@@ -955,7 +955,7 @@ git remote
 
   - 示例：
 
-    ![image-20240413180610720](./assets/image-20240413180610720.png)
+    ![Git-查看本地分支关联远程分支](./assets/Git-查看本地分支关联远程分支.png)
 
 ### 4.1.7 master、origin master 与 origin/master
 
@@ -1022,7 +1022,7 @@ git remote
 >
 > A用户在本地修改代码后优先推送到远程仓库，此时B用户在本地修订代码，提交到本地仓库后，也需要推送到远程仓库，此时B用户晚于A用户，**故需要先拉取远程仓库的提交，经过合并后才能推送到远端分支**,如下图所示。
 >
-> ![image-20240413180803645](./assets/image-20240413180803645.png)
+> ![Git-pull合并与push更新分支图](./assets/Git-pull合并与push更新分支图.png)
 >
 > 在B用户拉取代码时，因为A、B用户同一段时间修改了同一个文件的相同位置代码，故会发生合并冲突。
 >
@@ -1070,7 +1070,7 @@ git-log
 
 > - 查看远程分支
 >
-> ![在这里插入图片描述](./assets/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBA6Z-p5puZ5Lqu,size_20,color_FFFFFF,t_70,g_se,x_16.png)
+> ![在这里插入图片描述](./assets/Git-列出本地与所有远程分支.png)
 >
 > **远程分支内容 :**
 >
@@ -1093,23 +1093,23 @@ git-log
 >
 > 此时 , 在 Git 远程端查看 , 有 master 主分支 , 和 `feature1` 和 `6-` 两个分支 ;
 >
-> <img src="./assets/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBA6Z-p5puZ5Lqu,size_20,color_FFFFFF,t_70,g_se,x_16-1712406896557-1.png" alt="在这里插入图片描述" style="zoom:80%;" />
+> <img src="./assets/Git-远程仓库分支下拉列表.png" alt="在这里插入图片描述" style="zoom:80%;" />
 >
 > **删除远程分支：** `git push origin --delete feature1`
 >
-> <img src="./assets/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBA6Z-p5puZ5Lqu,size_20,color_FFFFFF,t_70,g_se,x_16-1712406896558-2.png" alt="在这里插入图片描述" style="zoom:80%;" />
+> <img src="./assets/Git-删除远程功能分支命令结果.png" alt="在这里插入图片描述" style="zoom:80%;" />
 >
 > 删除之后 , 再次查看 Git 远程仓库 , 发现没有 feature1 分支了
 >
-> <img src="./assets/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBA6Z-p5puZ5Lqu,size_20,color_FFFFFF,t_70,g_se,x_16-1712406896558-3.png" alt="在这里插入图片描述" style="zoom:80%;" />
+> <img src="./assets/Git-删除功能分支后的远程分支列表.png" alt="在这里插入图片描述" style="zoom:80%;" />
 >
 > 同理再执行 `git push origin --delete 6-` 删除另外一个分支 ：
 >
-> <img src="./assets/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBA6Z-p5puZ5Lqu,size_20,color_FFFFFF,t_70,g_se,x_16-1712406896558-4.png" alt="在这里插入图片描述" style="zoom:80%;" />
+> <img src="./assets/Git-删除远程分支遇到HTTP500错误.png" alt="在这里插入图片描述" style="zoom:80%;" />
 >
 > 上述执行出错 , 但是远程分支删除成功 ：
 >
-> ![在这里插入图片描述](./assets/watermark,type_d3F5LXplbmhlaQ,shadow_50,text_Q1NETiBA6Z-p5puZ5Lqu,size_20,color_FFFFFF,t_70,g_se,x_16-1712406896558-5.png)
+> ![在这里插入图片描述](./assets/Git-远程仓库仅剩主分支结果.png)
 
 
 
@@ -1136,7 +1136,7 @@ github使用教程：
 
 https://git-scm.com/downloads/guis
 
-![1](./assets/1.png)
+![Git-官网图形客户端介绍页面](./assets/Git-官网图形客户端介绍页面.png)
 
 
 
@@ -1144,7 +1144,7 @@ https://git-scm.com/downloads/guis
 
 ​    推荐下载使用GitHub Desktop。下载安装之后，选择不登录先进入页面。
 
-![2](./assets/2.png)
+![GitHubDesktop-首次使用仓库入口](./assets/GitHubDesktop-首次使用仓库入口.png)
 
 ## 2. 基础操作
 
@@ -1152,85 +1152,85 @@ https://git-scm.com/downloads/guis
 
 
 
-![1704960580138](./assets/3.png)
+![GitHubDesktop-提交作者信息设置](./assets/GitHubDesktop-提交作者信息设置.png)
 
 ### 2.2 创建新的Git仓库
 
-![1704960497554](./assets/4.png)
+![GitHubDesktop-创建本地仓库对话框](./assets/GitHubDesktop-创建本地仓库对话框.png)
 
 ### 2.3 提交不同版本
 
-![1704960800309](./assets/5C1704960800309.png)
+![GitHubDesktop-打开本地仓库文件夹入口](./assets/GitHubDesktop-打开本地仓库文件夹入口.png)
 
 新创建文件1.txt，并写入信息。之后可以在GitGui上面进行提交。
 
-![1704961275801](./assets/5C1704961275801.png)
+![GitHubDesktop-提交新增文件到主分支](./assets/GitHubDesktop-提交新增文件到主分支.png)
 
 多次提交的版本可以直接在History页面查看区别，不需要再使用reset命令。
 
-![1704962382919](./assets/5C1704962382919.png)
+![GitHubDesktop-查看文件提交历史](./assets/GitHubDesktop-查看文件提交历史.png)
 
 ## 3. 连接GitHub远程仓库
 
 登录自己注册的账号
 
-![1705040350413](./assets/5C1705040350413.png)
+![GitHubDesktop-发布仓库前登录提示](./assets/GitHubDesktop-发布仓库前登录提示.png)
 
 点击Publish可以将当前项目创建到GitHub上面。
 
-![1705458108708](./assets/5C1705458108708.png)
+![GitHubDesktop-发布私有仓库设置](./assets/GitHubDesktop-发布私有仓库设置.png)
 
 之后修改本地文件，就可以先推送到本地git之后再远程同步到GitHub仓库中。
 
 （1）选择对应的分支
 
-![1705458651469](./assets/5C1705458651469.png)
+![GitHubDesktop-当前分支选择列表](./assets/GitHubDesktop-当前分支选择列表.png)
 
 （2）点击推送
 
-![1705458678557](./assets/5C1705458678557.png)
+![GitHubDesktop-获取远程更新入口](./assets/GitHubDesktop-获取远程更新入口.png)
 
 （3）也可以先在GitHub上面创建远程仓库，之后再拉取到本地保持统一。
 
-![1705459375393](./assets/5C1705459375393.png)
+![GitHub-仓库列表新建仓库入口](./assets/GitHub-仓库列表新建仓库入口.png)
 
-![1705459556035](./assets/5C1705459556035.png)
+![GitHub-新建仓库表单配置](./assets/GitHub-新建仓库表单配置.png)
 
 （4）拉取远程仓库到本地
 
-![1705459822148](./assets/5C1705459822148.png)
+![GitHub-复制仓库HTTPS克隆地址](./assets/GitHub-复制仓库HTTPS克隆地址.png)
 
 点击克隆即可，连接完成远程仓库和本地Git之后，在本地修改文件提交Git之后再push推送即可完成同步。
 
-![1705459901802](./assets/5C1705459901802.png)
+![GitHubDesktop-通过URL克隆GitHub仓库](./assets/GitHubDesktop-通过URL克隆GitHub仓库.png)
 
 ## 3. Gitee替代GitHub
 
 GitHub的网站有时候会连接不上，无法登录。可以使用阿里提供的Git远程仓库网站Gitee来代替。
 
-![1705460369930](./assets/5C1705460369930.png)
+![Gitee-代码托管平台首页](./assets/Gitee-代码托管平台首页.png)
 
 登录账号之后创建新的仓库
 
-![1705461501846](./assets/5C1705461501846.png)
+![Gitee-新建仓库信息表单](./assets/Gitee-新建仓库信息表单.png)
 
 同步远程Gitee仓库的方式和同步GitHub仓库方法完全一致。
 
-![1705461596842](./assets/5C1705461596842.png)
+![GitHubDesktop-通过URL克隆Gitee仓库](./assets/GitHubDesktop-通过URL克隆Gitee仓库.png)
 
 ## 4. idea兼容使用Git（JAVA代码）
 
 （1）首先在idea中创建一个空的项目
 
-![1705461792030](./assets/5C1705461792030.png)
+![IntelliJIDEA-创建Maven项目配置](./assets/IntelliJIDEA-创建Maven项目配置.png)
 
 （2）编写基础的JAVA代码Hello world
 
-![1705462825829](./assets/5C1705462825829.png)
+![IntelliJIDEA-HelloWorld示例工程](./assets/IntelliJIDEA-HelloWorld示例工程.png)
 
 （3）此时会产生IDEA中的特定文件
 
-![1705462906032](./assets/5C1705462906032.png)
+![IntelliJIDEA-项目配置与编译目录](./assets/IntelliJIDEA-项目配置与编译目录.png)
 
 （4） 配置Git忽略文件
 
@@ -1289,11 +1289,11 @@ GitHub的网站有时候会连接不上，无法登录。可以使用阿里提�
 
 （6） 定位Git程序
 
-![1705471200362](./assets/5C1705471200362.png)
+![IntelliJIDEA-Git可执行文件路径配置](./assets/IntelliJIDEA-Git可执行文件路径配置.png)
 
 （7）初始化本地库
 
-![1705471441919](./assets/5C1705471441919.png)
+![IntelliJIDEA-创建Git仓库菜单入口](./assets/IntelliJIDEA-创建Git仓库菜单入口.png)
 
 
 
@@ -1301,9 +1301,9 @@ GitHub的网站有时候会连接不上，无法登录。可以使用阿里提�
 
 右键点击项目选择Git -> Add将项目添加到暂存区。
 
-![1705471545505](./assets/5C1705471545505.png)
+![IntelliJIDEA-提交代码菜单入口](./assets/IntelliJIDEA-提交代码菜单入口.png)
 
-![1705472084800](./assets/5C1705472084800.png)
+![IntelliJIDEA-提交窗口文件与说明](./assets/IntelliJIDEA-提交窗口文件与说明.png)
 
 
 
@@ -1311,13 +1311,13 @@ GitHub的网站有时候会连接不上，无法登录。可以使用阿里提�
 
 查看历史版本
 
-![img](./assets/wps66.jpg)
+![IntelliJIDEA-查看Git文件历史菜单](./assets/IntelliJIDEA-查看Git文件历史菜单.jpg)
 
-![img](./assets/wps67.jpg)
+![IntelliJIDEA-文件两次提交历史列表](./assets/IntelliJIDEA-文件两次提交历史列表.jpg)
 
 右键选择要切换的版本，然后在菜单里点击get。
 
-![1705472349179](./assets/5C1705472349179.png)
+![IntelliJIDEA-从文件历史恢复指定版本](./assets/IntelliJIDEA-从文件历史恢复指定版本.png)
 
 
 
@@ -1327,17 +1327,17 @@ GitHub的网站有时候会连接不上，无法登录。可以使用阿里提�
 
 首先在Gitlab上面按照项目规格创建远程仓库。
 
-![1706084894289](./assets/5C1706084894289.png)
+![GitLab-从Spring模板创建项目](./assets/GitLab-从Spring模板创建项目.png)
 
 ### 3.1 idea与远程仓库连接
 
-![1705473717653](./assets/5C1705473717653.png)
+![IntelliJIDEA-从版本控制克隆项目](./assets/IntelliJIDEA-从版本控制克隆项目.png)
 
 ### 3.2 不同分支的提交与合并
 
 （1）新建分支和切换分支
 
-![1706087127924](./assets/5C1706087127924.png)
+![IntelliJIDEA-本地与远程分支列表](./assets/IntelliJIDEA-本地与远程分支列表.png)
 
 （2）不同分支提交代码与合并
 
@@ -1356,13 +1356,13 @@ public class module1 {
 
 （3）合并feature到develop分支
 
-![1706088019573](./assets/5C1706088019573.png)
+![GitLab-新建合并请求选择源与目标分支](./assets/GitLab-新建合并请求选择源与目标分支.png)
 
-![1706088077244](./assets/5C1706088077244.png)
+![GitLab-填写合并请求标题与描述](./assets/GitLab-填写合并请求标题与描述.png)
 
 审查测试通过之后，完成合并
 
-![1706087991195](./assets/5C1706087991195.png)
+![GitLab-合并请求审核与活动详情](./assets/GitLab-合并请求审核与活动详情.png)
 
 ## 6.2 冲突提交
 
@@ -1372,7 +1372,7 @@ public class module1 {
 
 （1）在远程仓库添加gitLab.txt
 
-![1706146898301](./assets/5C1706146898301.png)
+![GitLab-查看功能分支文本文件](./assets/GitLab-查看功能分支文本文件.png)
 
 （2）在本地IDEA中添加代码，继续进行第二个模块的开发
 
@@ -1386,13 +1386,13 @@ public class Module2 {
 
 （3）提交代码到远程仓库，此时会有报错信息
 
-![1705549702169](./assets/5C1705549702169.png)
+![IntelliJIDEA-推送被拒后选择合并](./assets/IntelliJIDEA-推送被拒后选择合并.png)
 
 Git会智能识别，采用merge合并命令，拉取远端文件到本地进行合并。
 
 （4）查看Git提交的全部历史记录，可以看到中间有拉取Gitee日志的部分
 
-![1706146278780](./assets/5C1706146278780.png)
+![IntelliJIDEA-功能开发分支提交图](./assets/IntelliJIDEA-功能开发分支提交图.png)
 
 
 
@@ -1422,19 +1422,19 @@ public class Module1 {
 
 （3）提交代码，之后push到远程仓库
 
-![1705550474743](./assets/5C1705550474743.png)
+![IntelliJIDEA-远程更改导致推送拒绝提示](./assets/IntelliJIDEA-远程更改导致推送拒绝提示.png)
 
 同样可以采用merge命令，git会自动合并不同的区域代码。
 
-![1706146956838](./assets/5C1706146956838.png)
+![Java-模块开发示例代码与注释](./assets/Java-模块开发示例代码与注释.png)
 
-![1706146975271](./assets/5C1706146975271.png)
+![IntelliJIDEA-合并远程功能分支提交记录](./assets/IntelliJIDEA-合并远程功能分支提交记录.png)
 
 ### 6.2.3 不同人修改同文件的相同区域
 
 （1）远程仓库添加模块开发顺利
 
-![1705551269043](./assets/5C1705551269043.png)
+![Gitee-在线编辑Java文件并填写提交信息](./assets/Gitee-在线编辑Java文件并填写提交信息.png)
 
 （2）本地IDEA添加模块开发遇到了bug
 
@@ -1449,13 +1449,13 @@ public class module1 {
 }
 ```
 
-![1705551516941](./assets/5C1705551516941.png)
+![IntelliJIDEA-三栏合并冲突处理](./assets/IntelliJIDEA-三栏合并冲突处理.png)
 
 无法直接采用merge命令，需要人为判断哪些作为最终的结果来保留
 
 （3）之后需要重新提交到远程仓库
 
-![1705551702149](./assets/5C1705551702149.png)
+![IntelliJIDEA-功能分支提交推送成功提示](./assets/IntelliJIDEA-功能分支提交推送成功提示.png)
 
 
 
@@ -1477,7 +1477,7 @@ public class Module1plus {
 
 （3）提交代码修改到远程仓库
 
-![1705552452300](./assets/5C1705552452300.png)
+![IntelliJIDEA-推送文件重命名提交](./assets/IntelliJIDEA-推送文件重命名提交.png)
 
 可以直接提交成功。
 
@@ -1489,11 +1489,11 @@ public class Module1plus {
 
 （3）提交到远程仓库
 
-![1705552598042](./assets/5C1705552598042.png)
+![IntelliJIDEA-推送被拒后选择变基](./assets/IntelliJIDEA-推送被拒后选择变基.png)
 
 （4）需要手动宣传使用哪一个
 
-![1705552665960](./assets/5C1705552665960.png)
+![IntelliJIDEA-文件重命名冲突标记合并](./assets/IntelliJIDEA-文件重命名冲突标记合并.png)
 
 push会导致报错，之后需要用户自己解决保留哪些文件。
 
@@ -1507,7 +1507,7 @@ C:\mybigdata\project\gitlab_demo>git rm src/main/java/com/atguigu/Module1Plus.ja
 
 （6）最后重新选择正确的代码提交到仓库
 
-![1706151049392](./assets/5C1706151049392.png)
+![IntelliJIDEA-模块扩展开发与提交说明](./assets/IntelliJIDEA-模块扩展开发与提交说明.png)
 
 
 

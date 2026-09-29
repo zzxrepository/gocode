@@ -17,7 +17,7 @@ tag:
 
 # 07. 结构体
 
-![Go struct 结构体详解封面](/assets/image/go-struct-cover.png)
+![Go struct 结构体详解封面](/assets/image/Go-结构体详解-封面.png)
 
 很多同学上一次接触“结构体”，可能还是在 C 语言里。
 

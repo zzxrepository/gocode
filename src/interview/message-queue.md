@@ -27,13 +27,13 @@ tag:
 
 业界流行的开源消息中间件包括：`RabbitMQ、RocketMQ、Kafka`。**消息队列的主要作用是解耦发送者和接收者之间的直接依赖。**
 
-<img src="./assets/message-queue/mq-01.png" alt="img" style="zoom:33%;" />
+<img src="./assets/message-queue/消息队列-生产发送存储与消费流程.png" alt="img" style="zoom:33%;" />
 
 我们可以把消息队列看作是一个存放消息的容器，当我们需要使用消息的时候，直接从容器中取出消息供自己使用即可。由于队列 Queue 是一种先进先出的数据结构，所以消费消息时也是按照顺序来消费的。
 
 参与消息传递的双方称为 **生产者** 和 **消费者** ，生产者负责发送消息，消费者负责处理消息。
 
-<img src="./assets/message-queue/mq-02.png" alt="发布/订阅（Pub/Sub）模型" style="zoom:50%;" />
+<img src="./assets/message-queue/消息队列-主题发布订阅模型.png" alt="发布/订阅（Pub/Sub）模型" style="zoom:50%;" />
 
 ### 为什么要使用消息队列呢？
 
@@ -51,12 +51,12 @@ tag:
 - **削峰限流，保障系统稳定**：面对短时间高并发请求（如秒杀、促销活动），消息队列可作为缓冲区，先存储大量瞬时请求，再由后端服务按自身处理能力逐步消费，避免直接冲击后端导致系统崩溃，实现 “削峰填谷”。
   - 以秒杀场景为例：用户海量请求先被发送至消息队列（如 RocketMQ），队列按顺序缓存请求；下游通知系统从队列中按合理速率读取消息，仅处理满足秒杀条件的请求并通知用户。这一过程中，生产者异步发送消息快速响应用户，消费者动态调整速率适配负载，有效抵御流量峰值。
 
-<img src="./assets/message-queue/mq-03.png" alt="削峰" style="zoom: 25%;" />
+<img src="./assets/message-queue/消息队列-削峰填谷与系统承载能力.png" alt="削峰" style="zoom: 25%;" />
 
 - **异步解耦，降低系统耦合性**：基于发布 - 订阅模式，消息生产者仅需将消息发送至队列，无需关注消费者是谁；消费者从队列获取消息处理，无需与生产者直接通信。这种 “无直接依赖” 的设计，大幅降低模块间耦合，提升系统扩展性。
   - 例如：商城系统中，用户下单后需触发财务扣款、仓储调库存、物流发货、消息通知等操作。通过消息队列，下单服务只需发送 “订单创建” 消息，各下游服务订阅消息后自行处理，新增服务（如风控）只需订阅消息即可接入，无需修改原有系统，保障了系统稳定性和可扩展性。
 
-<img src="./assets/message-queue/mq-04.png" alt="img" style="zoom: 50%;" />
+<img src="./assets/message-queue/消息队列-订单事件驱动多个业务系统.png" alt="img" style="zoom: 50%;" />
 
 - **延时/定时调度**：消息队列支持消息发送后延迟指定时间再被消费，适用于订单超时处理、分布式延时任务等场景。主流消息队列（如 RocketMQ 5.0、RabbitMQ、Pulsar）可提供秒级精度的定时能力，且无需复杂的数据库扫描，性能高效、开发门槛低。
 
@@ -189,7 +189,7 @@ tag:
   - **采用延迟确认机制**：消费者在执行完所有消费业务逻辑后，再发送消费确认，消息队列只有收到确认后，才会将消息从队列中移除。这样，如果消费过程中出现异常，消息队列会重新投递消息，确保消息不丢失。
   - **采用合适的消息重试策略**：当消费者处理消息失败时，需要有合理的重试策略。可以设置重试次数和重试间隔时间。例如，在第一次处理失败后，等待一段时间（如 5 秒）后进行第二次重试，如果重试多次（如 3 次）后仍然失败，可以将消息发送到死信队列，以便后续人工排查或者采取其他特殊处理。
 
-![img](./assets/message-queue/mq-05.webp)
+![消息队列-生产存储消费三阶段确认](./assets/message-queue/消息队列-生产存储消费三阶段确认.webp)
 
 ### 消息队列的顺序性怎么保证
 
@@ -219,7 +219,7 @@ RocketMQ 实现顺序消息的核心逻辑，是通过**严格控制消息的生
 
 实际业务中，大多数场景可容忍短暂乱序，因此**局部顺序消息是主流选择**。需注意的是，RocketMQ 生产者默认采用 “轮询”（或其他负载均衡策略）向 Topic 的不同队列发送消息，若不做自定义配置，同一业务维度的消息（如同一订单的 “创建 - 支付 - 发货”）可能被分散到不同队列，导致无法利用队列有序特性。因此，局部顺序消息需通过自定义路由逻辑解决这一问题。
 
-<img src="./assets/message-queue/mq-06.jpg" alt="三分恶面渣逆袭：顺序消息" style="zoom:50%;" />
+<img src="./assets/message-queue/顺序消息-全局顺序与局部顺序分类.jpg" alt="三分恶面渣逆袭：顺序消息" style="zoom:50%;" />
 
 #### 局部顺序消息如何实现？
 
@@ -252,7 +252,7 @@ RocketMQ 实现顺序消息的核心逻辑，是通过**严格控制消息的生
 
 3. **顺序保障逻辑**表现为：同一业务标识的消息被路由到同一队列，且该队列仅被单线程消费，最终实现同一业务维度严格有序、不同业务维度并发处理的效果。
 
-<img src="./assets/message-queue/mq-07.jpg" alt="三分恶面渣逆袭：部分顺序消息" style="zoom:50%;" />
+<img src="./assets/message-queue/顺序消息-多主题多队列有序消费.jpg" alt="三分恶面渣逆袭：部分顺序消息" style="zoom:50%;" />
 
 #### 全局顺序消息如何实现？
 
@@ -262,7 +262,7 @@ RocketMQ 实现顺序消息的核心逻辑，是通过**严格控制消息的生
 2. **生产端：无需复杂路由逻辑**：由于 Topic 仅一个队列，生产者无需自定义 `MessageQueueSelector`，所有消息默认发送到该唯一队列；若需更严谨，也可通过自定义 Selector 强制指定该队列。
 3. **消费端：仅启动一个消费线程**：即使 Consumer 集群有多个节点，也需确保仅一个节点消费该唯一队列；同时，消费节点内仅启动一个消费线程，避免多线程并发破坏顺序。
 
-<img src="./assets/message-queue/mq-08.jpg" alt="三分恶面渣逆袭：全局顺序消息" style="zoom:50%;" />
+<img src="./assets/message-queue/顺序消息-单队列实现全局顺序.jpg" alt="三分恶面渣逆袭：全局顺序消息" style="zoom:50%;" />
 
 ### 消息堆积怎么处理？
 
@@ -287,7 +287,7 @@ RocketMQ 实现顺序消息的核心逻辑，是通过**严格控制消息的生
 
 一条普通的MQ消息，从产生到被消费，大概流程如下：
 
-<img src="./assets/message-queue/mq-09.png" alt="image-20250407142107477" style="zoom: 33%;" />
+<img src="./assets/message-queue/消息可靠性-持久化与双端ACK流程.png" alt="image-20250407142107477" style="zoom: 33%;" />
 
 1. 生产者产生消息，发送带MQ服务器
 2. MQ收到消息后，将消息持久化到存储系统。
@@ -314,7 +314,7 @@ RocketMQ 实现顺序消息的核心逻辑，是通过**严格控制消息的生
 
 > 生产者回查失败了可以通过消息队列的重试机制或者加入死信队列，进行人工处理
 
-<img src="./assets/message-queue/mq-10.png" alt="image-20250407142122992" style="zoom:50%;" />
+<img src="./assets/message-queue/事务消息-本地事务与状态回查流程.png" alt="image-20250407142122992" style="zoom:50%;" />
 
 ### 延时消息了解吗？
 
@@ -345,7 +345,7 @@ RocketMQ 5.x 版本的延时消息引入了时间轮（TimeWheel）机制，支�
 
 RocketMQ 5.x 的时间轮处理延时消息时，先根据消息延时时间确定其所属层级（如秒级、分钟级等），将消息放入对应层级时间轮的指定槽位（槽位对应固定时间间隔）；随着时间轮指针按固定间隔转动，若消息在高层级，会在指针到达其槽位时被下转到低层级时间轮继续等待，直至进入最低层级；当指针最终指向消息所在槽位时，遍历槽内消息，将到期的消息从延时队列投递到目标消费队列，完成延时触发。
 
-<img src="./assets/message-queue/mq-11.jpg" alt="延迟消息处理流程-图片来源见水印" style="zoom:50%;" />
+<img src="./assets/message-queue/RocketMQ-延迟消息在Broker内流转.jpg" alt="延迟消息处理流程-图片来源见水印" style="zoom:50%;" />
 
 #### RabbitMQ怎么实现延迟消息？
 
@@ -387,7 +387,7 @@ RabbitMQ 本身并未原生提供延迟队列功能，要实现延迟消息的�
   - ③ 在业务队列属性中，通过 `x-dead-letter-exchange` 指定死信交换机，`x-dead-letter-routing-key` 指定死信路由键（默认使用原消息路由键）。
 - **核心作用**：通过留存死信支持后续排查、重发或备份，区别在于 RabbitMQ 可通过配置自定义死信路由规则，灵活性更高。
 
-<img src="./assets/message-queue/mq-12.png" alt="阿里云官方文档：死信队列" style="zoom:67%;" />
+<img src="./assets/message-queue/消息重试-超过次数转死信处理流程.png" alt="阿里云官方文档：死信队列" style="zoom:67%;" />
 
 ### 消息队列有哪些消息模型？
 
@@ -395,11 +395,11 @@ RabbitMQ 本身并未原生提供延迟队列功能，要实现延迟消息的�
 
 - **队列模型**：这是消息队列最基础的模型，对应 “发送 - 存储 - 接收” 的核心流程。在该模型中，生产者将消息发送至特定队列，一个队列可接收多个生产者的消息；同时，一个队列也可关联多个消费者，但消费者之间是竞争关系，也就是说每条消息只会被其中一个消费者获取并消费，确保消息的唯一处理。
 
-<img src="./assets/message-queue/mq-13.jpg" alt="队列模型" style="zoom:50%;" />
+<img src="./assets/message-queue/消息队列-先进先出队列模型.jpg" alt="队列模型" style="zoom:50%;" />
 
 - **发布/订阅模型**：当需要将同一份消息分发给多个消费者，且每个消费者都需获取全量消息时，队列模型无法满足需求，发布 / 订阅模型由此产生。在该模型中，**消息发送方称为发布者（Publisher），接收方称为订阅者（Subscriber），服务端存储消息的容器称为主题（Topic）**。发布者将消息发送至主题，订阅者需先 “订阅主题” 才能接收消息。**这里的 “订阅” 既是动作，也可理解为主题在消费时的逻辑副本 —— 每个订阅者的订阅关系中，都能获取该主题的所有消息，实现消息的多副本分发。**
 
-<img src="./assets/message-queue/mq-14.jpg" alt="发布-订阅模型" style="zoom:50%;" />
+<img src="./assets/message-queue/发布订阅-主题向多个订阅者分发.jpg" alt="发布-订阅模型" style="zoom:50%;" />
 
 **两种模型的核心角色（生产者 / 发布者、消息容器 / 队列 / 主题、消费者 / 订阅者）本质一致，最关键的差异在于消息的消费方式： 队列模型中消息仅能被一个消费者消费，而发布 / 订阅模型支持消息被多个订阅者全量获取。**
 
@@ -414,11 +414,11 @@ RabbitMQ 本身并未原生提供延迟队列功能，要实现延迟消息的�
 
 - **观察者模式是一个一对多的关系**。观察者先主动订阅主题（被观察者），当主题状态变化时，会遍历所有已订阅的观察者，直接通知它们更新。此时，主题必须知道所有观察者的存在，双方是 “紧耦合” 的。。
 
-<img src="./assets/message-queue/mq-15.webp" alt="img" style="zoom: 25%;" />
+<img src="./assets/message-queue/观察者模式-主题订阅与通知关系.webp" alt="img" style="zoom: 25%;" />
 
 - **发布订阅模式是多对多的关系，引入了中间层（发布订阅中心），实现发布者与订阅者的 完全解耦**。订阅者先在中心订阅感兴趣的消息，发布者只需将消息发送到中心，由中心负责把消息转发给所有对应订阅者。此时，发布者不知道订阅者是谁，订阅者也不知道发布者是谁，双方通过中间层间接交互。
 
-<img src="./assets/message-queue/mq-16.webp" alt="img" style="zoom: 33%;" />
+<img src="./assets/message-queue/发布订阅-发布中心管理订阅关系.webp" alt="img" style="zoom: 33%;" />
 
 ### 消息的消费模式了解吗？
 
@@ -438,7 +438,7 @@ RabbitMQ 本身并未原生提供延迟队列功能，要实现延迟消息的�
 
 回答这类问题，并不要求你研究过那技术的源码，你知道那个技术框架的基本结构、工作原理即可。设计一个消息队列，我们可以从这几个角度去思考：
 
-<img src="./assets/message-queue/mq-17.png" alt="image-20250407142036609" style="zoom:50%;" />
+<img src="./assets/message-queue/消息队列-系统设计要点思维导图.png" alt="image-20250407142036609" style="zoom:50%;" />
 
 1. 首先是消息队列的整体流程，producer发送消息给broker，broker存储好，broker再发送给consumer消费，consumer回复消费确认等。
 2. producer发送消息给broker，broker发消息给consumer消费，那就需要两次RPC了，RPC如何设计呢？可以参考开源框架Dubbo，你可以说说服务发现、序列化协议等等
@@ -483,7 +483,7 @@ RabbitMQ 整体上是一个生产者与消费者模型，主要负责接收、�
 
 RabbitMQ 的整体模型架构如下：
 
-![图1-RabbitMQ 的整体模型架构](./assets/message-queue/mq-18.jpg)
+![图1-RabbitMQ 的整体模型架构](./assets/message-queue/RabbitMQ-交换机队列与消费者整体架构.jpg)
 
 下面我会一一介绍上图中的一些概念。
 
@@ -504,7 +504,7 @@ RabbitMQ 的整体模型架构如下：
 
 Exchange(交换器) 示意图如下：
 
-![Exchange(交换器) 示意图](./assets/message-queue/mq-19.jpg)
+![Exchange(交换器) 示意图](./assets/message-queue/RabbitMQ-交换机向两个队列分发.jpg)
 
 生产者将消息发给交换器的时候，一般会指定一个 **RoutingKey(路由键)**，用来指定这个消息的路由规则，而这个 **RoutingKey 需要与交换器类型和绑定键(BindingKey)联合使用才能最终生效**。
 
@@ -512,7 +512,7 @@ RabbitMQ 中通过 **Binding(绑定)** 将 **Exchange(交换器)** 与 **Queue(�
 
 Binding(绑定) 示意图：
 
-![Binding(绑定) 示意图](./assets/message-queue/mq-20.jpg)
+![Binding(绑定) 示意图](./assets/message-queue/RabbitMQ-交换机与队列绑定键.jpg)
 
 生产者将消息发送给交换器时，需要一个 RoutingKey,当 BindingKey 和 RoutingKey 相匹配时，消息会被路由到对应的队列中。在绑定多个队列到同一个交换器的时候，这些绑定允许使用相同的 BindingKey。BindingKey 并不是在所有的情况下都生效，它依赖于交换器类型，比如 fanout 类型的交换器就会无视，而是将消息路由到所有绑定到该交换器的队列中。
 
@@ -532,7 +532,7 @@ Binding(绑定) 示意图：
 
 下图展示了生产者将消息存入 RabbitMQ Broker,以及消费者从 Broker 中消费数据的整个流程。
 
-![消息队列的运转过程](./assets/message-queue/mq-21.jpg)
+![消息队列的运转过程](./assets/message-queue/RabbitMQ-业务消息序列化与传输流程.jpg)
 
 这样图 1 中的一些关于 RabbitMQ 的基本概念我们就介绍完毕了，下面再来介绍一下 **Exchange Types(交换器类型)** 。
 
@@ -548,7 +548,7 @@ fanout 类型的 Exchange 路由规则非常简单，它会把所有发送到该
 
 direct 类型的 Exchange 路由规则也很简单，它会把消息路由到那些 Bindingkey 与 RoutingKey 完全匹配的 Queue 中。
 
-![direct 类型交换器](./assets/message-queue/mq-22.jpg)
+![direct 类型交换器](./assets/message-queue/RabbitMQ-Direct交换机精确路由.jpg)
 
 以上图为例，如果发送消息的时候设置路由键为“warning”,那么消息会路由到 Queue1 和 Queue2。如果在发送消息的时候设置路由键为"Info”或者"debug”，消息只会路由到 Queue2。如果以其他的路由键发送消息，则消息不会路由到这两个队列中。
 
@@ -562,7 +562,7 @@ direct 类型常用在处理有优先级的任务，根据任务的优先级把�
 - BindingKey 和 RoutingKey 一样也是点号“．”分隔的字符串；
 - BindingKey 中可以存在两种特殊字符串“*”和“#”，用于做模糊匹配，其中“*”用于匹配一个单词，“#”用于匹配多个单词(可以是零个)。
 
-![topic 类型交换器](./assets/message-queue/mq-23.jpg)
+![topic 类型交换器](./assets/message-queue/RabbitMQ-Topic交换机通配路由.jpg)
 
 以上图为例：
 
@@ -586,7 +586,7 @@ headers 类型的交换器不依赖于路由键的匹配规则来路由消息，
 - **确认机制**：为了确保消息可靠送达，RabbitMQ 使用确认机制，消费者在处理完消息后发送确认给 RabbitMQ，未确认的消息会重新入队。
 - **高可用性**：RabbitMQ 提供了集群模式，可以将多个 RabbitMQ 实例组成一个集群，以提高可用性和负载均衡。通过镜像队列，可以在多个节点上复制同一队列的内容，以防止单点故障。
 
-<img src="./assets/message-queue/mq-24.png" alt="img" style="zoom: 33%;" />
+<img src="./assets/message-queue/RabbitMQ-连接通道与虚拟主机结构.png" alt="img" style="zoom: 33%;" />
 
 ### JMS 和 AMQP
 
@@ -698,7 +698,7 @@ RabbtiMQ 是可以设置过期时间的，也就是 TTL。如果消息在 queue 
 - 消息流转机制：消息由生产者发送至 Broker，Broker 依据路由规则将消息存储到对应队列中，最终由消费者从队列拉取并处理。
 - 典型适用场景：适用于异步解耦（如系统间非实时交互）、流量削峰（如应对突发高并发请求）等分布式架构常见需求。
 
-<img src="./assets/message-queue/mq-25.png" alt="牧小农：RocketMQ 的作用" style="zoom: 67%;" />
+<img src="./assets/message-queue/消息队列-替代RPC实现服务解耦.png" alt="牧小农：RocketMQ 的作用" style="zoom: 67%;" />
 
 > 1. [Java 面试指南（付费）](https://javabetter.cn/zhishixingqiu/mianshi.html)收录的京东同学 4 云实习面试原题：说说你对RocketMQ的理解
 
@@ -706,9 +706,9 @@ RabbtiMQ 是可以设置过期时间的，也就是 TTL。如果消息在 queue 
 
 RocketMQ 的核心架构由四大组件构成，分别是 NameServer、Broker、Producer（生产者）、Consumer（消费者），它们对应消息流转中的「路由发现」「消息存储与中转」「消息发送」「消息接收」四大核心环节。为保障高可用，各组件通常采用集群部署模式。其整体架构如下：
 
-<img src="./assets/message-queue/mq-26.jpg" alt="RocketMQ架构" style="zoom: 67%;" />
+<img src="./assets/message-queue/RocketMQ-四类集群组件关系.jpg" alt="RocketMQ架构" style="zoom: 67%;" />
 
-![QQ_1758368659894](./assets/message-queue/mq-27.png)
+![RocketMQ-生产消费与NameServer心跳](./assets/message-queue/RocketMQ-生产消费与NameServer心跳.png)
 
 一个人RocketMQ包含生产者集群、消费者集群、Broker集群、和NameServer集群
 
@@ -716,7 +716,7 @@ Broker负责接收生产者消息、持久化消息、然乎处理消费者的�
 
 NameServer是一个轻量级的注册中心，用来管理Broker集群、管理Topic等用的，和kafka用的zk和kraft差不多，
 
-![QQ_1758368862887](./assets/message-queue/mq-28.png)
+![RocketMQ-按主题发送与订阅消息](./assets/message-queue/RocketMQ-按主题发送与订阅消息.png)
 
 消息会有很多种不同的类型,Broker会根据Topic去分类，生产者把不同类型的这个消息发送给对应的Topic，消费者订阅对应的Topic，然后进行消费
 
@@ -724,15 +724,15 @@ NameServer是一个轻量级的注册中心，用来管理Broker集群、管理T
 
 Topic实际上就是一个逻辑上的分类的概念，从存储消息的角度来看，topic内部是多个队列（单机 RocketMQ 中，一个 Topic 的队列数量**默认是 4 个**），这里的队列在Kafka中叫Partition分区
 
-![QQ_1758369066216](./assets/message-queue/mq-29.png)
+![RocketMQ-主题内多队列分布](./assets/message-queue/RocketMQ-主题内多队列分布.png)
 
 一个消息可以被多个消费者消费，队列中的每个消息，都会分配给一个唯一标识，叫偏移量offset，就是一个低调递增的一个整数，用于标识每个队列中的消息消费到那里了
 
-![QQ_1758369182125](./assets/message-queue/mq-30.png)
+![RocketMQ-消费者独立消费位点](./assets/message-queue/RocketMQ-消费者独立消费位点.png)
 
 RocketMQ其实还有一个概念就是标签Tag,tag就是同一个topic下对消息更细粒度的一个分类，消费者可以根据tag去过滤消息，如果说一个topic对应的那些队列都放在一个机器上，那这个机器的IO就会称为这个Topic的性能瓶颈，所以一个Topic下有多个队列，每个队列都只存储一部分的数据，broker是做集群的，一个topic下的不同队列就可以分布到不同的broker节点上，这可以解决单机性能瓶颈，但是RocketMQ只能保证一个队列里面的消息是有序的，不同队列间的消息的有序性是无法保证的，这个和kafka是一样的，
 
-![QQ_1758369425618](./assets/message-queue/mq-31.png)
+![RocketMQ-多个Broker分布主题队列](./assets/message-queue/RocketMQ-多个Broker分布主题队列.png)
 
 如果每个broker只存一部分数据，如果broker挂了，那存的这份数据不就丢失了，如何保证高可用性的呢？
 
@@ -740,13 +740,13 @@ RocketMQ的高可用和Kafka的多副本机制是类似的，但是RocketQM实�
 
 
 
-![QQ_1758369686286](./assets/message-queue/mq-32.png)
+![RocketMQ-Broker主从副本结构](./assets/message-queue/RocketMQ-Broker主从副本结构.png)
 
 那么多的broker，生产者怎么知道应该发给哪个Broker呢？消费者获取消息的时候怎么知道应该从哪个broker中获取消息呢？所以这个时候就需要一个注册中心专门管理Broker集群，这就是nameserver :第一：保存集群的状态信息、通过Broker的定时上报心跳来感知这个节点上下线‘第二 掌管消息路由，让生产者知道消息应该发给哪个broker，让消费者知道哪个broker中应该去取消息；第三，负责集群中的负载均衡和故障转移，为了保证name server高可用，它自身也是做集群的
 
 那一个Topic下，有多个分布到不同Broker节点上的队列，如果这么多队列，只有一个消费者进行消费，那就有点慢，因此一个消费者可以组成一个消费者组，然后一个消费者组内的多个消费者可以并行的消费一个Topic中的多个队列，但是topic中的队列只能够被一个消费者组的一个消费者消费，如果说消费者组内的消费者的数量超过了队列的数量，那多余的消费者就空闲了
 
-![QQ_1758370176860](./assets/message-queue/mq-33.png)
+![RocketMQ-消费者数超过队列数示意](./assets/message-queue/RocketMQ-消费者数超过队列数示意.png)
 
 
 
@@ -801,7 +801,7 @@ RocketMQ是一个分布式消息队列中间件，融合了“消息队列” �
 
 - **Consumer消费消息**：消费者启动后，同样从 NameServer 获取订阅主题对应的 Broker 地址，通过 “主动拉取” 模式从分配到的消息队列中获取消息并处理。消费过程中，Consumer 会定期向 Broker 上报消费进度（Offset）以避免重复消费；若消费组内节点数量变化（如扩容、下线），还会触发 “重平衡” 机制重新分配队列，确保负载均衡。
 
-<img src="./assets/message-queue/mq-34.jpg" alt="RocketMQ整体工作流程" style="zoom:50%;" />
+<img src="./assets/message-queue/RocketMQ-路由发现主从同步与消息拉取.jpg" alt="RocketMQ整体工作流程" style="zoom:50%;" />
 
 那么多broker，生产者发消息的时候，怎么知道应该发给哪个broker呢，消费者消费消息的时候，怎么知道从哪个broker中获取呢？
 
@@ -809,7 +809,7 @@ RockerMQ的工作流程是什么样子的？
 
 首先Broker集群会定时的去向NameServer去发送一个心跳包，上报topic和队列的一个信息，然后NameServer会在内存中去维护一张路由表，记录了topic到集群的一个映射关系，以及每个broker上的消息队列的一个详细的配置，那生产者通过访问NameServer就能获取到消息的路由信息，然后发送给对应的broker，broker接收到消息之后，会持久化到磁盘，然后同步数据给从节点，消息的消费者通过访问这个nameserver，就能够获取到订阅这个topic的一个路由消息，就知道从哪个Broker中去拉取消息了
 
-![QQ_1758370692790](./assets/message-queue/mq-35.png)
+![RocketMQ-NameServer路由注册与心跳架构](./assets/message-queue/RocketMQ-NameServer路由注册与心跳架构.png)
 
 ### RocketMQ的消息模型
 
@@ -817,7 +817,7 @@ RockerMQ的工作流程是什么样子的？
 
 RocketMQ的消息体系由以下核心部分构成：
 
-<img src="./assets/message-queue/mq-36.jpg" alt="RocketMQ消息的组成" style="zoom:50%;" />
+<img src="./assets/message-queue/RocketMQ-消息主题队列消费组与位点关系.jpg" alt="RocketMQ消息的组成" style="zoom:50%;" />
 
 - **Message（消息）**：**消息是实际需要传输的信息载体**。**每条消息必须指定主题（Topic）**—— 可类比为信件的邮寄地址，用于明确消息的投递方向；**还可按需设置标签（Tag）和额外键值对**，其中键值对可作为业务标识，方便在 Broker 上查询消息以排查问题。
 - **Topic（主题）**：主题是消息的一级分类，用于对消息进行归类，以便于区分不同的业务消息。例如电商系统中，可划分为 “交易消息”“物流消息” 等主题，每条消息必须归属一个主题。
@@ -833,7 +833,7 @@ RocketMQ的消息体系由以下核心部分构成：
 - **Message Queue（消息队列）**：消息队列是主题的底层存储和传输单元，一个主题可包含多个消息队列。消费者若需获取某个主题的全部消息，需遍历其下所有消息队列。除消息队列外，RocketMQ 还包含其他队列类型（如 ConsumerQueue），用于辅助消息处理流程。
 - **Offset（位移）**：由于消息需被多个消费组重复消费，已消费的消息不会立即删除，RocketMQ会为每个消费组在每个队列上维护 “消费位移（Consumer Offset）”：位移之前的消息已被消费，之后的消息待消费；每成功消费一条消息，位移值加一。形象地说，消息队列可视为一个无限长的数组，Offset 就是数组的下标。
 
-<img src="./assets/message-queue/mq-37.jpg" alt="img" style="zoom:50%;" />
+<img src="./assets/message-queue/RocketMQ-生产者与消费组分配队列.jpg" alt="img" style="zoom:50%;" />
 
 #### 主题、消费组、消息队列和消费者之间的关系
 
@@ -861,11 +861,11 @@ RocketMQ的消息体系由以下核心部分构成：
 
 NameServer 因为是无状态，且不相互通信的，所以只要集群部署就可以保证高可用。
 
-<img src="./assets/message-queue/mq-38.jpg" alt="NameServer集群" style="zoom:50%;" />
+<img src="./assets/message-queue/RocketMQ-NameServer多节点集群.jpg" alt="NameServer集群" style="zoom:50%;" />
 
 RocketMQ 的高可用主要是在体现在 Broker 的读和写的高可用，Broker 的高可用是通过`集群`和`主从`实现的。
 
-<img src="./assets/message-queue/mq-39.jpg" alt="Broker集群、主从示意图" style="zoom:50%;" />
+<img src="./assets/message-queue/RocketMQ-Broker主写从读与同步.jpg" alt="Broker集群、主从示意图" style="zoom:50%;" />
 
 Broker 可以配置两种角色：Master 和 Slave，Master 角色的 Broker 支持读和写，Slave 角色的 Broker 只支持读，Master 会向 Slave 同步消息。
 
@@ -920,7 +920,7 @@ RocketMQ 通过刷盘机制将内存中的消息持久化到磁盘，以避免�
 
 Broker 在处理消息时，直接操作内存映射文件以提升读写效率，但内存数据无法抵抗物理故障，因此刷盘是保障数据持久性的关键环节。两种策略的核心差异在于是否阻塞消息发送流程以等待刷盘完成，可根据业务对可靠性和吞吐量的需求灵活选择。
 
-<img src="./assets/message-queue/mq-40.jpg" alt="异步刷盘" style="zoom:50%;" />
+<img src="./assets/message-queue/RocketMQ-CommitLog同步刷盘等待流程.jpg" alt="异步刷盘" style="zoom:50%;" />
 
 ### 说说RocketMQ怎么对文件进行读写的？
 
@@ -947,27 +947,27 @@ RocketMQ 对文件的读写设计，**核心是通过整合内存映射、操作
    - Consumer 通过 ConsumeQueue 直接定位 CommitLog 中的消息位置，高效拉取消息；
    - 如需按 Key 查询消息，可通过 IndexFile 快速找到消息在 CommitLog 中的存储位置，再从 CommitLog 中读取完整消息。
 
-<img src="./assets/message-queue/mq-41.jpg" alt="img" style="zoom:50%;" />
+<img src="./assets/message-queue/RocketMQ-三类消息存储文件作用.jpg" alt="img" style="zoom:50%;" />
 
 - **CommitLog是消息实体的统一存储文件， 用于存储所有 Producer 发送的消息主体及元数据，是消息持久化的核心载体**。其关键特点为：
   - 文件规格：单个文件默认 1G，文件名以 20 位数字表示起始偏移量（例如第一个文件为`00000000000000000000`，起始偏移量 0；写满后生成下一个文件，起始偏移量为 1073741824）。
   - 存储方式：消息内容长度不固定，按写入顺序连续存储，保证高效写入。
   - 存储路径：`${Rocket_Home}/store/commitlog`，所有 Topic 的消息实体都集中在此，实现数据统一管理。
 
-![CommitLog](./assets/message-queue/mq-42.jpg)
+![CommitLog](./assets/message-queue/RocketMQ-CommitLog分段文件目录.jpg)
 
 - **ConsumeQueue（逻辑消费队列） 是消费队列的索引文件，其引入的核心目的是提升消息消费性能**。由于 RocketMQ 采用基于主题（Topic）的订阅模式，消息消费需针对特定 Topic 进行，若直接遍历 CommitLog 文件按 Topic 检索消息会非常低效，而有了 ConsumeQueue 后，消费者（Consumer）可通过它快速定位待消费消息。
   - **存储内容**：作为消费消息的索引，ConsumeQueue 保存了指定 Topic 下队列消息在 CommitLog 中的关键信息，每条记录固定为 20 字节，具体包括 8 字节的消息在 CommitLog 中的物理偏移量（用于定位消息位置）、4 字节的消息长度（用于确定消息读取范围），以及 8 字节的消息 Tag 的 HashCode（用于快速过滤不需要的消息）。
   - **文件结构**：单个文件含 30 万条记录，大小约 5.72M，支持像数组一样随机访问。
   - **存储路径**：按`topic/queue/file`三层结构组织，具体为`$HOME/store/consumequeue/{topic}/{queueId}/{fileName}`，与 Topic 和队列一一对应，方便 Consumer 快速定位待消费消息。
 
-<img src="./assets/message-queue/mq-43.jpg" alt="Comsumer Queue" style="zoom:50%;" />
+<img src="./assets/message-queue/RocketMQ-ConsumeQueue主题队列目录.jpg" alt="Comsumer Queue" style="zoom:50%;" />
 
 - **IndexFile是消息查询的哈希索引文件，它的作用是支持通过消息 Key 或时间区间查询消息，底层实现为文件系统中的 HashMap 结构，通过哈希映射关联消息 Key 与 CommitLog 物理位置。**
   - 结构：单个文件约 400M，可存储 2000 万条索引；文件名以创建时间戳命名。
   - 路径：`${Rocket_Home}/store/index`，提供高效的消息检索能力。
 
-<img src="./assets/message-queue/mq-44.jpg" alt="IndexFile文件示意图" style="zoom:50%;" />
+<img src="./assets/message-queue/RocketMQ-IndexFile文件头哈希槽与索引结构.jpg" alt="IndexFile文件示意图" style="zoom:50%;" />
 
 
 
@@ -1004,11 +1004,11 @@ Consumer 端负载均衡的核心设计理念是：同一消息队列在同一�
 - 3）对消息队列和消费者 ID 分别排序，通过队列分配策略（默认是平均分配算法）计算当前 Consumer 应分配的队列。
   - 平均分配算法类似分页逻辑：先对所有 MessageQueue 和 Consumer 排序，计算每页（每个 Consumer）平均包含的队列数量及范围，再遍历范围确定当前 Consumer 对应的队列。
 
-![Cosumer分配](./assets/message-queue/mq-45.jpg)
+![Cosumer分配](./assets/message-queue/RocketMQ-同主题队列分配给两个消费者.jpg)
 
 - 4）调用 `updateProcessQueueTableInRebalance()` 方法更新队列分配结果，具体逻辑是将分配到的队列（`mqSet`）与本地缓存 `processQueueTable` 比对过滤
 
-<img src="./assets/message-queue/mq-46.jpg" alt="img" style="zoom: 67%;" />
+<img src="./assets/message-queue/RocketMQ-队列重分配与拉取请求维护.jpg" alt="img" style="zoom: 67%;" />
 
 - 上图中`processQueueTable`标注的红色部分，代表当前`processQueueTable`中存在但未被分配到的消息队列（即与`mqSet`无交集的队列）。
   - 处理逻辑为：先将这些队列的`Dropped`属性设为`true`，再通过`removeUnnecessaryMessageQueue()`方法尝试从`processQueueTable`缓存中移除它们。
@@ -1021,7 +1021,7 @@ Consumer 端负载均衡的核心设计理念是：同一消息队列在同一�
 
 **RocketMQ 的长轮询机制是 Consumer 拉取消息时的一种优化策略**：当 Consumer 向 Broker 拉取消息时，若目标消息队列（Queue）中没有可用数据，Broker 不会立即返回空结果，而是将该拉取请求（PullRequest）暂存起来。直到队列中有新消息到达，或长轮询的阻塞时间超时，Broker 才会重新处理该队列上所有暂存的PullRequest并返回结果。
 
-![长轮询简单示意图](./assets/message-queue/mq-47.jpg)
+![长轮询简单示意图](./assets/message-queue/RocketMQ-长轮询挂起与超时唤醒.jpg)
 
 #### Broker 对无数据请求的处理（PullMessageProcessor）
 

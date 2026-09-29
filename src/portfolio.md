@@ -11,7 +11,7 @@ tag:
   - 个人网站
 welcome: 👋 你好，我是
 name: 神马都会亿点点的毛毛张
-avatar: /maomao-zhang-logo-clean.png
+avatar: /站点标志-相机少年-无边框.png
 
 titles:
   - 跟着毛毛张学 Go
