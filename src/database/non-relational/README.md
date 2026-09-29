@@ -23,3 +23,4 @@ tag:
 
 - [Redis 缓存与常用场景](./redis.md)
 - [MongoDB 文档数据库入门](./mongodb.md)
+- [Redis 面试题](./redis-interview.md)

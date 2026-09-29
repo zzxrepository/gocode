@@ -680,7 +680,7 @@ sidebarSorter: ["readme", "order", "title", "filename"]
 
 ## 新增文章
 
-面试题统一放在 `src/interview/`，栏目首页为 `README.md`，叶子文章直接使用 `.md` 文件。例如，消息队列面试题位于 `src/interview/message-queue.md`，配图位于 `src/interview/assets/message-queue/`，正文使用相对路径引用。顶部导航、首页推荐和栏目首页提供入口，侧边栏由 `/interview/` 的 `structure` 配置自动生成。迁移文章时同步更新站内链接，并在 `src/.vuepress/theme.ts` 中保留旧地址重定向。
+面试题按技术主题放入对应的学习栏目：Java、JVM 与并发题放在 `src/backend/java/`，MySQL 与 Redis 题放在 `src/database/` 的相应子栏目，Spring 题放在 `src/backend/microservices/`。跨技术主题的综合题可以放在 `src/interview/`。配图放在所属栏目的 `assets/` 目录，并使用相对路径引用。迁移文章时同步更新栏目首页链接；已有公开旧地址时，再在 `src/.vuepress/theme.ts` 中配置重定向。
 
 最快路径：
 
