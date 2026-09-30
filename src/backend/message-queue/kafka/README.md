@@ -29,7 +29,6 @@ tag:
 6. [存储](./06-storage.html)
 7. [流式处理](./07-stream-processing.html)
 8. [运维](./08-operations.html)
-9. [Go 集成 Kafka：用 Sarama 从订单事件走到可靠消费](./09-go-sarama.html)——通过 curl 下单，逐步验证同步、异步、回调、分区、消费组、位移与事务。
 
 ## 版本说明
 

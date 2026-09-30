@@ -586,6 +586,9 @@ ALTER TABLE dept80 ADD job_id varchar(15);
 
 ![SQL-新增职位字段前后对比](./assets/SQL-新增职位字段前后对比.png)
 
+
+
+
 #### 3.2.3.2 修改一个列
 
 - 可以修改列的数据类型，长度、默认值和位置
