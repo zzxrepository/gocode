@@ -27,6 +27,7 @@ tag:
 - [Kratos](./kratos.md)：跳转到 Go 框架栏目中的 Kratos 教程。
 - [go-zero](./go-zero.md)：跳转到 Go 框架栏目中的 go-zero 教程。
 - [分布式系统](./distributed-systems.md)：服务治理、一致性、缓存与消息队列。
+- [ZooKeeper](./zookeeper/README.md)：基础概念、集群部署、配置管理与分布式锁。
 - [云原生](./cloud-native.md)：Docker、Kubernetes、可观测性与持续交付。
 
 ::: tip 云原生放在哪里？
