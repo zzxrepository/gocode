@@ -3370,7 +3370,6 @@ noslave-lazy-flush no
 
 建议开启其中的 lazyfree-lazy-eviction、lazyfree-lazy-expire、lazyfree-lazy-server-del 等配置，这样就可以有效的提高主线程的执行效率。
 
-> 1. 华为 OD 的面试中出现过该题：讲一讲 Redis 的热 Key 和大 Key
 
 ### 如何使用 Redis实现异步队列/消息队列？
 
