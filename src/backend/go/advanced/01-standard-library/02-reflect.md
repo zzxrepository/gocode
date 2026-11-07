@@ -34,7 +34,7 @@ tag:
 
 所以，学习反射不是为了在业务代码里到处“炫技”，而是为了理解这些框架为什么能做到“传一个结构体就自动工作”，以及在确实需要写通用工具时，知道该检查什么、避开什么坑。
 
-## 反射适合什么，也会付出什么代价
+## 2.1 反射适合什么，也会付出什么代价
 
 反射适合处理**编译期无法完全确定类型**的问题。
 
@@ -59,7 +59,7 @@ type User struct {
 
 一句话：**能用普通类型、接口、泛型解决的问题，优先不用反射；反射更适合框架、工具、序列化、绑定、校验这类“处理未知类型”的场景。**
 
-## 静态类型和动态类型
+## 2.2 静态类型和动态类型
 
 Go 是静态类型语言。普通变量在编译期就有确定类型：
 
@@ -109,7 +109,7 @@ func main() {
 
 `reflect.TypeOf` 和 `reflect.ValueOf` 观察到的，正是接口里保存的动态类型和动态值。
 
-## 底层直觉
+## 2.3 底层直觉
 
 理解反射，先记住一个简单直觉：**Go 的反射建立在 interface 的运行时信息之上。**
 
@@ -168,7 +168,7 @@ val := reflect.ValueOf(v)
 
 这也解释了一个重要现象：反射函数通常接收 `any`。当普通值传给 `reflect.TypeOf` 或 `reflect.ValueOf` 时，它会先被放进接口，再从接口里取出动态类型和动态值。
 
-## Type 和 Value
+## 2.4 Type 和 Value
 
 `reflect` 最核心的两个类型是：
 
@@ -220,7 +220,7 @@ Value 的类型: float64
 Value 的 Kind: float64
 ```
 
-## Type、Name 和 Kind
+## 2.5 Type、Name 和 Kind
 
 反射里经常同时看到 `Type`、`Name`、`Kind`。它们不是一回事。
 
@@ -278,7 +278,7 @@ Chan Func Interface Pointer UnsafePointer
 
 较新的 Go 文档使用 `reflect.Pointer` 表示指针种类；`reflect.Ptr` 是旧名称，很多老代码里仍然能看到。
 
-## ValueOf、Interface 和 IsValid
+## 2.6 ValueOf、Interface 和 IsValid
 
 `reflect.ValueOf` 会把普通值转换成 `reflect.Value`：
 
@@ -362,7 +362,7 @@ if v.CanInterface() {
 }
 ```
 
-## Elem：解开指针和接口
+## 2.7 Elem：解开指针和接口
 
 `Elem()` 用来“解开一层”指针或接口。
 
@@ -419,7 +419,7 @@ func indirect(v reflect.Value) reflect.Value {
 }
 ```
 
-## 通过反射修改值
+## 2.8 通过反射修改值
 
 反射可以读值，也可以改值。但能改的前提很严格：
 
@@ -544,7 +544,7 @@ func SetValue(target reflect.Value, newValue any) error {
 }
 ```
 
-## 遍历结构体字段
+## 2.9 遍历结构体字段
 
 结构体是反射最常见的应用对象。我们可以通过 `Type.Field(i)` 拿字段元信息，通过 `Value.Field(i)` 拿字段值。
 
@@ -638,7 +638,7 @@ func main() {
 }
 ```
 
-## 读取结构体 tag
+## 2.10 读取结构体 tag
 
 结构体 tag 是写在字段类型后面的元数据：
 
@@ -725,7 +725,7 @@ func main() {
 }
 ```
 
-## 通过反射修改结构体字段
+## 2.11 通过反射修改结构体字段
 
 修改结构体字段时，通常要传入结构体指针：
 
@@ -804,7 +804,7 @@ type User struct {
 
 实际业务代码里不要用 `unsafe` 强行绕过这个限制。封装边界一旦被破坏，后续维护会非常痛苦。
 
-## 反射调用方法
+## 2.12 反射调用方法
 
 反射可以通过方法名查找方法，并用 `Call` 调用。
 
@@ -893,7 +893,7 @@ if method.IsValid() {
 }
 ```
 
-## 常见 panic 清单
+## 2.13 常见 panic 清单
 
 反射的错误很多都发生在运行时。写通用代码时，下面这些检查要变成肌肉记忆：
 
@@ -921,7 +921,7 @@ if method.IsValid() {
 新值类型能赋过去吗？
 ```
 
-## 什么时候不用反射
+## 2.14 什么时候不用反射
 
 反射不是“更高级的写法”，它只是解决特殊问题的工具。
 
@@ -972,7 +972,7 @@ func Contains[T comparable](values []T, target T) bool {
 - 写校验器、依赖注入容器、测试工具；
 - 框架需要接收用户定义的任意结构体或函数。
 
-## 综合示例：一个迷你配置绑定器
+## 2.15 综合示例：一个迷你配置绑定器
 
 下面写一个很小的配置绑定函数，把 `map[string]string` 里的值写入结构体字段。它支持 `string`、整数、浮点数、布尔值，并读取字段上的 `config` tag。
 

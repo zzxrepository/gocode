@@ -32,7 +32,7 @@ tag:
 
 本文源码解读基于 **Go 1.26.5**，你可以对照官方源码阅读：[encoding/json](https://go.googlesource.com/go/+/refs/tags/go1.26.5/src/encoding/json/) 和 [encoding/xml](https://go.googlesource.com/go/+/refs/tags/go1.26.5/src/encoding/xml/)。
 
-## encoding 包族是什么
+## 3.1 encoding 包族是什么
 
 Go 标准库里有一组和编码、解码相关的包，很多都放在 `encoding` 目录下。
 
@@ -50,7 +50,7 @@ Go 标准库里有一组和编码、解码相关的包，很多都放在 `encodi
 
 这里的“编码”可以先理解成：**把 Go 里的值转换成某种外部格式**。而“解码”则反过来：**把外部格式转换成 Go 里的值**。
 
-### 为什么需要编码和解码
+### 3.1.1 为什么需要编码和解码
 
 为什么需要这一步？因为程序内部和外部世界使用的“数据形态”并不一样。
 
@@ -86,7 +86,7 @@ err = json.Unmarshal(data, &user)
 
 这一节先不展开所有 encoding 包。做后端开发时，最先要掌握的是 `encoding/json`，因为绝大多数 HTTP API 都会用 JSON 作为请求和响应格式。
 
-## JSON 基础
+## 3.2 JSON 基础
 
 在介绍 `encoding/json` 之前，我们先了解一下 JSON。JSON 是一种文本数据格式，全称是 JavaScript Object Notation。
 
@@ -128,7 +128,7 @@ type User struct {
 
 不过，在正式使用 `Marshal` 和 `Unmarshal` 之前，需要先补一个非常重要的前提：`encoding/json` 并不是结构体里所有字段都能访问，它只能处理导出字段。
 
-## 导出字段规则
+## 3.3 导出字段规则
 
 `encoding/json` 只能访问结构体里的导出字段。
 
@@ -160,7 +160,7 @@ fmt.Println(string(data))
 
 所以，想让 JSON 包处理某个结构体字段，字段名必须导出。确认了这个前提后，我们再看最常见的两件事：把 Go 值编码成 JSON，以及把 JSON 解码回 Go 值。
 
-## 使用 Marshal 编码 JSON
+## 3.4 使用 Marshal 编码 JSON
 
 `json.Marshal` 用来把 Go 值编码成 JSON。它最常见的用途是生成 HTTP 响应、写 JSON 配置文件，或者把数据发给其他服务。
 
@@ -217,7 +217,7 @@ func main() {
 
 注意，`json.Marshal` 返回的是 `[]byte`，不是 `string`。因为在网络、文件和 HTTP 响应里，数据本质上都是字节流。
 
-### 使用 MarshalIndent 输出格式化 JSON
+### 3.4.1 使用 MarshalIndent 输出格式化 JSON
 
 `json.Marshal` 生成的是紧凑 JSON，适合网络传输。
 
@@ -263,7 +263,7 @@ func main() {
 
 后端接口返回给前端时，一般不需要格式化；命令行工具、配置生成器、调试输出里更适合用 `MarshalIndent`。
 
-### Marshal 源码主线
+### 3.4.2 Marshal 源码主线
 
 从使用者视角看，`json.Marshal(user)` 好像只是把一个结构体变成 JSON 字符串。但在标准库内部，它做的是一件更底层的事情：**拿到任意 Go 值以后，通过反射识别它的真实类型，再选择对应的编码器把它写入缓冲区**。
 
@@ -333,7 +333,7 @@ func newStructEncoder(t reflect.Type) encoderFunc {
 
 这也解释了一个现象：`encoding/json` 很方便，但它不是零成本的。它依赖反射和字段规则判断，所以在极端高性能场景里，有些项目会使用代码生成或第三方 JSON 库来减少反射成本。不过对绝大多数后端接口来说，标准库已经足够稳定可靠。
 
-## 使用 Unmarshal 解码 JSON
+## 3.5 使用 Unmarshal 解码 JSON
 
 服务端不只会输出 JSON，也经常要接收 JSON。比如前端提交表单、客户端创建订单、其他服务调用你的接口时，请求体通常就是一段 JSON 文本。这时就需要用 `json.Unmarshal` 把 JSON 解码到 Go 变量里。
 
@@ -380,7 +380,7 @@ func main() {
 {Name:张三 Age:18}
 ```
 
-### 为什么 Unmarshal 要传指针
+### 3.5.1 为什么 Unmarshal 要传指针
 
 `Unmarshal` 的目标参数必须传指针：
 
@@ -416,7 +416,7 @@ if err := json.Unmarshal([]byte(`["Go","MySQL"]`), &names); err != nil {
 }
 ```
 
-### Unmarshal 源码主线
+### 3.5.2 Unmarshal 源码主线
 
 再看 `Unmarshal`。在 Go 1.26.5 稳定版官方源码 [`src/encoding/json/decode.go`](https://go.googlesource.com/go/+/refs/tags/go1.26.5/src/encoding/json/decode.go) 中，它不是一上来就直接把字段塞进结构体，而是先做一遍 JSON 语法检查：
 
@@ -447,7 +447,7 @@ func Unmarshal(data []byte, v any) error {
 
 所以“为什么要传指针”从源码角度看，本质是：**解码器最终要通过反射 Set 字段，只有拿到可设置的目标地址，才能把 JSON 值写回去**。
 
-## json struct tag
+## 3.6 json struct tag
 
 导出字段解决的是“`encoding/json` 能不能访问这个字段”的问题，但还没有解决“JSON 字段名应该叫什么”的问题。后端接口里通常不会直接把 `UserName`、`EmailAddress` 这种 Go 字段名暴露出去，而是会使用 `user_name`、`email_address` 这类更常见的 JSON 字段名。
 
@@ -483,7 +483,7 @@ type CreateUserRequest struct {
 
 这就引出了 struct tag 的核心问题：**Go 字段名和 JSON 字段名经常不是同一种命名风格**。Go 里是 `UserName`，JSON 里却往往是 `user_name`。这时就需要通过 `json` tag 明确告诉标准库二者的对应关系。
 
-### 指定字段名
+### 3.6.1 指定字段名
 
 ```go
 type CreateUserRequest struct {
@@ -497,7 +497,7 @@ type CreateUserRequest struct {
 
 `json:"email_address"` 的意思也是一样：这个字段在 Go 里叫 `EmailAddress`，但是在 JSON 里叫 `email_address`。
 
-### 不加 tag 会怎么样
+### 3.6.2 不加 tag 会怎么样
 
 先看编码，也就是 Go 结构体转 JSON。
 
@@ -619,7 +619,7 @@ type CreateUserRequest struct {
 {UserName:maomao EmailAddress:maomao@example.com Age:18}
 ```
 
-### 放到 HTTP handler 里看
+### 3.6.3 放到 HTTP handler 里看
 
 实际项目里，很少直接拿一段字符串调用 `json.Unmarshal`。更常见的是在 HTTP handler 里从请求体读取 JSON。
 
@@ -687,7 +687,7 @@ func createUserHandler(w http.ResponseWriter, r *http.Request) {
 
 所以后端 API 的 request / response 结构体，通常都应该显式写 `json` tag。这样接口字段名稳定，前端、移动端、其他服务也不用依赖 Go 的字段命名。
 
-### tag 的基本格式
+### 3.6.4 tag 的基本格式
 
 `json` tag 的基本格式是：
 
@@ -706,7 +706,7 @@ func createUserHandler(w http.ResponseWriter, r *http.Request) {
 
 注意，tag 不是给 Go 编译器看的，而是给 `encoding/json` 这类库在运行时通过反射读取的。Go 语言本身不会理解 `json:"user_name"` 的业务含义。
 
-### 源码里 tag 是怎么被读出来的
+### 3.6.5 源码里 tag 是怎么被读出来的
 
 这一点特别适合和“反射”那一节连起来理解。结构体 tag 写在字段声明上，但真正读取它的是标准库。`encoding/json` 在分析结构体字段时，会拿到 `reflect.StructField`，然后读取字段上的 `json` tag。
 
@@ -769,7 +769,7 @@ if f == nil {
 
 所以你可以把 `json struct tag` 理解成一句话：**它是写在结构体字段上的元信息，声明时属于结构体语法，使用时由 `encoding/json` 通过反射读取，并参与字段索引和匹配规则**。
 
-### omitempty：空值时省略
+### 3.6.6 omitempty：空值时省略
 
 `omitempty` 表示字段是空值时，就不要输出到 JSON。
 
@@ -835,7 +835,7 @@ type UpdateUserRequest struct {
 }
 ```
 
-### `-`：忽略字段
+### 3.6.7 `-`：忽略字段
 
 `json:"-"` 表示完全忽略这个字段。
 
@@ -884,11 +884,11 @@ type UserResponse struct {
 
 这样就算以后有人给 `UserModel` 补字段，也不容易误把敏感信息返回给前端。
 
-## Encoder 和 Decoder
+## 3.7 Encoder 和 Decoder
 
 到这里，我们已经分别看过 `Marshal` 和 `Unmarshal`。它们适合教学示例，也适合处理已经在内存里的 JSON 字节。但真实后端接口通常不是先手动准备一段 `[]byte`，而是直接面对 HTTP 请求体和响应流。这时可以使用 `json.Encoder` 和 `json.Decoder`。
 
-### 用 Encoder 写 JSON 响应
+### 3.7.1 用 Encoder 写 JSON 响应
 
 ```go
 package main
@@ -922,7 +922,7 @@ func getUserHandler(w http.ResponseWriter, r *http.Request) {
 
 `Encode` 会在输出末尾追加一个换行符。HTTP 响应里这通常没问题。
 
-### 用 Decoder 读 JSON 请求
+### 3.7.2 用 Decoder 读 JSON 请求
 
 ```go
 package main
@@ -964,7 +964,7 @@ func createUserHandler(w http.ResponseWriter, r *http.Request) {
 
 比如 `name` 为空字符串、`age` 是负数，JSON 包都不会替你拦住。业务校验仍然要自己写，或者交给专门的校验库。
 
-### Decoder 源码主线
+### 3.7.3 Decoder 源码主线
 
 `json.Decoder` 的源码入口在 Go 1.26.5 稳定版官方源码 [`src/encoding/json/stream.go`](https://go.googlesource.com/go/+/refs/tags/go1.26.5/src/encoding/json/stream.go)。它适合 HTTP 请求体、文件、网络连接这类 `io.Reader` 场景，因为它可以从流里读取 JSON，而不要求你先把整个内容手动读成 `[]byte`。
 
@@ -1006,7 +1006,7 @@ json.NewDecoder(r.Body).Decode(&v)
 
 写 HTTP 接口时，`Decoder` 更顺手；处理已经在内存里的 JSON 字节时，`Unmarshal` 更直接。
 
-## DisallowUnknownFields：拒绝未知字段
+## 3.8 DisallowUnknownFields：拒绝未知字段
 
 能把请求体解码出来，只是接口处理的第一步。接下来要考虑的是：客户端多传字段时，我们要不要接受？
 
@@ -1077,7 +1077,7 @@ if f != nil {
 
 这也说明它只管“字段有没有定义”，不管字段值是否符合业务规则。比如 `age` 字段存在但值是 `-1`，`DisallowUnknownFields` 不会报错，业务校验还是要自己写。
 
-## 限制请求体大小
+## 3.9 限制请求体大小
 
 字段严格性解决的是“内容是否符合约定”，但公开接口还要关心另一个问题：请求体本身能不能无限大。
 
@@ -1145,7 +1145,7 @@ import (
 )
 ```
 
-## 动态 JSON：map[string]any
+## 3.10 动态 JSON：map[string]any
 
 前面的例子都假设 JSON 结构比较稳定，所以用结构体最合适。但不是所有 JSON 都有固定结构，有些场景需要先接住一段“形状不确定”的数据。
 
@@ -1229,7 +1229,7 @@ fmt.Println(age)
 
 不过要小心精度问题。JSON 的“数字”没有区分 `int64`、`uint64`、`float64`，而 Go 需要区分。
 
-## UseNumber：保留数字文本
+## 3.11 UseNumber：保留数字文本
 
 动态 JSON 还有一个容易踩坑的地方：数字类型。结构体字段可以明确写 `int64`，但 `map[string]any` 里没有这么明确的类型信息。
 
@@ -1320,7 +1320,7 @@ func (d *decodeState) convertNumber(s string) (any, error) {
 
 这段源码把 `UseNumber` 的行为讲得很清楚：不开启时，动态 JSON 里的数字默认转成 `float64`；开启后，不急着转成浮点数，而是先保留成 `json.Number`，本质上保存的是数字的文本形式。后面你可以按业务需要调用 `Int64()`、`Float64()`，或者直接拿字符串继续处理。
 
-## XML 编码与解码
+## 3.12 XML 编码与解码
 
 讲完 JSON 以后，再回头看 XML 就容易很多。两者都是文本数据格式，都能和 Go 结构体做映射；区别是 XML 的表达能力更复杂，也更冗长。
 
@@ -1343,7 +1343,7 @@ XML 也是一种文本数据格式。它用标签组织数据，能表达元素�
 
 在 Go 里，可以用 `encoding/xml` 处理 XML。
 
-### XML struct tag
+### 3.12.1 XML struct tag
 
 先定义结构体：
 
@@ -1379,7 +1379,7 @@ type Servers struct {
 | `xml:",cdata"` | 映射 CDATA 内容 |
 | `xml:"-"` | 忽略字段 |
 
-### XML 源码主线
+### 3.12.2 XML 源码主线
 
 `encoding/xml` 的整体思路和 `encoding/json` 有相似之处：它也会通过反射分析结构体字段，也会读取 struct tag，也会缓存类型信息。但 XML 比 JSON 多了元素、属性、文本内容、命名空间等概念，所以它的字段信息更复杂。
 
@@ -1432,7 +1432,7 @@ tokens := strings.Split(tag, ",")
 
 所以 XML tag 也可以按这个思路理解：**声明写在结构体字段上，真正解释它的是 `encoding/xml`，解释过程同样依赖反射，只是 XML 的映射维度比 JSON 更多**。
 
-### XML Marshal
+### 3.12.3 XML Marshal
 
 `xml.Marshal` 和 `xml.MarshalIndent` 的思路与 JSON 很像。
 
@@ -1476,7 +1476,7 @@ func main() {
 }
 ```
 
-### XML Unmarshal
+### 3.12.4 XML Unmarshal
 
 解码 XML 也需要把目标变量地址传进去：
 
@@ -1526,7 +1526,7 @@ func main() {
 
 如果 XML 文件很大，或者你只想逐段读取，可以使用 `xml.Decoder` 读取 token。不过大多数后端业务里，先掌握 `Marshal`、`MarshalIndent`、`Unmarshal` 和 XML tag 就够用了。
 
-## JSON 和 XML 怎么选
+## 3.13 JSON 和 XML 怎么选
 
 学完两套标准库用法以后，最后要回到工程选择上：什么时候用 JSON，什么时候用 XML？
 
@@ -1547,9 +1547,9 @@ func main() {
 
 这一节的重点不是“JSON 比 XML 高级”，而是：**选择数据格式要看生态、协议约束和维护成本**。只是在现代 Web 后端里，JSON 的出现频率最高。
 
-## 常见坑
+## 3.14 常见坑
 
-### 1. 忘了传指针
+### 3.14.1 忘了传指针
 
 ```go
 var req CreateUserRequest
@@ -1567,7 +1567,7 @@ var req CreateUserRequest
 err := json.Unmarshal(data, &req)
 ```
 
-### 2. 字段没有导出
+### 3.14.2 字段没有导出
 
 ```go
 type User struct {
@@ -1583,7 +1583,7 @@ type User struct {
 }
 ```
 
-### 3. 以为 tag 能做校验
+### 3.14.3 以为 tag 能做校验
 
 ```go
 type CreateUserRequest struct {
@@ -1600,7 +1600,7 @@ if req.Name == "" || req.Age < 0 {
 }
 ```
 
-### 4. omitempty 把零值也省略了
+### 3.14.4 omitempty 把零值也省略了
 
 ```go
 type Response struct {
@@ -1610,7 +1610,7 @@ type Response struct {
 
 当 `Count` 是 `0` 时，字段不会输出。如果 `0` 本身有业务意义，就不要随便加 `omitempty`。
 
-### 5. 动态 JSON 数字默认是 float64
+### 3.14.5 动态 JSON 数字默认是 float64
 
 ```go
 var value map[string]any
@@ -1623,7 +1623,7 @@ fmt.Println(ok) // false
 
 需要按 `float64`、`json.Number` 或明确结构体字段处理。
 
-### 6. 直接把数据库模型返回给前端
+### 3.14.6 直接把数据库模型返回给前端
 
 ```go
 type UserModel struct {
@@ -1642,7 +1642,7 @@ type UserResponse struct {
 }
 ```
 
-### 7. 不限制请求体大小
+### 3.14.7 不限制请求体大小
 
 ```go
 // 不建议：公开接口直接从 r.Body 解码，没有大小限制。

@@ -18,7 +18,7 @@ tag:
 
 日志不是简单地打印一行文字，而是为运行中的系统留下可查询、可定位、可运营的事实记录。选择 `log`、`log/slog` 或 Zap 时，应先看结构化字段、输出目标、性能要求和既有工程约束，而不是只比较 API 的多少。
 
-## 日志系统需要解决的问题
+## 8.1 日志系统需要解决的问题
 
 日志用于记录程序运行状态、错误和诊断信息。一个完整的项目日志方案通常需要考虑：
 
@@ -30,7 +30,7 @@ tag:
 
 Go 标准库提供 `log` 和 `log/slog`。此外，Zap 是 Go 项目中常用的第三方高性能结构化日志库。
 
-## 标准库 `log` 的基本使用
+## 8.2 标准库 `log` 的基本使用
 
 `log` 包提供一个预定义的标准 logger。默认日志写入 `os.Stderr`，并包含日期和时间：
 
@@ -62,7 +62,7 @@ func main() {
 - `Fatal`、`Fatalf`、`Fatalln`：记录后调用 `os.Exit(1)`；
 - `Panic`、`Panicf`、`Panicln`：记录后触发 `panic`。
 
-## 配置标准 logger
+## 8.3 配置标准 logger
 
 ```go
 // Prefix 会出现在每条日志消息前面，便于区分模块。
@@ -105,7 +105,7 @@ func main() {
 }
 ```
 
-## 将标准日志写入文件
+## 8.4 将标准日志写入文件
 
 ```go
 package main
@@ -141,7 +141,7 @@ func main() {
 
 标准 logger 是进程级全局对象。可复用组件或需要多套日志配置时，应创建独立的 `*log.Logger`。
 
-## 创建独立的 `Logger`
+## 8.5 创建独立的 `Logger`
 
 ```go
 package main
@@ -181,16 +181,16 @@ logger.Output(2, "一条日志信息")
 
 `Output` 的第一个参数表示需要跳过的调用栈层数。普通业务代码通常直接调用 `Println`、`Printf` 等方法，不需要手动使用 `Output`。
 
-## 标准 `log` 的优点与局限
+## 8.6 标准 `log` 的优点与局限
 
-### 优点
+### 8.6.1 优点
 
 - API 简单，标准库直接可用；
 - 可以把任意 `io.Writer` 作为输出目标；
 - 可以配置时间、文件名、行号和日志前缀；
 - 适合小型程序、脚本和简单工具。
 
-### 局限
+### 8.6.2 局限
 
 - 没有完整的 `DEBUG`、`INFO`、`WARN`、`ERROR` 分级模型；
 - 缺少原生结构化字段；
@@ -200,7 +200,7 @@ logger.Output(2, "一条日志信息")
 
 `Fatal` 通常只应出现在 `main` 等进程入口。库函数、业务函数和 HTTP 处理函数应返回错误，由上层决定记录、重试或退出。
 
-## 使用 `log/slog` 记录结构化日志
+## 8.7 使用 `log/slog` 记录结构化日志
 
 `log/slog` 将一条日志表示为时间、级别、消息和一组键值属性：
 
@@ -274,7 +274,7 @@ serviceLogger.Info("服务启动", "port", 8080)
 
 ---
 
-## Zap 概述
+## 8.8 Zap 概述
 
 [Zap](https://github.com/uber-go/zap) 是 Uber 开源的高性能、结构化、分级日志库。
 
@@ -287,7 +287,7 @@ Zap 的主要特点包括：
 - 可以通过 `zapcore.Core` 自定义编码器、输出位置和最低日志级别；
 - 可以与 Lumberjack 组合实现日志切割和归档。
 
-## 为什么选择 Zap
+## 8.9 为什么选择 Zap
 
 Zap 同时提供两种使用方式：
 
@@ -308,7 +308,7 @@ Zap 官方仓库提供了基准测试。原教程中的两张性能图保留如�
 
 需要注意，基准测试结果会受到测试代码、依赖版本、硬件和日志配置影响。它适合作为选型参考，但不应替代针对自身业务场景的压测。
 
-## 安装 Zap
+## 8.10 安装 Zap
 
 在已经初始化 Go Module 的项目中执行：
 
@@ -322,7 +322,7 @@ go get go.uber.org/zap
 import "go.uber.org/zap"
 ```
 
-## 创建 Zap Logger
+## 8.11 创建 Zap Logger
 
 Zap 提供了三个常用预设：
 
@@ -346,7 +346,7 @@ defer logger.Sync()
 
 `Sync` 用于刷新可能存在的缓冲日志。部分终端环境中对标准输出或标准错误执行 `Sync` 可能返回不需要处理的底层错误；写文件等场景仍应重视刷新失败。
 
-### 使用强类型 `Logger`
+### 8.11.1 使用强类型 `Logger`
 
 `Logger` 的日志方法形式如下：
 
@@ -426,7 +426,7 @@ func simpleHTTPGet(client *http.Client, logger *zap.Logger, url string) {
 {"level":"info","ts":1721044200.456,"caller":"main.go:44","msg":"请求 URL 成功","url":"https://example.com","status":"200 OK","status_code":200}
 ```
 
-## 使用 `SugaredLogger`
+## 8.12 使用 `SugaredLogger`
 
 通过 `Logger.Sugar()` 可以获得 `SugaredLogger`：
 
@@ -522,7 +522,7 @@ plain := sugar.Desugar()
 
 是否使用 `SugaredLogger` 不必成为整个项目的全局决定。性能敏感的高频路径可以使用 `Logger`，其他位置可以使用 `SugaredLogger`。
 
-## 使用 `zapcore` 自定义 Logger
+## 8.13 使用 `zapcore` 自定义 Logger
 
 Zap 的高级配置通常由三个核心部分组成：
 
@@ -541,7 +541,7 @@ logger := zap.New(core)
 
 对于普通项目，应优先使用 `zap.Config` 或预设配置；只有需要拆分多个输出、组合多个 Core 或深度控制编码行为时，才需要直接使用 `zapcore`。
 
-### 将日志写入文件
+### 8.13.1 将日志写入文件
 
 ```go
 package main
@@ -600,7 +600,7 @@ func main() {
 
 与原教程直接使用 `os.Create` 不同，这里使用 `O_APPEND` 追加写入，避免程序每次启动都清空旧日志。
 
-### JSON Encoder 与 Console Encoder
+### 8.13.2 JSON Encoder 与 Console Encoder
 
 JSON 编码器：
 
@@ -623,7 +623,7 @@ func getConsoleEncoder() zapcore.Encoder {
 - JSON 适合日志采集系统进行解析和检索；
 - Console 格式适合开发环境或需要直接阅读文本日志的场景。
 
-### 修改时间和日志级别编码
+### 8.13.3 修改时间和日志级别编码
 
 默认生产配置中的时间可能以 Unix 秒表示。可以修改编码器配置，使日志更易读：
 
@@ -654,7 +654,7 @@ func getEncoder() zapcore.Encoder {
 - `zapcore.LowercaseColorLevelEncoder`：小写彩色级别；
 - `zapcore.CapitalColorLevelEncoder`：大写彩色级别。
 
-### 添加调用者信息
+### 8.13.4 添加调用者信息
 
 使用 `zap.AddCaller()` 可以记录调用文件和行号：
 
@@ -670,7 +670,7 @@ logger := zap.New(core, zap.AddCaller())
 logger := zap.New(core, zap.AddCaller(), zap.AddCallerSkip(1))
 ```
 
-## 使用 Lumberjack 进行日志切割归档
+## 8.14 使用 Lumberjack 进行日志切割归档
 
 Zap 负责生成和编码日志，但本身不负责按文件大小切割、保留备份和压缩历史文件。可以使用 [Lumberjack](https://github.com/natefinch/lumberjack) 作为底层 `io.Writer`。
 
@@ -686,7 +686,7 @@ go get gopkg.in/natefinch/lumberjack.v2
 import "gopkg.in/natefinch/lumberjack.v2"
 ```
 
-### Lumberjack 配置
+### 8.14.1 Lumberjack 配置
 
 ```go
 // Lumberjack 实现 io.Writer，并在达到阈值时轮转文件。
@@ -712,7 +712,7 @@ lumberjackLogger := &lumberjack.Logger{
 
 Lumberjack 假设同一个日志文件只由一个进程写入。多个进程同时使用相同配置写入同一文件可能产生异常行为。
 
-### 将 Lumberjack 转换为 Zap WriteSyncer
+### 8.14.2 将 Lumberjack 转换为 Zap WriteSyncer
 
 ```go
 func getLogWriter() zapcore.WriteSyncer {
@@ -732,7 +732,7 @@ func getLogWriter() zapcore.WriteSyncer {
 
 `lumberjack.Logger` 实现了 `io.Writer`，因此可以通过 `zapcore.AddSync` 适配为 Zap 使用的 `WriteSyncer`。
 
-## Zap 与 Lumberjack 完整示例
+## 8.15 Zap 与 Lumberjack 完整示例
 
 下面将以下功能组合在一起：
 
@@ -867,7 +867,7 @@ defer func() {
 }()
 ```
 
-## 多输出和不同级别的 Core
+## 8.16 多输出和不同级别的 Core
 
 原教程主要介绍单一文件输出。在实际项目中，`zapcore.NewTee` 还可以组合多个 Core，例如：
 
@@ -887,7 +887,7 @@ logger := zap.New(core, zap.AddCaller())
 
 这是 `zapcore` 的常见高级用途，但完整配置需要结合项目的日志规范、部署环境和采集系统设计。
 
-## 日志库选型建议
+## 8.17 日志库选型建议
 
 | 场景                         | 建议                                          |
 | ---------------------------- | --------------------------------------------- |

@@ -37,7 +37,7 @@ func Query(ctx context.Context, id int64) error
 2. **这件事是不是已经不用继续做了**。
 3. **这次请求上有没有一些需要一起传下去的数据**，比如 `traceID`。
 
-## 可能引起 P0 级事故的 context
+## 1.1 可能引起 P0 级事故的 context
 
 为什么一个看起来只是“传参数”的包，会变成 Go 后端里的常规写法？
 
@@ -67,7 +67,7 @@ Go 1.7 把 `context` 放进标准库以后，很多标准库和社区库都开�
 
 下面基于 Go 1.26.5 版本中的 `context.go` 来介绍 `context` 包。
 
-## 先看 Context 接口
+## 1.2 先看 Context 接口
 
 源码里，`Context` 是一个接口：
 
@@ -138,7 +138,7 @@ context.DeadlineExceeded		//超时取消
 
 还有一个细节很重要：`Context` 接口里没有 `Cancel()` 方法。也就是说，下游函数拿到 `ctx` 后，只能监听取消，不能取消父任务。谁创建可取消的 context，谁拿到 cancel 函数。
 
-## 先认识几种 context 具体类型
+## 1.3 先认识几种 context 具体类型
 
 读源码前，先把几个具体类型认一下。
 
@@ -183,7 +183,7 @@ ctx = context.WithValue(ctx, traceIDKey{}, "trace-001")
 | `func WithTimeout(parent Context, timeout time.Duration) (Context, CancelFunc)` | `WithDeadline` 的快捷写法，表示从现在开始最多运行 `timeout` 这么久。 | 本质来自 `WithDeadline`，通常是 `*timerCtx` 指针值 |
 | `func WithValue(parent Context, key, val any) Context` | 基于父 context 派生一个携带 key-value 的子 context。适合传 `traceID`、认证信息这类请求级数据。 | `*valueCtx` 指针值 |
 
-## Background 和 TODO
+## 1.4 Background 和 TODO
 
 我们经常这样写：
 
@@ -306,7 +306,7 @@ func Background() Context {
 >
 > `Background()` 自己不会取消。真正的取消能力来自后面的 `WithCancel`、`WithDeadline`、`WithTimeout`。
 
-## WithCancel
+## 1.5 WithCancel
 
 `WithCancel` 用来在父 context 外面包一层可取消的 context：
 
@@ -495,7 +495,7 @@ func (c *cancelCtx) cancel(removeFromParent bool, err, cause error) {
 
 `context` 不是给每个 goroutine 发一条消息，而是关闭同一个 channel。所有在等 `<-ctx.Done()` 的地方，都会因为 channel 关闭而醒过来。
 
-### 取消是怎么向下传的
+### 1.5.1 取消是怎么向下传的
 
 `withCancel` 里有一句：
 
@@ -596,7 +596,7 @@ ctx2, cancel2 := context.WithCancel(ctx1)
 
 所以取消方向很好记：父取消，子跟着取消；子取消，父不受影响。
 
-## WithDeadline 和 WithTimeout
+## 1.6 WithDeadline 和 WithTimeout
 
 `WithTimeout` 是最常用的超时写法：
 
@@ -760,7 +760,7 @@ if cur, ok := parent.Deadline(); ok && cur.Before(d) {
 
 另外，`WithTimeout` 后面要写 `defer cancel()`。即使没有手动取消，超时也会自动取消，但如果任务提前结束，调用 `cancel()` 可以及时停止 timer，并且把自己从父 context 的 children 里移走。
 
-## WithValue
+## 1.7 WithValue
 
 `WithValue` 用来给调用链挂一组请求级数据：
 
@@ -930,7 +930,7 @@ func TraceIDFromContext(ctx context.Context) (string, bool) {
 }
 ```
 
-## 一个完整 demo
+## 1.8 一个完整 demo
 
 下面这个 demo 模拟一个很常见的场景：一次请求进入服务端后，业务代码要查询数据库，并且希望给这次请求加上两个能力。
 
@@ -1027,7 +1027,7 @@ query failed: context deadline exceeded
 
 这个 demo 对应的完整链路是：先从 `Background()` 创建根 context，再用 `WithTimeout()` 增加超时能力，再用 `WithValue()` 增加请求级数据，最后在下游函数里用 `select` 同时等待“查询步骤完成”和“context 取消信号”。
 
-## 平时怎么用
+## 1.9 平时怎么用
 
 理解源码以后，平时写业务代码可以按下面几条习惯来。它们不是形式主义，背后都是为了让取消信号、超时时间和请求级数据能稳定地沿着调用链传下去。
 
