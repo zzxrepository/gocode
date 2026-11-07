@@ -372,7 +372,7 @@ tag:
 长教程适合使用目录型文章，例如：
 
 ```text
-src/backend/go/basic/09-methods.md
+src/backend/go/basic/11-methods.md
 ```
 
 短文章可以直接使用 Markdown 文件，例如：
@@ -634,8 +634,8 @@ GitHub Pages 的发布来源应为 `gh-pages` 分支、`/(root)` 目录。若将
 
 | 本地文件 | 网页地址 |
 | --- | --- |
-| `src/backend/go/basic/01-project-structure.md` | `/backend/go/basic/01-project-structure/` |
-| `src/backend/go/basic/09-methods.md` | `/backend/go/basic/09-methods/` |
+| `src/backend/go/basic/01-language-and-environment.md` | `/backend/go/basic/01-project-structure/` |
+| `src/backend/go/basic/11-methods.md` | `/backend/go/basic/09-methods/` |
 | `src/algorithm/leetcode/hot-100/two-sum.md` | `/algorithm/leetcode/hot-100/two-sum.html` |
 
 在配置里写内部链接时，通常使用根路径，例如：
@@ -688,7 +688,7 @@ sidebarSorter: ["readme", "order", "title", "filename"]
 
 ```text
 1. 选栏目：先确认文章应该放在哪个已有栏目下
-2. 建文件：叶子教程直接建 13-generics.md；只有它将来需要容纳多篇子文章时，才建立目录和 README.md
+2. 建文件：叶子教程直接建 15-generics.md；只有它将来需要容纳多篇子文章时，才建立目录和 README.md
 3. 写元信息：补齐 title / shortTitle / order / category / tag；叶子文章不写 icon 或 dir
 4. 写正文：一级标题和 title 保持一致，重点文章在标题下方放封面图
 5. 查效果：执行 npm run docs:build，确认文章进入侧边栏且构建通过
@@ -709,9 +709,9 @@ sidebarSorter: ["readme", "order", "title", "filename"]
 
 ```md
 ---
-title: 13. 泛型
+title: 15. 泛型
 shortTitle: 泛型
-order: 13
+order: 15
 category:
   - Go
 tag:
@@ -719,7 +719,7 @@ tag:
   - 泛型
 ---
 
-# 13. 泛型
+# 15. 泛型
 ```
 
 字段说明：
@@ -735,13 +735,13 @@ tag:
 
 叶子文章不设置 `icon`，并且不作为可展开目录。Go 的目录应保持为 `Golang 进阶知识 -> 01. 标准库 -> 01. context` 这类三级结构，不再额外显示一层同名首页。
 
-例如新增 Go 基础教程第 13 篇：
+例如新增 Go 基础教程第 15 篇：
 
 ```text
-src/backend/go/basic/13-generics.md
+src/backend/go/basic/15-generics.md
 ```
 
-写好 `order: 13` 后，它会自动出现在 Go 基础教程侧边栏里，不需要手动修改 `sidebar.ts`。
+写好 `order: 15` 后，它会自动出现在 Go 基础教程侧边栏里，不需要手动修改 `sidebar.ts`。
 
 ## 新增目录
 

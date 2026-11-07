@@ -1,8 +1,8 @@
 ---
 permalink: /backend/go/basic/06-map/
-title: 06. Map
-shortTitle: 06. Map
-order: 6
+title: 07. Map
+shortTitle: 07. Map
+order: 7
 category:
   - Go
   - Golang 基础知识
@@ -15,7 +15,7 @@ tag:
   - 增删改查
 ---
 
-# 06. Map
+# 07. Map
 
 ## 前言
 
@@ -29,7 +29,7 @@ Map 常用于：
 - 实现缓存；
 - 对数据进行分组。
 
-## 6.1 Map 类型
+## 7.1 Map 类型
 
 Map 类型的语法如下：
 
@@ -61,7 +61,7 @@ Map 的键和值可以使用不同类型，但同一个 Map 中所有键的类�
 
 ------
 
-## 6.2 Map 键类型的要求
+## 7.2 Map 键类型的要求
 
 Map 的键必须是可以使用 `==` 和 `!=` 比较的类型。
 
@@ -107,9 +107,9 @@ locations := map[Coordinate]string{
 
 ------
 
-## 6.3 创建和初始化 Map
+## 7.3 创建和初始化 Map
 
-### 6.3.1 声明 Map
+### 7.3.1 声明 Map
 
 ```go
 var scores map[string]int
@@ -142,7 +142,7 @@ assignment to entry in nil map
 
 因此，写入前必须初始化 Map。
 
-### 6.3.2 使用 make 创建 Map
+### 7.3.2 使用 make 创建 Map
 
 ```go
 scores := make(map[string]int)
@@ -160,7 +160,7 @@ scores := make(map[string]int, 100)
 - Map 可以继续添加更多元素；
 - 不能使用 `cap(scores)` 查询容量。
 
-### 6.3.3 使用 Map 字面量
+### 7.3.3 使用 Map 字面量
 
 ```go
 scores := map[string]int{
@@ -184,7 +184,7 @@ scores["Alice"] = 90
 
 ------
 
-## 6.4 添加和修改键值对
+## 7.4 添加和修改键值对
 
 向 Map 中写入数据：
 
@@ -217,7 +217,7 @@ Map 中不能存在两个相同的键。再次为同一个键赋值，会更新�
 
 ------
 
-## 6.5 读取数据和判断键是否存在
+## 7.5 读取数据和判断键是否存在
 
 可以通过键读取对应的值：
 
@@ -281,7 +281,7 @@ if _, ok := scores["Alice"]; ok {
 
 ------
 
-## 6.6 删除和清空 Map
+## 7.6 删除和清空 Map
 
 使用内置函数 `delete` 删除键值对：
 
@@ -310,7 +310,7 @@ delete(scores, "Unknown")
 
 对 `nil` Map 执行 `delete` 也是安全的。
 
-### 6.6.1 清空 Map
+### 7.6.1 清空 Map
 
 可以使用内置函数 `clear` 删除 Map 中的全部键值对：
 
@@ -335,7 +335,7 @@ scores = make(map[string]int)
 
 ------
 
-## 6.7 遍历 Map
+## 7.7 遍历 Map
 
 使用 `for range` 遍历 Map：
 
@@ -367,7 +367,7 @@ for _, score := range scores {
 }
 ```
 
-### 6.7.1 Map 的遍历顺序
+### 7.7.1 Map 的遍历顺序
 
 Map 的遍历顺序没有定义，不能依赖元素的插入顺序。
 
@@ -420,7 +420,7 @@ Carol 96
 
 ------
 
-## 6.8 Map 的赋值和函数传递
+## 7.8 Map 的赋值和函数传递
 
 Map 变量赋值后，两个变量会共享同一组底层数据：
 
@@ -464,7 +464,7 @@ func main() {
 
 ------
 
-## 6.9 Map 的值是结构体时
+## 7.9 Map 的值是结构体时
 
 Map 元素不能直接取得地址，因此当值类型是结构体时，不能直接修改其中的字段。
 
@@ -512,11 +512,11 @@ users["001"].Age = 21
 
 ------
 
-## 6.10 复合数据结构
+## 7.10 复合数据结构
 
 Map 和切片可以相互组合，构造更复杂的数据结构。
 
-### 6.10.1 值为切片的 Map
+### 7.10.1 值为切片的 Map
 
 ```go
 cities := make(map[string][]string)
@@ -563,7 +563,7 @@ sliceMap[key] = append(
 )
 ```
 
-### 6.10.2 元素为 Map 的切片
+### 7.10.2 元素为 Map 的切片
 
 ```go
 users := make([]map[string]string, 3)
@@ -584,7 +584,7 @@ users[0]["name"] = "Alice"
 users[0]["city"] = "Singapore"
 ```
 
-### 6.10.3 嵌套 Map
+### 7.10.3 嵌套 Map
 
 ```go
 scores := map[string]map[string]int{
@@ -607,7 +607,7 @@ scores["classB"]["Carol"] = 96
 
 ------
 
-## 6.11 复制 Map
+## 7.11 复制 Map
 
 Map 赋值不会复制全部键值对：
 
@@ -648,7 +648,7 @@ fmt.Println(destination["Alice"]) // 100
 
 ------
 
-## 6.12 Map 的并发访问
+## 7.12 Map 的并发访问
 
 普通 Map 不支持无同步的并发读写。
 
@@ -701,9 +701,9 @@ s.mu.Unlock()
 
 ------
 
-## 6.13 Map 的常见问题
+## 7.13 Map 的常见问题
 
-### 6.13.1 向 nil Map 写入数据
+### 7.13.1 向 nil Map 写入数据
 
 错误：
 
@@ -719,7 +719,7 @@ scores := make(map[string]int)
 scores["Alice"] = 90
 ```
 
-### 6.13.2 只读取值，不判断键是否存在
+### 7.13.2 只读取值，不判断键是否存在
 
 ```go
 score := scores["Alice"]
@@ -731,11 +731,11 @@ score := scores["Alice"]
 score, ok := scores["Alice"]
 ```
 
-### 6.13.3 依赖 Map 遍历顺序
+### 7.13.3 依赖 Map 遍历顺序
 
 Map 遍历顺序没有定义。需要固定顺序时，应提取并排序键。
 
-### 6.13.4 将 Map 的容量参数理解为上限
+### 7.13.4 将 Map 的容量参数理解为上限
 
 ```go
 make(map[string]int, 100)
@@ -743,7 +743,7 @@ make(map[string]int, 100)
 
 `100` 只是容量提示，不是最大元素数量。
 
-### 6.13.5 直接修改结构体类型的 Map 元素
+### 7.13.5 直接修改结构体类型的 Map 元素
 
 错误：
 
@@ -753,7 +753,7 @@ users["001"].Age++
 
 应当取出、修改并重新赋值，或者保存结构体指针。
 
-### 6.13.6 在多个 Goroutine 中直接修改同一个 Map
+### 7.13.6 在多个 Goroutine 中直接修改同一个 Map
 
 并发访问 Map 时需要使用锁、Channel 或其他同步机制。
 

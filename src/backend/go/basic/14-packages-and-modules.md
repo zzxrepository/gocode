@@ -1,8 +1,8 @@
 ---
 permalink: /backend/go/basic/12-packages-and-modules/
-title: 12. 包与 Go Modules
-shortTitle: 12. 包与 Go Modules
-order: 12
+title: 14. 包与 Go Modules
+shortTitle: 14. 包与 Go Modules
+order: 14
 category:
   - Go
   - Golang 基础知识
@@ -16,15 +16,17 @@ tag:
   - go 命令
 ---
 
-# 12. 包与 Go Modules
+# 14. 包与 Go Modules
 
-这里会整理包管理、模块初始化、依赖版本和常用 `go` 命令。
+## 前言
 
-## 包、模块、依赖和库
+理解包、模块、依赖和库之间的关系，可以帮助准确阅读导入路径、`go.mod` 和项目的依赖结构。
+
+## 14.1 包、模块、依赖和库
 
 学习 Go 依赖管理时，容易遇到几个相近的词：包、模块、依赖、库。它们经常一起出现，但含义并不在同一个层级。
 
-### package：代码的组织和导入单位
+### 14.1.1 package：代码的组织和导入单位
 
 `package` 通常翻译成“包”。Go 代码通过 `import` 引入的是包：
 
@@ -52,7 +54,7 @@ import (
 
 这是一种便于学习和工程沟通的来源分类，不是 Go 编译器强制规定的术语。对 Go 编译器来说，真正重要的是包的导入路径，以及这个包能否在当前模块的依赖关系里被找到。也不要把“私有模块包”简称为“内部包”：`internal` 在 Go 中有专门的目录和导入规则，含义更窄。
 
-### module：Go Modules 管理的版本单位
+### 14.1.2 module：Go Modules 管理的版本单位
 
 `module` 通常翻译成“模块”。一个模块是一组 Go 包的集合，根目录下有 `go.mod` 文件。
 
@@ -76,7 +78,7 @@ example.com/order-service/internal/repository
 
 Go Modules 管理的是模块及其版本。也就是说，`go.mod` 里的 `require` 记录的是模块依赖，而不是“某个包文件”。
 
-### dependency：当前模块需要的其他模块
+### 14.1.3 dependency：当前模块需要的其他模块
 
 `dependency` 通常翻译成“依赖”。当当前模块需要使用另一个模块提供的包时，那个模块就会成为当前模块的依赖。
 
@@ -114,7 +116,7 @@ go.mod require 的是模块：github.com/spf13/viper v1.x.x
 
 刚好 Viper 的模块路径和它最常用的包导入路径一样，所以看起来像是一回事。很多模块内部会提供多个包，导入路径就会更细。
 
-### library：日常说法里的“库”
+### 14.1.4 library：日常说法里的“库”
 
 `library` 一般翻译成“库”。Go 官方和很多教程都会说“标准库”，也就是 Standard library。标准库里包含很多标准库包，例如 `fmt`、`net/http`、`encoding/json`。
 
@@ -150,7 +152,14 @@ Viper 是一个第三方配置库。
 
 需要注意，不推荐把标准库叫作“标准依赖”。更常见、更准确的说法是“标准库”或“标准库包”。标准库随 Go 一起发布，不需要 `go get`，也不会作为依赖写进当前项目的 `go.mod`。
 
-参考资料：
+## 总结
+
+- `import` 引入包，包是代码组织与导入的单位。
+- 模块由 `go.mod` 声明，是 Go Modules 管理版本和依赖的单位。
+- 第三方库或内部库是日常沟通中的名称，实际使用时仍需要明确包路径与模块路径。
+- 标准库随工具链提供，不需要通过 `go get` 添加。
+
+## 参考资料
 
 - [Managing dependencies](https://go.dev/doc/modules/managing-dependencies)
 - [Go Modules Reference](https://go.dev/ref/mod)
