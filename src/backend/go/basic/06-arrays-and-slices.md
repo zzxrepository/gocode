@@ -1,7 +1,7 @@
 ---
 permalink: /backend/go/basic/05-arrays-and-slices/
-title: 06. 数组与切片
-shortTitle: 06. 数组与切片
+title: 06. 数组与切片（Array and Slice）
+shortTitle: 06. 数组与切片（Array and Slice）
 order: 6
 category:
   - Go
@@ -15,7 +15,7 @@ tag:
   - range
 ---
 
-# 06. 数组与切片
+# 06. 数组与切片（Array and Slice）
 
 ## 前言
 

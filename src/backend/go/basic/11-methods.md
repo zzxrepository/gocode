@@ -1,7 +1,7 @@
 ---
 permalink: /backend/go/basic/09-methods/
-title: 11. 方法
-shortTitle: 11. 方法
+title: 11. 方法（Method）
+shortTitle: 11. 方法（Method）
 order: 11
 category:
   - Go
@@ -15,7 +15,7 @@ tag:
   - 接口
 ---
 
-# 11. 方法
+# 11. 方法（Method）
 
 ![Go methods 方法详解封面](/assets/image/Go-方法详解-封面.png)
 

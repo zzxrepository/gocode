@@ -1,7 +1,7 @@
 ---
 permalink: /backend/go/basic/10-interfaces/
-title: 12. 接口
-shortTitle: 12. 接口
+title: 12. 接口（Interface）
+shortTitle: 12. 接口（Interface）
 order: 12
 category:
   - Go
@@ -15,7 +15,7 @@ tag:
   - 类型断言
 ---
 
-# 12. 接口
+# 12. 接口（Interface）
 
 ## 前言
 

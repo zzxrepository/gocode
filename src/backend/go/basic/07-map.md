@@ -1,7 +1,7 @@
 ---
 permalink: /backend/go/basic/06-map/
-title: 07. Map
-shortTitle: 07. Map
+title: 07. 映射（Map）
+shortTitle: 07. 映射（Map）
 order: 7
 category:
   - Go
@@ -15,7 +15,7 @@ tag:
   - 增删改查
 ---
 
-# 07. Map
+# 07. 映射（Map）
 
 ## 前言
 

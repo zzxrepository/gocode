@@ -1,7 +1,7 @@
 ---
 permalink: /backend/go/basic/04-functions/
-title: 05. 函数
-shortTitle: 05. 函数
+title: 05. 函数（Function）
+shortTitle: 05. 函数（Function）
 order: 5
 category:
   - Go
@@ -17,7 +17,7 @@ tag:
   - defer
 ---
 
-# 05. 函数
+# 05. 函数（Function）
 
 ## 前言
 

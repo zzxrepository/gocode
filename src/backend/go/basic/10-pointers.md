@@ -1,7 +1,7 @@
 ---
 permalink: /backend/go/basic/08-pointers/
-title: 10. 指针
-shortTitle: 10. 指针
+title: 10. 指针（Pointer）
+shortTitle: 10. 指针（Pointer）
 order: 10
 category:
   - Go
@@ -14,7 +14,7 @@ tag:
   - new
 ---
 
-# 10. 指针
+# 10. 指针（Pointer）
 
 ## 前言
 

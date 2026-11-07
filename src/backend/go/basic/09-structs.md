@@ -1,7 +1,7 @@
 ---
 permalink: /backend/go/basic/07-structs/
-title: 09. 结构体
-shortTitle: 09. 结构体
+title: 09. 结构体（Struct）
+shortTitle: 09. 结构体（Struct）
 order: 9
 category:
   - Go
@@ -15,7 +15,7 @@ tag:
   - struct tag
 ---
 
-# 09. 结构体
+# 09. 结构体（Struct）
 
 ![Go struct 结构体详解封面](/assets/image/Go-结构体详解-封面.png)
 
