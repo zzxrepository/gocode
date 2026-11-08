@@ -31,8 +31,8 @@ tag:
 
 | 项目 | 主要内容 |
 | --- | --- |
-| `01-database-sql-demo` | 使用 `database/sql`，手动扫描查询结果 |
-| `02-sqlx-demo` | 使用 sqlx，完成结构体映射、命名参数和切片参数展开 |
+| [01-database-sql-demo](https://github.com/zzxrepository/gocode-examples/tree/main/go/01-database-sql-demo) | 使用 `database/sql`，手动扫描查询结果 |
+| [02-sqlx-demo](https://github.com/zzxrepository/gocode-examples/tree/main/go/02-sqlx-demo) | 使用 sqlx，完成结构体映射、命名参数和切片参数展开 |
 
 两个项目使用相同的表结构，连接本机 MySQL，可以直接比较相同操作的实现方式。
 
@@ -170,6 +170,8 @@ VALUES
 
 ### 1.2.3 定义 Go 结构体
 
+示例源码：[go/01-database-sql-demo/model.go](https://github.com/zzxrepository/gocode-examples/blob/main/go/01-database-sql-demo/model.go)。
+
 ```go
 type Person struct {
 	UserID   int64          `db:"user_id"`
@@ -225,6 +227,8 @@ export MYSQL_DATABASE='go_mysql_demo'
 
 可以使用驱动提供的配置类型生成 DSN：
 
+示例源码：[go/01-database-sql-demo/mysql.go](https://github.com/zzxrepository/gocode-examples/blob/main/go/01-database-sql-demo/mysql.go#L39)。
+
 ```go
 func localDSN(database string) string {
 	cfg := mysql.NewConfig()
@@ -255,6 +259,8 @@ import mysql "github.com/go-sql-driver/mysql"
 后面传入查询方法的 `Context`，则用于控制一次操作的生命周期，例如等待连接、执行查询和读取结果。
 
 ### 1.3.2 创建句柄并验证连接
+
+示例源码：[go/01-database-sql-demo/mysql.go](https://github.com/zzxrepository/gocode-examples/blob/main/go/01-database-sql-demo/mysql.go#L15)。
 
 ```go
 func openDatabase(ctx context.Context, dsn string) (*sql.DB, error) {
@@ -305,25 +311,97 @@ defer db.Close()
 
 ### 1.3.3 Open 如何找到驱动
 
-MySQL 驱动被导入时，其初始化代码会调用 `sql.Register`，把驱动注册到标准库维护的注册表中，注册名称是 `"mysql"`。
+标准库在 `database/sql/driver` 包中定义驱动接口。其中最基本的 `Driver` 接口约定了创建连接的方法：
 
-因此：
+源码位置：[Go driver/driver.go](https://github.com/golang/go/blob/go1.26.5/src/database/sql/driver/driver.go#L85)、[Go sql.go：Register](https://github.com/golang/go/blob/go1.26.5/src/database/sql/sql.go#L56)、[MySQL driver.go](https://github.com/go-sql-driver/mysql/blob/v1.10.0/driver.go#L94)。
 
 ```go
-sql.Open("mysql", dsn)
+// database/sql/driver：接口定义。
+type Driver interface {
+    Open(name string) (Conn, error)
+}
 ```
 
-中的第一个参数，是注册表中的驱动名称。
+这里的 `Conn` 是同一包中的连接接口。具体数据库驱动实现这些接口，标准库便可以通过公共方法调用它们。
 
-如果程序只需要驱动的注册行为，可以使用匿名导入：
+MySQL 驱动提供了具体类型 `MySQLDriver`，当前实现是一个没有字段的结构体，驱动能力由其方法提供。在驱动的 `driver.go` 中，包初始化函数会注册该对象，关键调用为：
+
+```go
+sql.Register(driverName, &MySQLDriver{})
+```
+
+默认的 `driverName` 是 `"mysql"`。标准库用下面的注册表保存各个驱动：
+
+```go
+var drivers = make(map[string]driver.Driver)
+```
+
+`Register` 的保存动作如下，省略空对象和重复名称检查：
+
+```go
+func Register(name string, driver driver.Driver) {
+    driversMu.Lock()
+    defer driversMu.Unlock()
+    // 省略合法性检查。
+    drivers[name] = driver
+}
+```
+
+`drivers[name] = driver` 将传入的驱动接口值保存起来。注册完成后，可以把内容理解为：
+
+| 键 | 接口值内部保存的具体对象 |
+| --- | --- |
+| `"mysql"` | `*mysql.MySQLDriver` 对象 |
+
+接口值同时保留了具体类型与具体值，因此标准库取出对象以后，仍然可以调用它实现的方法。
+
+这个对象提供的是 MySQL 驱动能力，此时还没有绑定某一个库的账号或地址。连接信息由调用 `sql.Open` 时传入的 DSN 决定。
+
+如果只需要导入后的注册行为，可以使用匿名导入：
 
 ```go
 import _ "github.com/go-sql-driver/mysql"
 ```
 
-本文还需要使用 `mysql.NewConfig` 和 `mysql.MySQLError`，所以使用具名导入。具名导入同样会执行包的初始化逻辑。
+匿名导入会执行包初始化，只是不在当前文件引入可使用的包名。本文需要访问 `mysql.NewConfig` 和驱动错误类型，所以使用具名导入；两种方式都会执行初始化。
 
 ### 1.3.4 为什么 Open 后还没有建立连接
+
+这里需要先认识连接器。标准库定义的 `driver.DriverContext` 提供 `OpenConnector` 方法；驱动实现该可选接口后，就可以先解析配置，后续再按配置创建连接：
+
+```go
+type DriverContext interface {
+    OpenConnector(name string) (Connector, error)
+}
+
+type Connector interface {
+    Connect(context.Context) (Conn, error)
+    Driver() Driver
+}
+```
+
+这两个接口位于 [Go driver/driver.go](https://github.com/golang/go/blob/go1.26.5/src/database/sql/driver/driver.go#L104)。`OpenConnector` 返回连接器，`Connect` 才创建实际连接；`Driver()` 用于返回对应的驱动对象。
+
+MySQL 驱动的 [OpenConnector 实现](https://github.com/go-sql-driver/mysql/blob/v1.10.0/driver.go#L112) 如下：
+
+```go
+func (d MySQLDriver) OpenConnector(dsn string) (driver.Connector, error) {
+    cfg, err := ParseDSN(dsn)
+    if err != nil {
+        return nil, err
+    }
+    return newConnector(cfg), nil
+}
+```
+
+`cfg` 是解析得到的 `*mysql.Config`。驱动内部的连接器保存这份配置，所以以后需要新连接时，可以使用相同配置再次调用 `Connect`，不必每次重新解析 DSN。
+
+| 对象 | 职责 |
+| --- | --- |
+| `MySQLDriver` | 提供 MySQL 驱动能力，被注册表保存 |
+| MySQL `connector` | 保存连接配置，按配置创建连接 |
+| `*sql.DB` | 保存连接器，管理连接的分配与回收 |
+| MySQL `mysqlConn` | 代表一条实际 MySQL 会话，内部保存网络连接 |
 
 沿着调用过程来看，主要步骤是：
 
@@ -333,9 +411,28 @@ import _ "github.com/go-sql-driver/mysql"
 4. 标准库创建 `*sql.DB`，初始化连接池相关状态。
 5. 返回数据库句柄。
 
+标准库 [sql.Open 的实现](https://github.com/golang/go/blob/go1.26.5/src/database/sql/sql.go#L863) 会对注册对象做类型断言，判断它是否实现 `driver.DriverContext`。MySQL 驱动实现了该接口，所以取得连接器后进入 `OpenDB`。
+
+下面是 [OpenDB 源码](https://github.com/golang/go/blob/go1.26.5/src/database/sql/sql.go#L832) 中创建管理对象的关键部分，省略其他初始化字段：
+
+```go
+db := &DB{
+    connector: c,
+    // 省略后台请求通道、取消函数等初始化字段。
+}
+```
+
+`DB.connector` 保存传入的连接器，此处没有调用 `c.Connect`。`OpenDB` 还会启动后台连接创建协程；该协程等待建连请求，不会因启动就立即拨号。
+
+需要区分两个同名方法：`sql.Open` 返回连接池句柄，而 `driver.Driver.Open` 返回单条驱动连接；本文的 MySQL 驱动使用连接器路径创建连接。
+
 此时，程序已经具备了“以后如何建立连接”的信息，但尚未执行实际网络连接。
 
 真正需要连接时，标准库才调用连接器的 `Connect`，由驱动建立 TCP 连接，完成握手和身份验证。
+
+在默认网络拨号路径中，[connector.Connect](https://github.com/go-sql-driver/mysql/blob/v1.10.0/connector.go#L67) 创建 `mysqlConn`，再通过 `net.Dialer` 建立连接，结果保存到 `mc.netConn`。完成握手、认证和必要的会话初始化后，它才把连接作为 `driver.Conn` 返回。
+
+标准库又把这个驱动连接包装成内部 `driverConn`，记录创建时间、归还时间和使用状态，用于连接池管理。因此，`driver.Conn` 是接口，`mysqlConn` 是驱动的实际连接对象，`driverConn` 是标准库管理连接的包装对象。
 
 首次调用 `PingContext` 时，可以用下面的时序图理解：
 
@@ -381,6 +478,26 @@ Ping 后连接池: open=1 idle=1 in_use=0
 
 `*sql.DB` 可以被多个 goroutine 共享使用。它管理连接的创建、复用、等待和回收。
 
+先看 [标准库 DB 结构体](https://github.com/golang/go/blob/go1.26.5/src/database/sql/sql.go#L507) 中与连接池相关的字段，省略其余字段：
+
+```go
+type DB struct {
+    connector    driver.Connector // 新建连接所需的连接器
+    freeConn     []*driverConn    // 当前空闲连接
+    connRequests connRequestSet   // 正在等待连接的请求
+    numOpen      int              // 已打开及正在建立的连接数量
+    maxOpen      int              // 最大连接数
+    maxIdleCount int              // 最大空闲连接数
+    maxLifetime  time.Duration    // 最长可复用生命周期
+    maxIdleTime  time.Duration    // 最长空闲时间
+    // 省略互斥锁等其他字段。
+}
+```
+
+`freeConn` 保存的是内部 `driverConn` 对象。它的 `ci` 字段才是驱动提供的 `driver.Conn`，同时还保存 `createdAt`、`returnedAt` 和 `inUse` 等管理信息。
+
+连接借出时会从空闲列表中取走，并标记为使用中，但仍计入 `numOpen`。因此，空闲列表并不包含所有已打开连接。
+
 当业务调用查询方法时，标准库大致按照以下过程获取连接：
 
 ```mermaid
@@ -400,6 +517,10 @@ flowchart TD
 ```
 
 图中省略了失效连接处理和内部重试，但保留了连接池最重要的行为：复用、创建、等待和归还。
+
+对应源码主要是 [DB.conn](https://github.com/golang/go/blob/go1.26.5/src/database/sql/sql.go#L1316) 与 [putConn](https://github.com/golang/go/blob/go1.26.5/src/database/sql/sql.go#L1481)。新建连接前先增加 `numOpen`，可以让其他并发调用看到正在使用的连接名额；创建失败再修正计数。
+
+归还的可用连接，有等待请求时可以直接交给等待方；没有等待请求且空闲容量允许时，才加入 `freeConn`。失效或无法继续保留的连接则会关闭。
 
 因此，数据库句柄通常在应用启动时创建，在应用退出时关闭。每次请求都调用 `sql.Open`，会创建多个独立连接池，削弱连接复用的效果。
 
@@ -425,6 +546,8 @@ db.SetConnMaxLifetime(time.Hour)
 
 这些数值需要结合数据库容量、应用实例数量、查询耗时与并发情况确定。本文的配置用于演示，不代表所有项目都应采用相同数值。
 
+这些设置可以对应回刚才的管理字段：总量上限影响能否继续建连，空闲上限影响归还后是否保留；生命周期依据 `createdAt` 等信息判断，空闲时间依据 `returnedAt` 等信息判断。配置与清理逻辑可参阅 [Go sql.go](https://github.com/golang/go/blob/go1.26.5/src/database/sql/sql.go#L995)。
+
 ### 1.4.3 为什么拿不到连接也会超时
 
 假设连接池最多只有一条连接：
@@ -445,6 +568,21 @@ SELECT 1;
 
 因此，数据库操作返回 `context.DeadlineExceeded`，并不一定表示 MySQL 执行 SQL 太慢，也可能是在连接池中等待过久。
 
+[DB.conn 的等待分支](https://github.com/golang/go/blob/go1.26.5/src/database/sql/sql.go#L1358) 会为本次请求创建带缓冲的通道，加入 `connRequests`，并增加 `waitCount`。随后通过 `select` 等待结果。以下源码节选省略了撤销请求、统计及连接有效性检查：
+
+```go
+select {
+case <-ctx.Done():
+    // 省略撤销等待请求、处理并发归还和统计的代码。
+    return nil, ctx.Err()
+case ret, ok := <-req:
+    // 省略通道关闭、连接有效性和会话状态的检查。
+    return ret.conn, ret.err
+}
+```
+
+`req` 等待分配给本次请求的连接；`ctx.Done()` 则允许本次等待提前结束。此时还没有取得连接，SQL 也就没有发送给 MySQL。
+
 可以通过 `db.Stats()` 观察：
 
 | 字段 | 含义 |
@@ -455,11 +593,15 @@ SELECT 1;
 | `WaitCount` | 等待连接的累计次数 |
 | `WaitDuration` | 等待连接的累计时长 |
 
-连接池管理的实现可以结合标准库中的 `DB.conn`、`putConn` 等方法阅读。
+`OpenConnections` 的统计来自 `numOpen`，建连中的名额也可能计入其中。因此，应结合空闲数、使用数与等待统计判断连接池状态。
+
+连接的取得与归还已经明确，接下来可以沿一次具体写入，继续观察 SQL 参数与执行结果。
 
 ## 1.5 使用 database/sql 完成增删改查
 
 ### 1.5.1 插入数据：SQL 模板与参数分别传入
+
+示例源码：[go/01-database-sql-demo/person.go](https://github.com/zzxrepository/gocode-examples/blob/main/go/01-database-sql-demo/person.go#L9)。
 
 ```go
 func insertPerson(ctx context.Context, db *sql.DB, person Person) (int64, error) {
@@ -500,11 +642,30 @@ person.Username, person.Age, person.Email
 
 `LastInsertId` 是否受支持与数据库、驱动有关，不能把 MySQL 中的行为直接推广到所有数据库。
 
+`Result` 中的信息来自 MySQL 的执行响应。驱动在 [packets.go 的 handleOkPacket](https://github.com/go-sql-driver/mysql/blob/v1.10.0/packets.go#L670) 中解析影响行数、自增 ID 等字段，再通过 [mysqlResult](https://github.com/go-sql-driver/mysql/blob/v1.10.0/result.go#L32) 实现结果接口。
+
+所以，`LastInsertId()` 读取的是本次执行返回的信息，不需要补发查询，也不是查询表中当前最大的 ID。`ExecContext` 完成后已经结束本次连接占用，业务仍然可以读取返回的结果信息。
+
 ### 1.5.2 参数是如何传到 MySQL 的
 
 业务代码传入的参数是 Go 值。标准库和驱动会将它们转换成数据库驱动能够处理的参数形式，再按照驱动采用的协议路径发送给 MySQL。
 
-本文没有开启驱动的 `interpolateParams`。在当前驱动实现中，带参数的普通执行会进入标准库的预处理回退路径：
+标准库先通过驱动的参数检查能力及通用转换规则处理 Go 参数。实现了 `driver.Valuer` 的值，可以在这个过程中转成数据库参数；普通切片或结构体不会自动拆成任意多个参数。
+
+标准库取得连接后，会优先检查驱动是否提供 `ExecerContext` 等直接执行能力。MySQL 驱动实现了该接口，但在本文没有开启 `interpolateParams` 的配置下，带参数时会返回 `driver.ErrSkip`。以下是 [MySQL connection.go](https://github.com/go-sql-driver/mysql/blob/v1.10.0/connection.go#L433) 中的相关分支，省略前后逻辑：
+
+```go
+if len(args) != 0 {
+    if !mc.cfg.InterpolateParams {
+        return nil, driver.ErrSkip
+    }
+    // 省略参数插值分支。
+}
+```
+
+`ErrSkip` 是驱动与标准库约定的执行路径信号，表示本次不走直接执行。标准库的 [execDC](https://github.com/golang/go/blob/go1.26.5/src/database/sql/sql.go#L1696) 识别后，继续准备、执行并关闭本次语句。
+
+准备语句时，SQL 模板先发给 MySQL，服务器返回语句标识及参数信息；执行时再携带标识和参数发送执行命令。整个过程如下：
 
 ```mermaid
 sequenceDiagram
@@ -548,6 +709,8 @@ row := db.QueryRowContext(ctx, query, username)
 
 ### 1.5.3 查询单行：QueryRowContext 与 Scan
 
+示例源码：[go/01-database-sql-demo/person.go](https://github.com/zzxrepository/gocode-examples/blob/main/go/01-database-sql-demo/person.go#L23)。
+
 ```go
 func findPerson(ctx context.Context, db *sql.DB, id int64) (Person, error) {
 	var person Person
@@ -582,7 +745,21 @@ func findPerson(ctx context.Context, db *sql.DB, id int64) (Person, error) {
 row := db.QueryRowContext(ctx, query, id)
 ```
 
-它把查询过程中产生的错误保存在 `Row` 中，再由 `Scan` 返回。
+可以直接看 [QueryRowContext 与 Row 的源码](https://github.com/golang/go/blob/go1.26.5/src/database/sql/sql.go#L1841)：
+
+```go
+func (db *DB) QueryRowContext(ctx context.Context, query string, args ...any) *Row {
+    rows, err := db.QueryContext(ctx, query, args...)
+    return &Row{rows: rows, err: err}
+}
+
+type Row struct {
+    err  error
+    rows *Rows
+}
+```
+
+`Row` 包装了底层结果集或查询错误。它把查询过程中产生的错误保存在 `Row` 中，再由 `Scan` 返回。
 
 需要准确区分：
 
@@ -598,6 +775,8 @@ err := db.QueryRowContext(ctx, query, id).Scan(&value)
 ```
 
 即使不关心某些查询结果，也不能把返回的 `Row` 放在那里不处理。`Scan` 同时承担读取结果和结束这次单行查询的工作。
+
+[Row.Scan](https://github.com/golang/go/blob/go1.26.5/src/database/sql/sql.go#L3486) 会先检查保存的错误，再推进到第一行。没有第一行且无其他读取错误时返回 `ErrNoRows`；有第一行时调用底层 `Rows.Scan`，并结束结果集。因此，单行 API 没有显式 `Next`，不代表底层省略了这一过程。
 
 ### 1.5.5 如何判断没有查到记录
 
@@ -624,6 +803,17 @@ default:
 
 MySQL 驱动先把数据库结果转换成驱动层的值，`Scan` 再把这些值转换并写入目标变量。
 
+标准库 `Rows` 内部的 `lastcols` 保存当前行驱动值，扫描函数按列将这些值交给目标地址。以下节选自 [scanLocked](https://github.com/golang/go/blob/go1.26.5/src/database/sql/sql.go#L3383)，省略数量校验与错误返回：
+
+```go
+for i, sv := range rs.lastcols {
+    err := convertAssignRows(dest[i], sv, rs)
+    // 省略转换失败时的错误返回。
+}
+```
+
+`sv` 是当前列值，`dest[i]` 是对应目标指针。转换函数处理常见类型赋值、字节切片与字符串转换、数字解析等。类型不兼容或数字越界时，SQL 可以查询成功，但扫描仍然失败。
+
 目标变量可能是普通类型指针：
 
 ```go
@@ -631,6 +821,29 @@ var age int
 ```
 
 也可能是实现了 `sql.Scanner` 的类型。
+
+`Scanner` 接口让目标类型提供自己的转换规则。它的关键方法是 `Scan(src any) error`；在 [convertAssignRows](https://github.com/golang/go/blob/go1.26.5/src/database/sql/convert.go#L393) 中，可以看到：
+
+```go
+if scanner, ok := dest.(Scanner); ok {
+    return scanner.Scan(src)
+}
+```
+
+传入 `&person.Email` 时，`*sql.NullString` 满足这个接口。[NullString.Scan 的实现](https://github.com/golang/go/blob/go1.26.5/src/database/sql/sql.go#L200) 为：
+
+```go
+func (ns *NullString) Scan(value any) error {
+    if value == nil {
+        ns.String, ns.Valid = "", false
+        return nil
+    }
+    ns.Valid = true
+    return convertAssign(&ns.String, value)
+}
+```
+
+驱动用 `nil` 表达 SQL `NULL`，因此它会进入第一个分支；非 `NULL` 值则交给字符串转换。
 
 `sql.NullString` 就实现了该接口。扫描到 `NULL` 时，它将 `Valid` 设置为 `false`；扫描到非 `NULL` 值时，保存字符串并将 `Valid` 设置为 `true`。
 
@@ -649,7 +862,11 @@ if person.Email.Valid {
 
 因此，同一个类型同时参与了“数据库结果转为 Go 值”和“Go 值转为数据库参数”两个方向的转换。
 
+`driver.Valuer` 则约定反方向的 `Value()` 方法，返回驱动能够处理的值。[NullString.Value](https://github.com/golang/go/blob/go1.26.5/src/database/sql/sql.go#L210) 根据 `Valid` 返回字符串或 `nil`。字段自身保存有效标记，两个接口分别负责写入参数和读取结果时的转换。
+
 ### 1.5.7 查询多行：Next、Scan、Close 与 Err
+
+示例源码：[go/01-database-sql-demo/person.go](https://github.com/zzxrepository/gocode-examples/blob/main/go/01-database-sql-demo/person.go#L34)。
 
 ```go
 func listPeople(ctx context.Context, db *sql.DB) ([]Person, error) {
@@ -688,6 +905,22 @@ func listPeople(ctx context.Context, db *sql.DB) ([]Person, error) {
 
 ### 1.5.8 结果集为什么会影响连接池
 
+先看 [Rows 的相关字段](https://github.com/golang/go/blob/go1.26.5/src/database/sql/sql.go#L2929)，省略其余状态：
+
+```go
+type Rows struct {
+    dc          *driverConn
+    releaseConn func(error)
+    rowsi       driver.Rows
+    lastcols    []driver.Value
+    // 省略其余字段。
+}
+```
+
+`dc` 保存查询使用的连接，`rowsi` 是驱动返回的结果集，`lastcols` 保存当前行，`releaseConn` 用于本次读取结束时释放连接占用。
+
+`Next` 通过驱动结果集的 `Next` 方法填充当前行；`Scan` 再转换并写入目标变量；关闭结果集时，标准库清理驱动结果集并调用释放逻辑。因此，这几个方法分别对应行读取、变量赋值与资源结束。
+
 普通查询取得连接后，这条连接需要继续服务于结果集的读取。在结果集结束前，它通常无法供另一条查询复用。
 
 ```mermaid
@@ -719,6 +952,8 @@ defer rows.Close()
 
 更新年龄：
 
+示例源码：[go/01-database-sql-demo/person.go](https://github.com/zzxrepository/gocode-examples/blob/main/go/01-database-sql-demo/person.go#L55)。
+
 ```go
 func updateAge(ctx context.Context, db *sql.DB, id int64, age int) (int64, error) {
 	result, err := db.ExecContext(ctx,
@@ -735,6 +970,8 @@ func updateAge(ctx context.Context, db *sql.DB, id int64, age int) (int64, error
 ```
 
 删除用户：
+
+示例源码：[go/01-database-sql-demo/person.go](https://github.com/zzxrepository/gocode-examples/blob/main/go/01-database-sql-demo/person.go#L68)。
 
 ```go
 func deletePerson(ctx context.Context, db *sql.DB, id int64) (int64, error) {
@@ -786,6 +1023,12 @@ if err != nil {
 
 是否显式复用语句，可以根据重复执行的场景和实际测量决定。参数化查询本身不要求业务代码每次都显式调用 `PrepareContext`。
 
+这可以结合 [标准库 Stmt](https://github.com/golang/go/blob/go1.26.5/src/database/sql/sql.go#L2603) 与 [MySQL mysqlStmt](https://github.com/go-sql-driver/mysql/blob/v1.10.0/statement.go#L19) 理解：前者管理 SQL 及其在不同连接上已准备的语句记录，后者保存所属连接、服务器返回的语句 ID 和参数数量等。
+
+语句 ID 属于具体 MySQL 连接，因此业务 `Stmt` 取得另一条连接后，需要判断该连接上是否已有可用语句，必要时再次准备。通过事务创建的语句则随事务使用固定连接。
+
+这些例子都需要显式维护参数和接收地址。接下来保持相同 SQL，观察 sqlx 如何减少这部分代码。
+
 ## 1.6 使用 sqlx 包装已有连接池
 
 前面已经获得一个可用的 `*sql.DB`。引入 sqlx 后，可以直接包装它：
@@ -800,7 +1043,24 @@ db := sqlx.NewDb(baseDB, "mysql")
 fmt.Println(db.DB == baseDB) // true
 ```
 
-sqlx 的数据库对象嵌入了 `*sql.DB`，因此原来的方法仍然可以调用：
+[sqlx.DB 与 NewDb 的源码](https://github.com/jmoiron/sqlx/blob/v1.4.0/sqlx.go#L243) 如下：
+
+```go
+type DB struct {
+    *sql.DB
+    driverName string
+    unsafe     bool
+    Mapper     *reflectx.Mapper
+}
+
+func NewDb(db *sql.DB, driverName string) *DB {
+    return &DB{DB: db, driverName: driverName, Mapper: mapper()}
+}
+```
+
+嵌入字段保存传入的数据库句柄；`driverName` 用于选择占位符形式；`Mapper` 负责结构体名称映射；`unsafe` 控制是否允许结果列缺少对应字段，默认会检查映射。
+
+构造函数没有重新调用 `Open`，而是保存原指针。sqlx 的数据库对象嵌入了 `*sql.DB`，因此原来的方法仍然可以调用：
 
 ```go
 db.ExecContext(...)
@@ -828,6 +1088,8 @@ flowchart TD
 ### 1.7.1 改写标准库查询
 
 标准库版本需要显式传入四个字段地址。sqlx 版本可以写为：
+
+示例源码：[go/02-sqlx-demo/person.go](https://github.com/zzxrepository/gocode-examples/blob/main/go/02-sqlx-demo/person.go#L23)。
 
 ```go
 func findPerson(ctx context.Context, db *sqlx.DB, id int64) (Person, error) {
@@ -894,21 +1156,127 @@ flowchart TD
 
 这也是 `sql.NullString` 在 sqlx 中继续有效的原因。
 
+从 [GetContext 的实现](https://github.com/jmoiron/sqlx/blob/v1.4.0/sqlx_context.go#L82) 看，查询先进入 `QueryRowxContext`，返回 sqlx 自己的 `Row`，随后由 `scanAny` 处理目标。这个包装对象保存底层 `*sql.Rows`、查询错误与 Mapper。
+
+[scanAny](https://github.com/jmoiron/sqlx/blob/v1.4.0/sqlx.go#L740) 先检查目标指针，再判断它可以直接扫描，还是需要按结构体字段映射。`Person` 进入字段映射分支；实现了 `Scanner` 的 `sql.NullString` 则可以作为单列接收类型。
+
 ### 1.7.3 反射在这里做了什么
 
-sqlx 需要在运行时知道：
+反射中有两类信息：
 
-- 目标是不是可写入的指针。
-- 结构体有哪些可访问字段。
-- 每个字段使用什么 `db` 标签。
-- 某个结果列对应哪个字段。
-- 如何取得该字段的地址。
+| 信息 | 在当前查询中的作用 |
+| --- | --- |
+| `reflect.Type` | 描述 `Person` 有哪些字段、字段位置和标签 |
+| `reflect.Value` | 定位这次传入的 `person` 变量及其可写字段 |
 
-这些信息通过反射获得。
+例如，对 `&person` 调用 `reflect.ValueOf` 得到指针的反射值；再调用 `Elem()`，得到其指向的结构体反射值。
 
-sqlx 的映射器会缓存结构体类型的字段映射，减少重复解析类型信息的工作。对于每个实际目标对象，仍然需要定位字段并取得接收地址。
+这和之前手动扫描的目标一致：需要的是当前对象各字段的地址，而不只是知道字段的类型。
 
-因此，sqlx 减少了手写扫描代码，同时引入了字段映射与反射处理。具体开销应结合查询规模和实际性能需求测量。
+`Mapper` 读取类型信息，按 `db` 标签和默认名称规则建立映射。对于 `Person`，可以得到：
+
+源码位置：[sqlx reflectx/reflect.go：TraversalsByName](https://github.com/jmoiron/sqlx/blob/v1.4.0/reflectx/reflect.go#L167)。
+
+| 映射名称 | Go 字段 | 字段路径 |
+| --- | --- | --- |
+| `user_id` | `UserID` | `[0]` |
+| `username` | `Username` | `[1]` |
+| `age` | `Age` | `[2]` |
+| `email` | `Email` | `[3]` |
+
+路径保存为 `[]int`，因为结构体可能嵌套：例如 `[1, 0]` 表示先访问第 2 个字段，再访问其中第 1 个字段。本文的结构体没有嵌套，所以每条路径只有一个下标。
+
+数据库返回的列名决定本次接收地址的顺序。假设查询调整为：
+
+```sql
+SELECT age, user_id, username, email FROM person WHERE user_id = ?;
+```
+
+`Mapper.TraversalsByName` 按列名查到的路径就是：
+
+```go
+[][]int{{2}, {0}, {1}, {3}}
+```
+
+`TraversalsByName` 可以理解为“按给定名称列表查找字段访问路径”。它的输出还不是地址，接下来需要结合具体变量取得每个字段。
+
+下面是只针对当前 `Person`、当前列顺序的原理演示：
+
+源码位置：[sqlx sqlx.go：fieldsByTraversal](https://github.com/jmoiron/sqlx/blob/v1.4.0/sqlx.go#L1026)、[sqlx reflectx/reflect.go：FieldByIndexes](https://github.com/jmoiron/sqlx/blob/v1.4.0/reflectx/reflect.go#L205)。
+
+```go
+func reflectionTargets(person *Person) []any {
+    fields := [][]int{{2}, {0}, {1}, {3}}
+    v := reflect.ValueOf(person).Elem()
+    values := make([]any, len(fields))
+
+    for i, path := range fields {
+        f := v.Field(path[0])
+        values[i] = f.Addr().Interface()
+    }
+    return values
+}
+```
+
+几个调用分别完成：
+
+- `Elem()`：从指针取得被指向的结构体。
+- `Field(i)`：取得结构体中指定位置的字段。
+- `Addr()`：取得该字段地址的反射值。
+- `Interface()`：将反射值中的字段指针取出，装入 `any`。
+
+结果相当于：
+
+```go
+[]any{&person.Age, &person.UserID, &person.Username, &person.Email}
+```
+
+sqlx 的通用实现使用 `fieldsByTraversal` 与 `reflectx.FieldByIndexes`，可以沿多级路径定位字段。其取地址的关键语句也是 `f.Addr().Interface()`。
+
+整理好 `values` 后，sqlx 调用扫描方法。列值的类型转换和 `sql.NullString.Scan` 等逻辑，仍然回到前面讲过的标准库扫描机制。
+
+所以，列顺序调整后仍能正确赋值，是因为 sqlx 用列名重新组织了地址顺序。它最终仍需要让第 1 列对应第 1 个接收地址。
+
+sqlx 使用 `reflectx.Mapper` 管理映射缓存。相关结构可以概括为：
+
+源码位置：[sqlx reflectx/reflect.go：Mapper 与 TypeMap](https://github.com/jmoiron/sqlx/blob/v1.4.0/reflectx/reflect.go#L62)。
+
+```go
+// Mapper 中的相关字段，省略其余字段。
+type Mapper struct {
+    cache map[reflect.Type]*StructMap
+    mutex sync.Mutex
+    // 省略其余字段。
+}
+```
+
+这里的 `StructMap` 是某个结构体类型的解析结果。它的名称表 `Names` 可以找到 `FieldInfo`，而 `FieldInfo.Index` 保存刚才讨论的字段路径。
+
+`TypeMap` 的关键代码如下，省略加锁与解锁语句：
+
+```go
+mapping, ok := m.cache[t]
+if !ok {
+    mapping = getMapping(t, m.tagName, m.mapFunc, m.tagMapFunc)
+    m.cache[t] = mapping
+}
+return mapping
+```
+
+`getMapping` 负责解析字段、标签与名称规则；结果以结构体类型为键保存。完整实现使用互斥锁保护缓存访问。
+
+同一种 `Person` 类型，字段标签和访问路径可以重复使用。但两个具体变量 `a`、`b` 的字段地址不同，每次扫描都要针对当前目标重新取得地址。
+
+```mermaid
+flowchart TD
+    T["Person 类型"] --> M["Mapper 缓存：名称到字段路径"]
+    M --> PA["结合变量 a 取得 a 的字段地址"]
+    M --> PB["结合变量 b 取得 b 的字段地址"]
+    PA --> A["写入 a"]
+    PB --> B["写入 b"]
+```
+
+缓存锁保护的是类型映射的生成与访问，不能据此认为多个 goroutine 同时写同一个业务结构体就自动安全。
 
 ### 1.7.4 为什么推荐显式写 db 标签
 
@@ -976,6 +1344,8 @@ err := db.GetContext(
 
 ## 1.8 使用 SelectContext 查询多行
 
+示例源码：[go/02-sqlx-demo/person.go](https://github.com/zzxrepository/gocode-examples/blob/main/go/02-sqlx-demo/person.go#L33)。
+
 ```go
 func listPeople(ctx context.Context, db *sqlx.DB) ([]Person, error) {
 	people := make([]Person, 0)
@@ -1000,6 +1370,8 @@ for rows.Next() {
 
 sqlx 会查询结果、遍历每行、建立元素并写入切片，同时负责该次查询的结果集关闭。
 
+这可以直接对应到 [SelectContext](https://github.com/jmoiron/sqlx/blob/v1.4.0/sqlx_context.go#L55)：它调用 `QueryxContext` 获取结果集，安排 `defer rows.Close()`，再调用 `scanAll` 收集各行。
+
 ### 1.8.1 为什么传入切片指针
 
 切片包含底层数组指针、长度和容量。
@@ -1011,6 +1383,22 @@ sqlx 会查询结果、遍历每行、建立元素并写入切片，同时负责
 ```
 
 这样函数才能把更新后的切片状态写回调用方。
+
+在 [scanAll](https://github.com/jmoiron/sqlx/blob/v1.4.0/sqlx.go#L899) 中，`base` 是元素类型 `Person`，`direct` 是调用方切片的可写反射值。对于 `[]Person`，结构体扫描的循环主干如下，省略错误返回与指针元素分支：
+
+```go
+for rows.Next() {
+    vp = reflect.New(base)
+    v = reflect.Indirect(vp)
+    err = fieldsByTraversal(v, fields, values, true)
+    // 省略地址准备失败时的错误返回。
+    err = rows.Scan(values...)
+    // 省略扫描失败时的错误返回。
+    direct.Set(reflect.Append(direct, v))
+}
+```
+
+`reflect.New` 创建当前行的接收元素，随后准备字段地址、扫描并追加。最后一行将追加后的切片写回 `direct`，因此需要调用方传入切片变量的地址。
 
 ### 1.8.2 没有结果时会怎样
 
@@ -1025,6 +1413,8 @@ sqlx 会查询结果、遍历每行、建立元素并写入切片，同时负责
 
 本文预先使用 `make([]Person, 0)`，空结果可以表示为空切片。
 
+当前实现会先把目标切片长度设置为 0，再用本次查询结果填充。因此，`SelectContext` 会重新填充目标切片，而不是默认继续追加到原有数据之后。
+
 ### 1.8.3 SelectContext 会收集完整结果
 
 `SelectContext` 会把查询结果全部写入目标切片。结果越多，需要保留的 Go 对象也越多。
@@ -1032,6 +1422,8 @@ sqlx 会查询结果、遍历每行、建立元素并写入切片，同时负责
 对于需要逐条处理的结果，可以使用 `QueryxContext`，避免在业务代码中保存整个结果切片。
 
 ## 1.9 使用 QueryxContext 逐行处理
+
+示例源码：[go/02-sqlx-demo/person.go](https://github.com/zzxrepository/gocode-examples/blob/main/go/02-sqlx-demo/person.go#L114)。
 
 ```go
 func walkPeople(ctx context.Context, db *sqlx.DB, visit func(Person) error) error {
@@ -1055,6 +1447,18 @@ func walkPeople(ctx context.Context, db *sqlx.DB, visit func(Person) error) erro
 
 `QueryxContext` 保留了标准库逐行遍历的形式，同时增加 `StructScan`，用于把当前行映射到结构体。
 
+[sqlx.Rows](https://github.com/jmoiron/sqlx/blob/v1.4.0/sqlx.go#L577) 嵌入底层 `*sql.Rows`，同时保存 Mapper 以及本次扫描使用的状态。相关字段包括：
+
+```go
+started bool
+fields  [][]int
+values  []interface{}
+```
+
+这是结构体字段节选：`started` 标记是否已经完成首次准备，`fields` 保存当前列顺序对应的字段路径，`values` 复用接收列表的空间。首次 `StructScan` 准备它们，后续行使用相同路径，再针对当前目标刷新字段地址。
+
+Mapper 缓存的是类型映射，这里缓存的是本次结果集的列对应关系。由于路径以首次扫描目标建立，同一个 `Rows` 实例不应切换不同结构体类型调用 `StructScan`。
+
 例如：
 
 ```go
@@ -1071,6 +1475,8 @@ err := walkPeople(ctx, db, func(person Person) error {
 ## 1.10 使用命名参数插入数据
 
 ### 1.10.1 NamedExecContext 的写法
+
+示例源码：[go/02-sqlx-demo/person.go](https://github.com/zzxrepository/gocode-examples/blob/main/go/02-sqlx-demo/person.go#L10)。
 
 ```go
 func insertPerson(ctx context.Context, db *sqlx.DB, person Person) (int64, error) {
@@ -1122,6 +1528,12 @@ VALUES (?, ?, ?)
 
 命名参数在字段较多时更容易阅读，也减少了手动维护参数顺序的工作。
 
+具体过程见 [named.go 的 bindStruct 与 bindArgs](https://github.com/jmoiron/sqlx/blob/v1.4.0/named.go#L173)：先解析命名 SQL，得到转换后的语句和按出现顺序排列的参数名称，再通过 Mapper 查找结构体字段路径，读取字段值加入参数切片。
+
+因此，参数顺序由名称在 SQL 中的出现顺序决定，与结构体字段声明顺序无关。这里取的是字段值；扫描结果时取的是字段地址。它们使用相同的映射信息，分别完成数据流的两个方向。
+
+最后，[NamedExecContext](https://github.com/jmoiron/sqlx/blob/v1.4.0/named_context.go#L127) 调用普通 `ExecContext`。参数转换、驱动执行及结果读取继续沿用标准库的过程。
+
 ### 1.10.3 更新与删除仍然可以使用原方法
 
 sqlx 嵌入了 `*sql.DB`，因此更新和删除仍然可以调用：
@@ -1170,6 +1582,8 @@ db.SelectContext(
 
 ### 1.11.2 展开占位符与参数
 
+示例源码：[go/02-sqlx-demo/person.go](https://github.com/zzxrepository/gocode-examples/blob/main/go/02-sqlx-demo/person.go#L87)。
+
 ```go
 func findPeopleByIDs(ctx context.Context, db *sqlx.DB, ids []int64) ([]Person, error) {
 	if len(ids) == 0 {
@@ -1205,6 +1619,10 @@ WHERE user_id IN (?, ?, ?)
 
 空切片需要先处理，否则既无法形成有意义的 `IN` 条件，也会触发切片展开错误。本文将空 ID 集合定义为返回空结果。
 
+[sqlx.In 的实现](https://github.com/jmoiron/sqlx/blob/v1.4.0/bind.go#L142) 会识别待展开的切片，依据元素数量增加占位符，并将元素依次放进新的参数列表。`args...` 再把这些元素逐个传给查询方法；如果只传 `args`，则会把整个切片当作一个参数。
+
+[Rebind](https://github.com/jmoiron/sqlx/blob/v1.4.0/bind.go#L60) 使用数据库对象保存的驱动名称选择占位符风格。这也是 `sqlx.NewDb(baseDB, "mysql")` 需要驱动名称的用途之一。
+
 ## 1.12 使用事务保证多条操作共同完成
 
 ### 1.12.1 事务解决什么问题
@@ -1233,6 +1651,8 @@ WHERE user_id IN (?, ?, ?)
 本文使用 InnoDB 表，通过重复用户名触发错误，观察原子性。
 
 ### 1.12.2 标准库事务实现
+
+示例源码：[go/01-database-sql-demo/person.go](https://github.com/zzxrepository/gocode-examples/blob/main/go/01-database-sql-demo/person.go#L80)。
 
 ```go
 func createPeople(ctx context.Context, db *sql.DB, people []Person) error {
@@ -1280,6 +1700,21 @@ flowchart TD
 
 事务状态属于数据库连接上的会话状态。标准库开始事务后，会保留一条连接供这个事务使用。
 
+这条连接的归属可以从 [Tx 的字段](https://github.com/golang/go/blob/go1.26.5/src/database/sql/sql.go#L2166) 中看出来，以下省略其他字段：
+
+```go
+type Tx struct {
+    db          *DB
+    dc          *driverConn
+    txi         driver.Tx
+    releaseConn func(error)
+    done        atomic.Bool
+    // 省略其余字段。
+}
+```
+
+`dc` 保存本事务保留的连接，`txi` 是驱动事务对象，`releaseConn` 用于结束后释放连接，`done` 控制事务只结束一次。MySQL 驱动的 [mysqlTx](https://github.com/go-sql-driver/mysql/blob/v1.10.0/transaction.go#L11) 也保存着对应 `*mysqlConn`，提交和回滚通过这个会话发送给服务器。
+
 ```mermaid
 flowchart TD
     A["连接池"] --> B["连接 1：由事务 tx 保留"]
@@ -1311,6 +1746,10 @@ db.ExecContext(...)
 
 事务开始后，属于该事务的操作应统一通过 `tx` 执行。
 
+[Tx.grabConn](https://github.com/golang/go/blob/go1.26.5/src/database/sql/sql.go#L2245) 直接返回事务保存的 `dc`；普通 `DB` 操作则走连接池分配。事务内关闭结果集只结束当前读取，不会立即交出事务保留的连接。
+
+提交或回滚结束后，[Tx.close](https://github.com/golang/go/blob/go1.26.5/src/database/sql/sql.go#L2235) 调用保存的 `releaseConn`，再清空连接和驱动事务引用。`Commit` 自身的错误仍须返回，不能将兜底的 `Rollback` 理解为任何提交失败都已确认撤销。
+
 ### 1.12.4 sqlx 中的事务
 
 sqlx 使用：
@@ -1336,6 +1775,8 @@ if err := tx.Commit(); err != nil {
 `*sqlx.Tx` 包装了标准库事务，并增加 sqlx 的参数和扫描辅助方法。事务仍然使用底层事务保留的连接。
 
 配套 sqlx 示例中的批量插入，除参数类型和开始事务的方法外，与标准库版本采用相同流程。
+
+[BeginTxx 的实现](https://github.com/jmoiron/sqlx/blob/v1.4.0/sqlx_context.go#L204) 先调用 `db.DB.BeginTx(ctx, opts)`，再把得到的标准库事务放入 `sqlx.Tx`，附带驱动名称和 Mapper。因此它没有创建另一套事务连接池，而是在现有事务上增加映射与参数辅助方法。
 
 ### 1.12.5 通过唯一约束观察回滚
 
@@ -1384,7 +1825,7 @@ make init
 
 ### 1.13.2 运行标准库示例
 
-进入：
+进入 [go/01-database-sql-demo](https://github.com/zzxrepository/gocode-examples/tree/main/go/01-database-sql-demo)：
 
 ```text
 01-database-sql-demo
@@ -1422,7 +1863,7 @@ NULL 扫描: bob.email.Valid=false
 
 ### 1.13.3 运行 sqlx 示例
 
-进入：
+进入 [go/02-sqlx-demo](https://github.com/zzxrepository/gocode-examples/tree/main/go/02-sqlx-demo)：
 
 ```text
 02-sqlx-demo
@@ -1485,6 +1926,8 @@ MYSQL_INTEGRATION=1 make test
 
 测试账号需要具有创建和删除测试数据库的权限，测试不会清空配置中的学习数据库。
 
+配套测试源码：[标准库 person_integration_test.go](https://github.com/zzxrepository/gocode-examples/blob/main/go/01-database-sql-demo/person_integration_test.go)、[sqlx person_integration_test.go](https://github.com/zzxrepository/gocode-examples/blob/main/go/02-sqlx-demo/person_integration_test.go)。
+
 ## 1.14 如何选择 database/sql 与 sqlx
 
 完成相同操作后，可以从两个方面理解它们的区别。
@@ -1510,12 +1953,13 @@ MYSQL_INTEGRATION=1 make test
 3. [Go 官方文档：Querying for data](https://go.dev/doc/database/querying)——单行、多行查询与结果扫描。
 4. [Go 官方文档：Executing transactions](https://go.dev/doc/database/execute-transactions)——事务开始、提交、回滚及使用要求。
 5. [Go 官方文档：Avoiding SQL injection risk](https://go.dev/doc/database/sql-injection)——SQL 模板与参数分离。
-6. [Go 1.26.5：database/sql 源码](https://github.com/golang/go/blob/go1.26.5/src/database/sql/sql.go)——`Open`、连接池、`QueryRowContext`、结果集与事务实现。
+6. [Go 1.26.5：database/sql 源码](https://github.com/golang/go/blob/go1.26.5/src/database/sql/sql.go)、[driver/driver.go](https://github.com/golang/go/blob/go1.26.5/src/database/sql/driver/driver.go)、[convert.go](https://github.com/golang/go/blob/go1.26.5/src/database/sql/convert.go)——`Open`、连接池、`QueryRowContext`、结果集与事务实现。
 7. [MySQL 驱动 v1.10.0：使用说明](https://github.com/go-sql-driver/mysql/blob/v1.10.0/README.md)——DSN、超时、参数插值与影响行数配置。
 8. [MySQL 驱动 v1.10.0：driver.go](https://github.com/go-sql-driver/mysql/blob/v1.10.0/driver.go)、[connector.go](https://github.com/go-sql-driver/mysql/blob/v1.10.0/connector.go)、[connection.go](https://github.com/go-sql-driver/mysql/blob/v1.10.0/connection.go)——驱动注册、连接建立与语句执行。
 9. [sqlx 使用指南](https://jmoiron.github.io/sqlx/)——结构体映射、查询辅助方法与参数绑定。
 10. [sqlx v1.4.0：sqlx.go](https://github.com/jmoiron/sqlx/blob/v1.4.0/sqlx.go)、[sqlx_context.go](https://github.com/jmoiron/sqlx/blob/v1.4.0/sqlx_context.go)——数据库包装、`GetContext`、`SelectContext` 与扫描实现。
 11. [sqlx v1.4.0：reflectx/reflect.go](https://github.com/jmoiron/sqlx/blob/v1.4.0/reflectx/reflect.go)——结构体字段映射与缓存。
-12. [sqlx v1.4.0：named.go](https://github.com/jmoiron/sqlx/blob/v1.4.0/named.go)、[bind.go](https://github.com/jmoiron/sqlx/blob/v1.4.0/bind.go)——命名参数、`sqlx.In` 与占位符转换。
+12. [sqlx v1.4.0：named.go](https://github.com/jmoiron/sqlx/blob/v1.4.0/named.go)、[named_context.go](https://github.com/jmoiron/sqlx/blob/v1.4.0/named_context.go)、[bind.go](https://github.com/jmoiron/sqlx/blob/v1.4.0/bind.go)——命名参数、`sqlx.In` 与占位符转换。
 13. [博客园：Go 数据库操作入门参考](https://www.cnblogs.com/you-men/p/13906612.html)。
 14. [Tizi365：Go sqlx 入门参考](https://www.tizi365.com/archives/100.html)。
+15. [配套示例 GitHub 仓库：gocode-examples](https://github.com/zzxrepository/gocode-examples)。
