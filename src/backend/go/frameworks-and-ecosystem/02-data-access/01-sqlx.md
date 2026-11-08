@@ -599,7 +599,25 @@ case ret, ok := <-req:
 
 ## 1.5 使用 database/sql 完成增删改查
 
-### 1.5.1 插入数据：SQL 模板与参数分别传入
+数据库连接和表结构准备完成后，先明确每种操作使用哪个方法：
+
+| 操作 | 主要方法 | 如何取得结果 |
+| --- | --- | --- |
+| 插入 | `ExecContext` | 从 `sql.Result` 读取新增主键 |
+| 查询单行 | `QueryRowContext` | 用 `Scan` 接收一行，并检查错误 |
+| 查询多行 | `QueryContext` | 遍历 `Rows`，逐行 `Scan` |
+| 更新 | `ExecContext` | 检查错误与影响行数 |
+| 删除 | `ExecContext` | 检查错误与影响行数 |
+
+以下各节先给出操作函数及调用方式，再说明结果处理和实现原理。调用片段放在已经取得 `db`、`ctx` 的业务函数中；插入返回的 `id` 会继续用于查询、更新和删除。
+
+### 1.5.1 插入数据
+
+<span id="_1-5-1-插入数据-sql-模板与参数分别传入"></span>
+
+#### 1.5.1.1 使用 ExecContext 插入一条记录
+
+`INSERT` 决定写入哪张表、哪些列；`ExecContext` 执行 SQL，并返回 `sql.Result`。先将插入过程封装为函数：
 
 示例源码：[go/01-database-sql-demo/person.go](https://github.com/zzxrepository/gocode-examples/blob/main/go/01-database-sql-demo/person.go#L9)。
 
@@ -619,6 +637,27 @@ func insertPerson(ctx context.Context, db *sql.DB, person Person) (int64, error)
 }
 ```
 
+调用时创建一个 `Person`，将它交给插入函数：
+
+```go
+person := Person{
+    Username: fmt.Sprintf("charlie_%d", time.Now().UnixNano()),
+    Age:      22,
+    Email: sql.NullString{
+        String: "charlie@example.com",
+        Valid:  true,
+    },
+}
+
+id, err := insertPerson(ctx, db, person)
+if err != nil {
+    return err
+}
+fmt.Println("新用户 ID：", id)
+```
+
+用户名增加时间后缀，便于重复运行；数据库生成的 ID 通过返回值交给后续操作。`Email.Valid` 为 `true` 时写入对应字符串，为 `false` 时写入 SQL `NULL`。
+
 这次调用包含两个部分：
 
 ```go
@@ -635,6 +674,8 @@ person.Username, person.Age, person.Email
 
 三个参数按照顺序与三个 `?` 对应。
 
+#### 1.5.1.2 读取新增主键与执行结果
+
 `ExecContext` 适合执行不返回查询结果集的语句，例如本文中的 `INSERT`、`UPDATE` 和 `DELETE`。它返回的 `sql.Result` 提供执行结果信息，包括：
 
 - `LastInsertId`：本文 MySQL 自增主键插入后生成的 ID。
@@ -646,7 +687,9 @@ person.Username, person.Age, person.Email
 
 所以，`LastInsertId()` 读取的是本次执行返回的信息，不需要补发查询，也不是查询表中当前最大的 ID。`ExecContext` 完成后已经结束本次连接占用，业务仍然可以读取返回的结果信息。
 
-### 1.5.2 参数是如何传到 MySQL 的
+<span id="_1-5-2-参数是如何传到-mysql-的"></span>
+
+#### 1.5.1.3 参数是如何传到 MySQL 的
 
 业务代码传入的参数是 Go 值。标准库和驱动会将它们转换成数据库驱动能够处理的参数形式，再按照驱动采用的协议路径发送给 MySQL。
 
@@ -707,7 +750,13 @@ row := db.QueryRowContext(ctx, query, username)
 
 占位符用于传递值，不能代替表名、列名或 `ASC`、`DESC` 等 SQL 关键字。需要动态排序时，可以把允许的排序方式映射成预先确定的 SQL 片段。
 
-### 1.5.3 查询单行：QueryRowContext 与 Scan
+### 1.5.2 查询单行
+
+<span id="_1-5-3-查询单行-queryrowcontext-与-scan"></span>
+
+#### 1.5.2.1 使用 QueryRowContext 与 Scan
+
+先执行查询，再按照查询列的顺序接收数据。下面按主键查询刚才创建的用户：
 
 示例源码：[go/01-database-sql-demo/person.go](https://github.com/zzxrepository/gocode-examples/blob/main/go/01-database-sql-demo/person.go#L23)。
 
@@ -724,6 +773,19 @@ func findPerson(ctx context.Context, db *sql.DB, id int64) (Person, error) {
 }
 ```
 
+调用函数并读取结果：
+
+```go
+found, err := findPerson(ctx, db, id)
+if err != nil {
+    return err
+}
+fmt.Printf("id=%d username=%s age=%d\n",
+    found.UserID, found.Username, found.Age)
+```
+
+这里的 `id` 来自插入操作，不需要假定数据库生成的编号一定是 1。
+
 `Scan` 根据查询结果中的列顺序，依次写入传入的目标地址：
 
 | 查询结果列 | 接收地址 |
@@ -737,7 +799,32 @@ func findPerson(ctx context.Context, db *sql.DB, id int64) (Person, error) {
 
 标准库不会根据变量名或结构体标签自动推断对应关系。如果调整了 SQL 中的列顺序，也需要同步调整 `Scan` 参数顺序。
 
-### 1.5.4 QueryRowContext 为什么没有直接返回 error
+<span id="_1-5-5-如何判断没有查到记录"></span>
+
+#### 1.5.2.2 处理没有查到记录的情况
+
+如果没有匹配行，`Scan` 返回 `sql.ErrNoRows`：
+
+```go
+person, err := findPerson(ctx, db, id)
+
+switch {
+case errors.Is(err, sql.ErrNoRows):
+    // 没有匹配的用户。
+case err != nil:
+    // 查询、通信或扫描失败。
+default:
+    // 查询成功，使用 person。
+}
+```
+
+前面的函数使用 `%w` 包装了错误，因此调用方仍然可以通过 `errors.Is` 判断原始错误。
+
+还需要注意，`QueryRowContext` 读取第一行，并不会检查结果集中是否只有一行。本文使用主键条件，由主键约束保证最多匹配一条记录。
+
+<span id="_1-5-4-queryrowcontext-为什么没有直接返回-error"></span>
+
+#### 1.5.2.3 QueryRowContext 为什么没有直接返回 error
 
 `QueryRowContext` 返回的是 `*sql.Row`：
 
@@ -778,28 +865,9 @@ err := db.QueryRowContext(ctx, query, id).Scan(&value)
 
 [Row.Scan](https://github.com/golang/go/blob/go1.26.5/src/database/sql/sql.go#L3486) 会先检查保存的错误，再推进到第一行。没有第一行且无其他读取错误时返回 `ErrNoRows`；有第一行时调用底层 `Rows.Scan`，并结束结果集。因此，单行 API 没有显式 `Next`，不代表底层省略了这一过程。
 
-### 1.5.5 如何判断没有查到记录
+<span id="_1-5-6-scan-如何处理类型与-null"></span>
 
-如果没有匹配行，`Scan` 返回 `sql.ErrNoRows`：
-
-```go
-person, err := findPerson(ctx, db, id)
-
-switch {
-case errors.Is(err, sql.ErrNoRows):
-    // 没有匹配的用户。
-case err != nil:
-    // 查询、通信或扫描失败。
-default:
-    // 查询成功，使用 person。
-}
-```
-
-前面的函数使用 `%w` 包装了错误，因此调用方仍然可以通过 `errors.Is` 判断原始错误。
-
-还需要注意，`QueryRowContext` 读取第一行，并不会检查结果集中是否只有一行。本文使用主键条件，由主键约束保证最多匹配一条记录。
-
-### 1.5.6 Scan 如何处理类型与 NULL
+#### 1.5.2.4 Scan 如何处理类型与 NULL
 
 MySQL 驱动先把数据库结果转换成驱动层的值，`Scan` 再把这些值转换并写入目标变量。
 
@@ -864,7 +932,11 @@ if person.Email.Valid {
 
 `driver.Valuer` 则约定反方向的 `Value()` 方法，返回驱动能够处理的值。[NullString.Value](https://github.com/golang/go/blob/go1.26.5/src/database/sql/sql.go#L210) 根据 `Valid` 返回字符串或 `nil`。字段自身保存有效标记，两个接口分别负责写入参数和读取结果时的转换。
 
-### 1.5.7 查询多行：Next、Scan、Close 与 Err
+### 1.5.3 查询多行
+
+<span id="_1-5-7-查询多行-next、scan、close-与-err"></span>
+
+#### 1.5.3.1 使用 QueryContext 遍历结果
 
 示例源码：[go/01-database-sql-demo/person.go](https://github.com/zzxrepository/gocode-examples/blob/main/go/01-database-sql-demo/person.go#L34)。
 
@@ -903,7 +975,23 @@ func listPeople(ctx context.Context, db *sql.DB) ([]Person, error) {
 
 `Next` 返回 `false` 有两种主要可能：已经读完，或者读取过程发生错误。因此，循环结束后还需要检查 `rows.Err()`。
 
-### 1.5.8 结果集为什么会影响连接池
+调用时，取得切片后再处理每一条记录：
+
+```go
+people, err := listPeople(ctx, db)
+if err != nil {
+    return err
+}
+for _, person := range people {
+    fmt.Printf("%d %s %d\n", person.UserID, person.Username, person.Age)
+}
+```
+
+如果没有匹配行，循环不会进入，函数正常返回空切片；多行查询不以 `sql.ErrNoRows` 表示空结果。
+
+<span id="_1-5-8-结果集为什么会影响连接池"></span>
+
+#### 1.5.3.2 结果集为什么会影响连接池
 
 先看 [Rows 的相关字段](https://github.com/golang/go/blob/go1.26.5/src/database/sql/sql.go#L2929)，省略其余状态：
 
@@ -948,9 +1036,11 @@ defer rows.Close()
 
 对于事务内查询，关闭 `Rows` 只结束当前结果集；事务占用的连接仍要等到事务提交或回滚后才能归还。
 
-### 1.5.9 更新与删除
+### 1.5.4 更新数据
 
-更新年龄：
+<span id="_1-5-9-更新与删除"></span>
+
+#### 1.5.4.1 使用 ExecContext 更新指定记录
 
 示例源码：[go/01-database-sql-demo/person.go](https://github.com/zzxrepository/gocode-examples/blob/main/go/01-database-sql-demo/person.go#L55)。
 
@@ -969,7 +1059,35 @@ func updateAge(ctx context.Context, db *sql.DB, id int64, age int) (int64, error
 }
 ```
 
-删除用户：
+SQL 中第一个参数是新年龄，第二个参数是筛选用户的 ID。调用后重新查询，可以看到保存的新值：
+
+```go
+affected, err := updateAge(ctx, db, id, 23)
+if err != nil {
+    return err
+}
+fmt.Println("更新影响行数：", affected)
+
+updated, err := findPerson(ctx, db, id)
+if err != nil {
+    return err
+}
+fmt.Println("更新后年龄：", updated.Age) // 23
+```
+
+`WHERE user_id = ?` 决定更新范围；不带 `WHERE` 的这类更新会作用于整张表，标准库不会自动阻止。
+
+#### 1.5.4.2 如何解释更新影响行数
+
+更新没有匹配记录时，通常不会返回 `sql.ErrNoRows`，需要查看 `RowsAffected`。
+
+对于本文使用的 MySQL 默认配置，更新行数反映实际发生变化的行数。将某条记录的年龄从 22 改为 23，可能返回 1；再次将 23 更新为 23，则可能返回 0。
+
+所以，更新影响行数为 0，不能直接推出“记录不存在”。驱动的 `clientFoundRows` 配置也会改变这一统计行为。
+
+### 1.5.5 删除数据
+
+#### 1.5.5.1 使用 ExecContext 删除指定记录
 
 示例源码：[go/01-database-sql-demo/person.go](https://github.com/zzxrepository/gocode-examples/blob/main/go/01-database-sql-demo/person.go#L68)。
 
@@ -987,13 +1105,39 @@ func deletePerson(ctx context.Context, db *sql.DB, id int64) (int64, error) {
 }
 ```
 
-更新或删除没有匹配记录时，通常不会返回 `sql.ErrNoRows`，需要查看 `RowsAffected`。
+调用删除函数，并再次查询验证结果：
 
-对于本文使用的 MySQL 默认配置，更新行数反映实际发生变化的行数。将某条记录的年龄从 22 改为 23，可能返回 1；再次将 23 更新为 23，则可能返回 0。
+```go
+deleted, err := deletePerson(ctx, db, id)
+if err != nil {
+    return err
+}
+fmt.Println("删除影响行数：", deleted)
 
-所以，更新影响行数为 0，不能直接推出“记录不存在”。驱动的 `clientFoundRows` 配置也会改变这一统计行为。
+_, err = findPerson(ctx, db, id)
+switch {
+case errors.Is(err, sql.ErrNoRows):
+    fmt.Println("该用户已不存在")
+case err != nil:
+    return err
+default:
+    return errors.New("删除后仍查询到该用户")
+}
+```
 
-### 1.5.10 需要重复执行同一 SQL 时
+这里真正移除了数据库记录。删除条件只接收本次创建的用户 ID，不影响初始化时的 alice 和 bob。
+
+#### 1.5.5.2 删除后如何判断结果
+
+对于本文按主键执行的 `DELETE`，影响行数为 1 表示删除了一条记录，为 0 表示本次没有删除匹配记录。再次删除同一个 ID，通常正常返回 0，而不会返回 `sql.ErrNoRows`。
+
+`sql.ErrNoRows` 来自后续单行查询的 `Scan`，并不是删除方法的返回约定。
+
+### 1.5.6 需要重复执行同一 SQL 时
+
+<span id="_1-5-10-需要重复执行同一-sql-时"></span>
+
+#### 1.5.6.1 准备并使用可复用语句
 
 如果同一条 SQL 需要多次执行，可以显式创建可复用的语句：
 
@@ -1018,6 +1162,8 @@ if err != nil {
     return err
 }
 ```
+
+#### 1.5.6.2 语句如何配合连接池使用
 
 通过 `*sql.DB` 创建的 `*sql.Stmt` 可以配合连接池使用。语句对象会根据实际使用的连接，在相应连接上准备底层语句；它并不意味着所有调用都固定占用同一条连接。
 
@@ -1085,7 +1231,9 @@ flowchart TD
 
 ## 1.7 使用 GetContext 查询单行
 
-### 1.7.1 改写标准库查询
+<span id="_1-7-1-改写标准库查询"></span>
+
+### 1.7.1 查询结构体并处理结果
 
 标准库版本需要显式传入四个字段地址。sqlx 版本可以写为：
 
@@ -1105,6 +1253,22 @@ func findPerson(ctx context.Context, db *sqlx.DB, id int64) (Person, error) {
 
 这里依然需要传入 `&person`，因为 sqlx 最终需要修改这个结构体中的字段。
 
+调用方式与标准库版本保持一致：
+
+```go
+person, err := findPerson(ctx, db, id)
+switch {
+case errors.Is(err, sql.ErrNoRows):
+    fmt.Println("用户不存在")
+case err != nil:
+    return err
+default:
+    fmt.Printf("%s: %d\n", person.Username, person.Age)
+}
+```
+
+SQL、ID 参数和错误判断没有变化，变化的是函数内部的结果接收方式。
+
 没有匹配记录时，仍然可以判断：
 
 ```go
@@ -1113,7 +1277,83 @@ errors.Is(err, sql.ErrNoRows)
 
 `GetContext` 同样读取第一行，不会自动验证查询是否只返回一行。
 
-### 1.7.2 sqlx 如何知道结果应该写到哪里
+<span id="_1-7-4-为什么推荐显式写-db-标签"></span>
+
+### 1.7.2 使用 db 标签明确字段映射
+
+默认名称映射会将字段名转成小写，但不会自动把所有驼峰名称转换成下划线形式。
+
+例如：
+
+```go
+UserID
+```
+
+默认转换结果是：
+
+```text
+userid
+```
+
+它与数据库列名：
+
+```text
+user_id
+```
+
+并不相同。
+
+因此，建议明确声明：
+
+```go
+UserID int64 `db:"user_id"`
+```
+
+查询中的列名也可以使用别名与标签对应：
+
+```sql
+SELECT user_id AS id, username
+FROM person;
+```
+
+相应目标类型可以写为：
+
+```go
+type PersonSummary struct {
+    ID       int64  `db:"id"`
+    Username string `db:"username"`
+}
+```
+
+默认情况下，如果结果中出现无法映射的列，sqlx 会报告错误。这能帮助发现 SQL 与目标结构体不一致的问题。
+
+<span id="_1-7-5-getcontext-也可以接收标量"></span>
+
+### 1.7.3 查询单个值
+
+如果查询只返回一个值，不一定需要创建结构体：
+
+```go
+var count int
+
+err := db.GetContext(
+    ctx,
+    &count,
+    "SELECT COUNT(*) FROM person",
+)
+if err != nil {
+    return err
+}
+fmt.Println("用户总数：", count)
+```
+
+此时，目标是一个标量地址，sqlx 可以直接完成单列扫描。
+
+### 1.7.4 结构体映射与反射原理
+
+<span id="_1-7-2-sqlx-如何知道结果应该写到哪里"></span>
+
+#### 1.7.4.1 sqlx 如何确定接收字段
 
 查询返回的列名为：
 
@@ -1160,7 +1400,9 @@ flowchart TD
 
 [scanAny](https://github.com/jmoiron/sqlx/blob/v1.4.0/sqlx.go#L740) 先检查目标指针，再判断它可以直接扫描，还是需要按结构体字段映射。`Person` 进入字段映射分支；实现了 `Scanner` 的 `sql.NullString` 则可以作为单列接收类型。
 
-### 1.7.3 反射在这里做了什么
+<span id="_1-7-3-反射在这里做了什么"></span>
+
+#### 1.7.4.2 反射如何取得当前对象的字段地址
 
 反射中有两类信息：
 
@@ -1237,6 +1479,8 @@ sqlx 的通用实现使用 `fieldsByTraversal` 与 `reflectx.FieldByIndexes`，�
 
 所以，列顺序调整后仍能正确赋值，是因为 sqlx 用列名重新组织了地址顺序。它最终仍需要让第 1 列对应第 1 个接收地址。
 
+#### 1.7.4.3 为什么类型映射可以缓存
+
 sqlx 使用 `reflectx.Mapper` 管理映射缓存。相关结构可以概括为：
 
 源码位置：[sqlx reflectx/reflect.go：Mapper 与 TypeMap](https://github.com/jmoiron/sqlx/blob/v1.4.0/reflectx/reflect.go#L62)。
@@ -1278,71 +1522,9 @@ flowchart TD
 
 缓存锁保护的是类型映射的生成与访问，不能据此认为多个 goroutine 同时写同一个业务结构体就自动安全。
 
-### 1.7.4 为什么推荐显式写 db 标签
-
-默认名称映射会将字段名转成小写，但不会自动把所有驼峰名称转换成下划线形式。
-
-例如：
-
-```go
-UserID
-```
-
-默认转换结果是：
-
-```text
-userid
-```
-
-它与数据库列名：
-
-```text
-user_id
-```
-
-并不相同。
-
-因此，建议明确声明：
-
-```go
-UserID int64 `db:"user_id"`
-```
-
-查询中的列名也可以使用别名与标签对应：
-
-```sql
-SELECT user_id AS id, username
-FROM person;
-```
-
-相应目标类型可以写为：
-
-```go
-type PersonSummary struct {
-    ID       int64  `db:"id"`
-    Username string `db:"username"`
-}
-```
-
-默认情况下，如果结果中出现无法映射的列，sqlx 会报告错误。这能帮助发现 SQL 与目标结构体不一致的问题。
-
-### 1.7.5 GetContext 也可以接收标量
-
-如果查询只返回一个值，不一定需要创建结构体：
-
-```go
-var count int
-
-err := db.GetContext(
-    ctx,
-    &count,
-    "SELECT COUNT(*) FROM person",
-)
-```
-
-此时，目标是一个标量地址，sqlx 可以直接完成单列扫描。
-
 ## 1.8 使用 SelectContext 查询多行
+
+### 1.8.1 查询列表并使用返回结果
 
 示例源码：[go/02-sqlx-demo/person.go](https://github.com/zzxrepository/gocode-examples/blob/main/go/02-sqlx-demo/person.go#L33)。
 
@@ -1370,9 +1552,44 @@ for rows.Next() {
 
 sqlx 会查询结果、遍历每行、建立元素并写入切片，同时负责该次查询的结果集关闭。
 
-这可以直接对应到 [SelectContext](https://github.com/jmoiron/sqlx/blob/v1.4.0/sqlx_context.go#L55)：它调用 `QueryxContext` 获取结果集，安排 `defer rows.Close()`，再调用 `scanAll` 收集各行。
+调用后得到 `[]Person`，可以直接遍历：
 
-### 1.8.1 为什么传入切片指针
+```go
+people, err := listPeople(ctx, db)
+if err != nil {
+    return err
+}
+for _, person := range people {
+    fmt.Printf("%s: %d\n", person.Username, person.Age)
+}
+```
+
+### 1.8.2 没有结果时会怎样
+
+多行查询没有匹配记录时，`SelectContext` 通常正常返回，结果切片长度为 0。
+
+这与单行查询不同：
+
+| 查询方式 | 没有匹配记录时 |
+| --- | --- |
+| `GetContext` | 返回 `sql.ErrNoRows` |
+| `SelectContext` | 正常返回，结果长度为 0 |
+
+本文预先使用 `make([]Person, 0)`，空结果可以表示为空切片。
+
+当前实现会先把目标切片长度设置为 0，再用本次查询结果填充。因此，`SelectContext` 会重新填充目标切片，而不是默认继续追加到原有数据之后。
+
+### 1.8.3 SelectContext 会收集完整结果
+
+`SelectContext` 会把查询结果全部写入目标切片。结果越多，需要保留的 Go 对象也越多。
+
+对于需要逐条处理的结果，可以使用 `QueryxContext`，避免在业务代码中保存整个结果切片。
+
+### 1.8.4 切片是如何被填充的
+
+<span id="_1-8-1-为什么传入切片指针"></span>
+
+#### 1.8.4.1 为什么传入切片指针
 
 切片包含底层数组指针、长度和容量。
 
@@ -1400,28 +1617,13 @@ for rows.Next() {
 
 `reflect.New` 创建当前行的接收元素，随后准备字段地址、扫描并追加。最后一行将追加后的切片写回 `direct`，因此需要调用方传入切片变量的地址。
 
-### 1.8.2 没有结果时会怎样
+#### 1.8.4.2 谁负责遍历与关闭结果集
 
-多行查询没有匹配记录时，`SelectContext` 通常正常返回，结果切片长度为 0。
-
-这与单行查询不同：
-
-| 查询方式 | 没有匹配记录时 |
-| --- | --- |
-| `GetContext` | 返回 `sql.ErrNoRows` |
-| `SelectContext` | 正常返回，结果长度为 0 |
-
-本文预先使用 `make([]Person, 0)`，空结果可以表示为空切片。
-
-当前实现会先把目标切片长度设置为 0，再用本次查询结果填充。因此，`SelectContext` 会重新填充目标切片，而不是默认继续追加到原有数据之后。
-
-### 1.8.3 SelectContext 会收集完整结果
-
-`SelectContext` 会把查询结果全部写入目标切片。结果越多，需要保留的 Go 对象也越多。
-
-对于需要逐条处理的结果，可以使用 `QueryxContext`，避免在业务代码中保存整个结果切片。
+这可以直接对应到 [SelectContext](https://github.com/jmoiron/sqlx/blob/v1.4.0/sqlx_context.go#L55)：它调用 `QueryxContext` 获取结果集，安排 `defer rows.Close()`，再调用 `scanAll` 收集各行。
 
 ## 1.9 使用 QueryxContext 逐行处理
+
+### 1.9.1 使用 QueryxContext 与 StructScan
 
 示例源码：[go/02-sqlx-demo/person.go](https://github.com/zzxrepository/gocode-examples/blob/main/go/02-sqlx-demo/person.go#L114)。
 
@@ -1447,6 +1649,17 @@ func walkPeople(ctx context.Context, db *sqlx.DB, visit func(Person) error) erro
 
 `QueryxContext` 保留了标准库逐行遍历的形式，同时增加 `StructScan`，用于把当前行映射到结构体。
 
+调用时传入每行的处理函数：
+
+```go
+err := walkPeople(ctx, db, func(person Person) error {
+    fmt.Printf("%s: %d\n", person.Username, person.Age)
+    return nil
+})
+```
+
+### 1.9.2 StructScan 如何复用字段映射
+
 [sqlx.Rows](https://github.com/jmoiron/sqlx/blob/v1.4.0/sqlx.go#L577) 嵌入底层 `*sql.Rows`，同时保存 Mapper 以及本次扫描使用的状态。相关字段包括：
 
 ```go
@@ -1459,22 +1672,23 @@ values  []interface{}
 
 Mapper 缓存的是类型映射，这里缓存的是本次结果集的列对应关系。由于路径以首次扫描目标建立，同一个 `Rows` 实例不应切换不同结构体类型调用 `StructScan`。
 
-例如：
-
-```go
-err := walkPeople(ctx, db, func(person Person) error {
-    fmt.Printf("%s: %d\n", person.Username, person.Age)
-    return nil
-})
-```
+### 1.9.3 提前退出与连接占用
 
 如果处理某一行时提前返回，`defer rows.Close()` 仍然会执行。
 
 逐行处理期间，结果集仍然占用连接。因此，不宜在每一行的回调中执行长时间阻塞的操作。若处理过程较慢，可以结合分页查询，将数据库读取与后续处理分批完成。
 
-## 1.10 使用命名参数插入数据
+<span id="_1-10-使用命名参数插入数据"></span>
 
-### 1.10.1 NamedExecContext 的写法
+## 1.10 使用 sqlx 完成插入、更新与删除
+
+查询时使用了 sqlx 的结构体扫描；写入时则可以选择命名参数，或者继续使用继承自标准库的方法。
+
+### 1.10.1 使用命名参数插入数据
+
+<span id="_1-10-1-namedexeccontext-的写法"></span>
+
+#### 1.10.1.1 NamedExecContext 的用法
 
 示例源码：[go/02-sqlx-demo/person.go](https://github.com/zzxrepository/gocode-examples/blob/main/go/02-sqlx-demo/person.go#L10)。
 
@@ -1503,7 +1717,25 @@ SQL 中使用参数名称：
 
 sqlx 根据这些名称，从结构体中读取对应字段。
 
-### 1.10.2 命名参数如何变成普通参数
+调用 `insertPerson` 时仍然传入普通 `Person`，并取得新主键：
+
+```go
+id, err := insertPerson(ctx, db, Person{
+    Username: fmt.Sprintf("named_%d", time.Now().UnixNano()),
+    Age:      22,
+    Email:    sql.NullString{String: "named@example.com", Valid: true},
+})
+if err != nil {
+    return err
+}
+fmt.Println("新用户 ID：", id)
+```
+
+`:username`、`:age`、`:email` 对应结构体的 `db` 标签；SQL 中不再需要由调用方手动排列这三个字段值。
+
+<span id="_1-10-2-命名参数如何变成普通参数"></span>
+
+#### 1.10.1.2 命名参数如何变成普通参数
 
 对于 MySQL，sqlx 会把上面的语句转换为：
 
@@ -1534,18 +1766,36 @@ VALUES (?, ?, ?)
 
 最后，[NamedExecContext](https://github.com/jmoiron/sqlx/blob/v1.4.0/named_context.go#L127) 调用普通 `ExecContext`。参数转换、驱动执行及结果读取继续沿用标准库的过程。
 
-### 1.10.3 更新与删除仍然可以使用原方法
+<span id="_1-10-3-更新与删除仍然可以使用原方法"></span>
 
-sqlx 嵌入了 `*sql.DB`，因此更新和删除仍然可以调用：
+### 1.10.2 更新数据
+
+sqlx 的 `*sqlx.DB` 嵌入 `*sql.DB`，因此可以继续调用 `ExecContext`。配套项目中的 `updateAge` 与标准库版本使用相同 SQL，参数中的 `db` 类型改为 `*sqlx.DB`。
+
+示例源码：[go/02-sqlx-demo/person.go：updateAge](https://github.com/zzxrepository/gocode-examples/blob/main/go/02-sqlx-demo/person.go#L43)。
 
 ```go
 result, err := db.ExecContext(
     ctx,
     "UPDATE person SET age = ? WHERE user_id = ?",
-    age,
+    23,
     id,
 )
+if err != nil {
+    return err
+}
+affected, err := result.RowsAffected()
+if err != nil {
+    return err
+}
+fmt.Println("更新影响行数：", affected)
 ```
+
+也可以直接复用配套项目封装好的 `updateAge(ctx, db, id, 23)`，然后通过 `findPerson` 读取更新结果。影响行数的含义与标准库版本相同，同值更新可能返回 0。
+
+### 1.10.3 删除数据
+
+示例源码：[go/02-sqlx-demo/person.go：deletePerson](https://github.com/zzxrepository/gocode-examples/blob/main/go/02-sqlx-demo/person.go#L56)。
 
 ```go
 result, err := db.ExecContext(
@@ -1553,34 +1803,27 @@ result, err := db.ExecContext(
     "DELETE FROM person WHERE user_id = ?",
     id,
 )
+if err != nil {
+    return err
+}
+affected, err := result.RowsAffected()
+if err != nil {
+    return err
+}
+fmt.Println("删除影响行数：", affected)
 ```
 
-这两种操作通常不涉及结构体结果扫描，使用标准库方法已经很直接。是否使用命名参数，可以根据参数数量和代码可读性决定。
+也可以调用配套项目的 `deletePerson(ctx, db, id)`。删除后再通过 `findPerson` 查询，应使用 `errors.Is(err, sql.ErrNoRows)` 判断记录是否还存在。
+
+更新和删除不需要接收结构体结果，因此使用 `ExecContext` 已经很直接；字段较多时，也可以用 `NamedExecContext` 组织参数。sqlx 不会自动生成 `UPDATE` 或 `DELETE`，操作范围仍然由 SQL 中的 `WHERE` 决定。
 
 ## 1.11 使用 sqlx.In 处理切片参数
 
-### 1.11.1 为什么不能直接传入切片
+<span id="_1-11-2-展开占位符与参数"></span>
 
-假设需要按多个 ID 查询：
+### 1.11.1 按一组 ID 查询用户
 
-```go
-ids := []int64{3, 8, 12}
-```
-
-下面这种写法不会自动生成三个占位符：
-
-```go
-db.SelectContext(
-    ctx,
-    &people,
-    "SELECT user_id, username, age, email FROM person WHERE user_id IN (?)",
-    ids,
-)
-```
-
-一个 `?` 对应一个参数位置，普通数据库参数绑定不会把任意 Go 切片自动展开成多个 SQL 参数。
-
-### 1.11.2 展开占位符与参数
+需要按多个 ID 查询时，先使用 `sqlx.In` 展开参数，再通过 `SelectContext` 执行查询：
 
 示例源码：[go/02-sqlx-demo/person.go](https://github.com/zzxrepository/gocode-examples/blob/main/go/02-sqlx-demo/person.go#L87)。
 
@@ -1602,6 +1845,49 @@ func findPeopleByIDs(ctx context.Context, db *sqlx.DB, ids []int64) ([]Person, e
 	return people, nil
 }
 ```
+
+下面用查询到的 alice 和 bob 组织 ID，避免依赖固定的自增编号：
+
+```go
+alice, err := findByUsername(ctx, db, "alice")
+if err != nil {
+    return err
+}
+bob, err := findByUsername(ctx, db, "bob")
+if err != nil {
+    return err
+}
+people, err := findPeopleByIDs(ctx, db, []int64{alice.UserID, bob.UserID})
+if err != nil {
+    return err
+}
+fmt.Println("匹配用户数：", len(people))
+```
+
+<span id="_1-11-1-为什么不能直接传入切片"></span>
+
+### 1.11.2 为什么不能直接传入切片
+
+假设需要按多个 ID 查询：
+
+```go
+ids := []int64{3, 8, 12}
+```
+
+下面这种写法不会自动生成三个占位符：
+
+```go
+db.SelectContext(
+    ctx,
+    &people,
+    "SELECT user_id, username, age, email FROM person WHERE user_id IN (?)",
+    ids,
+)
+```
+
+一个 `?` 对应一个参数位置，普通数据库参数绑定不会把任意 Go 切片自动展开成多个 SQL 参数。
+
+### 1.11.3 占位符展开与 Rebind 的原理
 
 对于三个 ID，`sqlx.In` 得到的结果相当于：
 
@@ -1650,7 +1936,9 @@ WHERE user_id IN (?, ?, ?)
 
 本文使用 InnoDB 表，通过重复用户名触发错误，观察原子性。
 
-### 1.12.2 标准库事务实现
+<span id="_1-12-2-标准库事务实现"></span>
+
+### 1.12.2 标准库事务的用法
 
 示例源码：[go/01-database-sql-demo/person.go](https://github.com/zzxrepository/gocode-examples/blob/main/go/01-database-sql-demo/person.go#L80)。
 
@@ -1696,7 +1984,72 @@ flowchart TD
 
 如果 `Commit` 已经成功，事务已经结束，随后执行的 `Rollback` 会返回事务已结束的错误，不会撤销已经提交的数据。这里不使用这个兜底调用的返回值。
 
-### 1.12.3 事务为什么必须使用 tx
+<span id="_1-12-4-sqlx-中的事务"></span>
+
+### 1.12.3 sqlx 事务的用法
+
+sqlx 使用：
+
+```go
+tx, err := db.BeginTxx(ctx, nil)
+```
+
+获得 `*sqlx.Tx`。
+
+其余流程保持一致：
+
+```go
+defer tx.Rollback()
+
+// 使用 tx.ExecContext、tx.GetContext 等执行操作。
+
+if err := tx.Commit(); err != nil {
+    return err
+}
+```
+
+`*sqlx.Tx` 包装了标准库事务，并增加 sqlx 的参数和扫描辅助方法。事务仍然使用底层事务保留的连接。
+
+配套 sqlx 示例中的批量插入，除参数类型和开始事务的方法外，与标准库版本采用相同流程。
+
+[BeginTxx 的实现](https://github.com/jmoiron/sqlx/blob/v1.4.0/sqlx_context.go#L204) 先调用 `db.DB.BeginTx(ctx, opts)`，再把得到的标准库事务放入 `sqlx.Tx`，附带驱动名称和 Mapper。因此它没有创建另一套事务连接池，而是在现有事务上增加映射与参数辅助方法。
+
+<span id="_1-12-5-通过唯一约束观察回滚"></span>
+
+### 1.12.4 通过唯一约束观察回滚
+
+传入两个相同用户名：
+
+```go
+people := []Person{
+    {Username: "same_user", Age: 25},
+    {Username: "same_user", Age: 26},
+}
+```
+
+第一次插入成功，第二次插入违反用户名唯一约束，MySQL 返回重复键错误。
+
+因为尚未提交，函数返回后执行回滚，第一次插入也不会保留。
+
+可以通过错误类型判断具体错误：
+
+```go
+var duplicate *mysql.MySQLError
+
+if errors.As(err, &duplicate) && duplicate.Number == 1062 {
+    // MySQL 重复键错误。
+}
+```
+
+回滚后，再查询这个本次新建的用户名，应得到 `sql.ErrNoRows`。
+
+配套程序为每次实验生成不同的用户名，避免已有记录干扰验证。
+
+自增编号在失败或回滚过程中也可能被消耗，因此不要把“编号连续”作为事务成功或回滚成功的判断依据。
+
+<span id="_1-12-3-事务为什么必须使用-tx"></span>
+
+### 1.12.5 事务连接与资源释放原理
 
 事务状态属于数据库连接上的会话状态。标准库开始事务后，会保留一条连接供这个事务使用。
 
@@ -1749,65 +2102,6 @@ db.ExecContext(...)
 [Tx.grabConn](https://github.com/golang/go/blob/go1.26.5/src/database/sql/sql.go#L2245) 直接返回事务保存的 `dc`；普通 `DB` 操作则走连接池分配。事务内关闭结果集只结束当前读取，不会立即交出事务保留的连接。
 
 提交或回滚结束后，[Tx.close](https://github.com/golang/go/blob/go1.26.5/src/database/sql/sql.go#L2235) 调用保存的 `releaseConn`，再清空连接和驱动事务引用。`Commit` 自身的错误仍须返回，不能将兜底的 `Rollback` 理解为任何提交失败都已确认撤销。
-
-### 1.12.4 sqlx 中的事务
-
-sqlx 使用：
-
-```go
-tx, err := db.BeginTxx(ctx, nil)
-```
-
-获得 `*sqlx.Tx`。
-
-其余流程保持一致：
-
-```go
-defer tx.Rollback()
-
-// 使用 tx.ExecContext、tx.GetContext 等执行操作。
-
-if err := tx.Commit(); err != nil {
-    return err
-}
-```
-
-`*sqlx.Tx` 包装了标准库事务，并增加 sqlx 的参数和扫描辅助方法。事务仍然使用底层事务保留的连接。
-
-配套 sqlx 示例中的批量插入，除参数类型和开始事务的方法外，与标准库版本采用相同流程。
-
-[BeginTxx 的实现](https://github.com/jmoiron/sqlx/blob/v1.4.0/sqlx_context.go#L204) 先调用 `db.DB.BeginTx(ctx, opts)`，再把得到的标准库事务放入 `sqlx.Tx`，附带驱动名称和 Mapper。因此它没有创建另一套事务连接池，而是在现有事务上增加映射与参数辅助方法。
-
-### 1.12.5 通过唯一约束观察回滚
-
-传入两个相同用户名：
-
-```go
-people := []Person{
-    {Username: "same_user", Age: 25},
-    {Username: "same_user", Age: 26},
-}
-```
-
-第一次插入成功，第二次插入违反用户名唯一约束，MySQL 返回重复键错误。
-
-因为尚未提交，函数返回后执行回滚，第一次插入也不会保留。
-
-可以通过错误类型判断具体错误：
-
-```go
-var duplicate *mysql.MySQLError
-
-if errors.As(err, &duplicate) && duplicate.Number == 1062 {
-    // MySQL 重复键错误。
-}
-```
-
-回滚后，再查询这个本次新建的用户名，应得到 `sql.ErrNoRows`。
-
-配套程序为每次实验生成不同的用户名，避免已有记录干扰验证。
-
-自增编号在失败或回滚过程中也可能被消耗，因此不要把“编号连续”作为事务成功或回滚成功的判断依据。
 
 ## 1.13 运行配套示例
 
