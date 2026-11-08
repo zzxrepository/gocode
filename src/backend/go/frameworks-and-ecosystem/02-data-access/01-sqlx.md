@@ -27,8 +27,6 @@ Go 程序访问 MySQL，表面上是在调用 `Exec`、`Query` 或 `Get`；真�
 
 下面始终围绕 `person` 表完成一次“连接、写入、查询、更新、删除、事务”的闭环。先看 SQL 与参数绑定，再把每个 API 放回 `database/sql` 的连接池和结果集生命周期中理解；这样学习 `sqlx` 时，看到的不是另一套数据库模型，而是在标准库上减少重复代码的一层薄包装。
 
-使用 `database/sql` 或 `sqlx` 时，SQL 仍由应用显式编写。[GORM](/backend/go/frameworks-and-ecosystem/02-data-access/02-gorm/) 则进一步通过模型和 Go API 构造 SQL；它们最终都依赖底层连接池与数据库驱动。
-
 ## 1.1 准备数据库和数据表
 首先创建名为 `test` 的数据库，并在其中创建 `person` 和 `place` 两张表。后续 `Person` 使用 Go 的 `string` 接收文本列，因此示例把这三个文本列约束为 `NOT NULL`；如果业务确实允许 SQL `NULL`，接收字段应改为 `sql.NullString`，而不是直接扫描到 `string`。
 

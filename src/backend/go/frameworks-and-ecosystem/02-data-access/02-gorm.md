@@ -1,7 +1,7 @@
 ---
 permalink: /backend/go/frameworks-and-ecosystem/02-data-access/02-gorm/
-title: 02. Go MySQL 数据访问：GORM
-shortTitle: 02. GORM
+title: 2.Go mysql 数据访问：GORM
+shortTitle: 2. GORM
 order: 2
 category:
   - Go
@@ -17,15 +17,13 @@ tag:
   - 事务
 ---
 
-# 02. Go MySQL 数据访问：GORM
+# 2.Go mysql 数据访问：GORM
 
 ## 前言
 
 GORM 是 Go 生态中常用的 ORM（Object-Relational Mapping，对象关系映射）库。它把结构体、关联关系和常见数据操作组织成 Go API，让简单的 CRUD 更接近业务语言；但 ORM 不是把 SQL 和数据库问题“隐藏掉”，而是换了一种更结构化的表达方式。
 
 理解 GORM 的关键，是始终看见它下面的那一层：GORM 仍通过 `database/sql` 管理连接并借助 MySQL 驱动与服务器通信。因此，连接池、`Context`、事务边界、索引、锁与 SQL 注入并不会因为使用了 ORM 而自动得到解决；它们仍是应用设计的一部分。
-
-与 [database/sql 和 sqlx](/backend/go/frameworks-and-ecosystem/02-data-access/01-sqlx/) 主要执行应用编写的 SQL 相比，GORM 还会根据模型、条件和链式调用构造 SQL。理解这一区别，才能判断哪些操作适合 ORM，哪些操作直接编写 SQL 更清楚。
 
 本文先建立模型与连接，再逐步学习迁移、CRUD、条件查询、关联、事务与原生 SQL，并在底层原理部分把链路还原为“GORM → `database/sql` → MySQL 驱动 → MySQL”。示例统一采用传统 API，避免与泛型 API 混用；掌握核心概念后，可继续查阅 [GORM 官方中文文档](https://gorm.io/zh_CN/docs/)。
 
