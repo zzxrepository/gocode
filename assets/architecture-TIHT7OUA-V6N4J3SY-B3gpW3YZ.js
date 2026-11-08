@@ -1,0 +1,1 @@
+import{r as e}from"./chunk-NV3KIAZN-SG5auddX.js";export{e as createArchitectureServices};
