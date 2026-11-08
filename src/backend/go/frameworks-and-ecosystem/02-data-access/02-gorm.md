@@ -31,6 +31,8 @@ GORM 将这些工作进一步封装，允许我们通过结构体和方法调用
 
 本文统一使用 GORM 的传统 API。官方目前也提供泛型 API，两种 API 的调用方式和错误处理方式有所不同，本文不混用两套写法。相关入口见 [GORM 官方中文指南](https://gorm.io/zh_CN/docs/index.html)。
 
+配套项目：[go/03-gorm-demo](https://github.com/zzxrepository/gocode-examples/tree/ce4ce672155053376c74ddb19bb61f1e94a6e88b/go/03-gorm-demo)。示例连接本机 MySQL，完整演示本文的数据操作；每次运行创建独立的演示记录，结束时按本次主键清理。
+
 ## 2.1 安装与连接数据库
 
 ### 2.1.1 安装依赖
@@ -70,6 +72,8 @@ flowchart TD
 因此，GORM 仍然建立在 `database/sql` 之上。连接池、Context 和事务连接等基础机制，在这里仍然适用。
 
 ### 2.1.2 连接本地 MySQL
+
+完整示例：[OpenDB 与本机连接配置（mysql.go）](https://github.com/zzxrepository/gocode-examples/blob/ce4ce672155053376c74ddb19bb61f1e94a6e88b/go/03-gorm-demo/mysql.go)。
 
 先在本地 MySQL 中创建数据库：
 
@@ -298,6 +302,8 @@ sequenceDiagram
 
 ### 2.2.1 使用结构体描述数据
 
+完整示例：[完整模型定义（model.go）](https://github.com/zzxrepository/gocode-examples/blob/ce4ce672155053376c74ddb19bb61f1e94a6e88b/go/03-gorm-demo/model.go)。
+
 GORM 中的模型通常就是一个普通 Go 结构体：
 
 ```go
@@ -407,6 +413,8 @@ flowchart LR
 
 ### 2.3.1 使用 AutoMigrate
 
+完整示例：[数据表迁移（schema.go）](https://github.com/zzxrepository/gocode-examples/blob/ce4ce672155053376c74ddb19bb61f1e94a6e88b/go/03-gorm-demo/schema.go)。
+
 定义结构体，并不会自动让数据库中出现对应的数据表。
 
 在学习和本地开发阶段，可以使用：
@@ -448,6 +456,8 @@ Email string `gorm:"size:128;not null;uniqueIndex"`
 ## 2.4 创建记录
 
 ### 2.4.1 创建一条记录
+
+完整示例：[单条、批量创建与主键回填（demo.go）](https://github.com/zzxrepository/gocode-examples/blob/ce4ce672155053376c74ddb19bb61f1e94a6e88b/go/03-gorm-demo/demo.go)。
 
 ```go
 user := User{
@@ -564,6 +574,8 @@ if err := db.CreateInBatches(&users, 100).Error; err != nil {
 ## 2.5 查询记录
 
 ### 2.5.1 查询单条记录
+
+完整示例：[查询操作与结果使用（demo_crud.go）](https://github.com/zzxrepository/gocode-examples/blob/ce4ce672155053376c74ddb19bb61f1e94a6e88b/go/03-gorm-demo/demo_crud.go)。
 
 根据邮箱查询用户：
 
@@ -837,6 +849,8 @@ rows, err := db.Statement.ConnPool.QueryContext(
 
 ### 2.6.3 查询条件为什么可能累积
 
+完整示例：[基础条件的安全复用（demo_crud.go）](https://github.com/zzxrepository/gocode-examples/blob/ce4ce672155053376c74ddb19bb61f1e94a6e88b/go/03-gorm-demo/demo_crud.go)。
+
 不能把 GORM 的链式调用理解为“每调用一个方法，就一定创建一个完全独立的对象”。
 
 [getInstance](https://github.com/go-gorm/gorm/blob/v1.31.1/gorm.go) 会根据当前句柄的状态，决定创建新 `Statement`、克隆已有 `Statement`，或者继续使用当前对象。
@@ -880,6 +894,8 @@ if err := query.
 这也是为什么可以共享初始化得到的根 `db`，却不能随意共享一条不断追加条件的查询链。相关说明见[官方链式方法文档](https://gorm.io/zh_CN/docs/method_chaining.html)。
 
 ### 2.6.4 分页查询
+
+完整示例：[ListUsers 分页实现（user.go）](https://github.com/zzxrepository/gocode-examples/blob/ce4ce672155053376c74ddb19bb61f1e94a6e88b/go/03-gorm-demo/user.go)。
 
 下面查询启用状态的用户，并返回总数：
 
@@ -949,6 +965,8 @@ LIMIT ? OFFSET ?;
 ## 2.7 更新记录
 
 ### 2.7.1 更新单个字段
+
+完整示例：[单字段、结构体、Map 与 Select 更新（demo_crud.go）](https://github.com/zzxrepository/gocode-examples/blob/ce4ce672155053376c74ddb19bb61f1e94a6e88b/go/03-gorm-demo/demo_crud.go)。
 
 ```go
 result := db.
@@ -1079,6 +1097,8 @@ MySQL 中的影响行数受实际数据变化和驱动配置等因素影响。�
 
 ### 2.8.1 为什么 Delete 可能执行 UPDATE
 
+完整示例：[软删除与唯一约束实验（demo_crud.go）](https://github.com/zzxrepository/gocode-examples/blob/ce4ce672155053376c74ddb19bb61f1e94a6e88b/go/03-gorm-demo/demo_crud.go)。
+
 本文的模型包含：
 
 ```go
@@ -1193,6 +1213,8 @@ errors.Is(err, gorm.ErrRecordNotFound)
 
 ### 2.9.2 使用 WithContext
 
+完整示例：[GetUser 与请求 Context（user.go）](https://github.com/zzxrepository/gocode-examples/blob/ce4ce672155053376c74ddb19bb61f1e94a6e88b/go/03-gorm-demo/user.go)。
+
 业务函数应接收上层传入的 Context：
 
 ```go
@@ -1250,6 +1272,8 @@ GORM 默认会为创建、更新、删除操作启用事务。
 
 ### 2.10.2 扣减库存并创建订单
 
+完整示例：[CreateOrder 事务实现（order.go）](https://github.com/zzxrepository/gocode-examples/blob/ce4ce672155053376c74ddb19bb61f1e94a6e88b/go/03-gorm-demo/order.go)。
+
 先定义商品和订单模型：
 
 ```go
@@ -1279,47 +1303,51 @@ if err := db.AutoMigrate(&Product{}, &Order{}); err != nil {
 下面的函数演示已经完成用户身份校验后的下单过程：
 
 ```go
+// ErrInsufficientStock 同时表示商品不存在或库存不足。
+var ErrInsufficientStock = errors.New("商品不存在或库存不足")
+
+// CreateOrder 在同一个事务中扣减库存并创建订单。调用方应先验证用户身份。
 func CreateOrder(
-    ctx context.Context,
-    db *gorm.DB,
-    userID uint,
-    productID uint,
-    quantity int,
+	ctx context.Context,
+	db *gorm.DB,
+	userID uint,
+	productID uint,
+	quantity int,
 ) error {
-    if userID == 0 || productID == 0 {
-        return errors.New("用户 ID 和商品 ID 必须有效")
-    }
-    if quantity <= 0 {
-        return errors.New("购买数量必须大于 0")
-    }
+	if userID == 0 || productID == 0 {
+		return errors.New("用户 ID 和商品 ID 必须有效")
+	}
+	if quantity <= 0 {
+		return errors.New("购买数量必须大于 0")
+	}
 
-    return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-        // 将库存条件与扣减放在同一条 UPDATE 中，避免先读再写。
-        result := tx.
-            Model(&Product{}).
-            Where("id = ? AND stock >= ?", productID, quantity).
-            Update("stock", gorm.Expr("stock - ?", quantity))
+	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 将库存条件与扣减放在同一条 UPDATE 中，避免先读再写。
+		result := tx.
+			Model(&Product{}).
+			Where("id = ? AND stock >= ?", productID, quantity).
+			Update("stock", gorm.Expr("stock - ?", quantity))
 
-        if result.Error != nil {
-            return fmt.Errorf("扣减库存：%w", result.Error)
-        }
-        if result.RowsAffected == 0 {
-            return errors.New("商品不存在或库存不足")
-        }
+		if result.Error != nil {
+			return fmt.Errorf("扣减库存：%w", result.Error)
+		}
+		if result.RowsAffected == 0 {
+			return ErrInsufficientStock
+		}
 
-        order := Order{
-            UserID:    userID,
-            ProductID: productID,
-            Quantity:  quantity,
-        }
+		order := Order{
+			UserID:    userID,
+			ProductID: productID,
+			Quantity:  quantity,
+		}
 
-        // 使用同一个 tx，让订单插入与库存扣减属于同一事务。
-        if err := tx.Create(&order).Error; err != nil {
-            return fmt.Errorf("创建订单：%w", err)
-        }
+		// 使用同一个 tx，让订单插入与库存扣减属于同一事务。
+		if err := tx.Create(&order).Error; err != nil {
+			return fmt.Errorf("创建订单：%w", err)
+		}
 
-        return nil
-    })
+		return nil
+	})
 }
 ```
 
@@ -1417,6 +1445,8 @@ if err := db.AutoMigrate(&User{}, &Order{}); err != nil {
 
 ### 2.11.2 使用 Preload
 
+完整示例：[订单提交、回滚与关联查询（demo_transaction.go）](https://github.com/zzxrepository/gocode-examples/blob/ce4ce672155053376c74ddb19bb61f1e94a6e88b/go/03-gorm-demo/demo_transaction.go)。
+
 ```go
 var user User
 
@@ -1476,6 +1506,8 @@ flowchart TD
 ## 2.12 原生 SQL 与 SQL 注入
 
 ### 2.12.1 使用 Raw 查询
+
+完整示例：[Raw 查询与 Exec 写入（demo_crud.go）](https://github.com/zzxrepository/gocode-examples/blob/ce4ce672155053376c74ddb19bb61f1e94a6e88b/go/03-gorm-demo/demo_crud.go)。
 
 对于复杂统计或更适合直接表达的 SQL，可以使用原生查询：
 
@@ -1660,7 +1692,99 @@ if result.Error != nil {
 
 两种写法可以使用同一个连接池，也可以通过同一个事务句柄执行。
 
-## 2.14 本节小结
+## 2.14 运行配套示例
+
+### 2.14.1 项目位置与文件
+
+完整项目：[go/03-gorm-demo](https://github.com/zzxrepository/gocode-examples/tree/ce4ce672155053376c74ddb19bb61f1e94a6e88b/go/03-gorm-demo)，运行说明：[README.md](https://github.com/zzxrepository/gocode-examples/blob/ce4ce672155053376c74ddb19bb61f1e94a6e88b/go/03-gorm-demo/README.md)。链接固定到本文验证过的提交版本，便于对照代码。
+
+| 文件 | 对应内容 |
+| --- | --- |
+| [main.go](https://github.com/zzxrepository/gocode-examples/blob/ce4ce672155053376c74ddb19bb61f1e94a6e88b/go/03-gorm-demo/main.go) | 命令行入口、连接池状态和演示流程 |
+| [mysql.go](https://github.com/zzxrepository/gocode-examples/blob/ce4ce672155053376c74ddb19bb61f1e94a6e88b/go/03-gorm-demo/mysql.go) | 本机连接配置与 GORM 初始化 |
+| [model.go](https://github.com/zzxrepository/gocode-examples/blob/ce4ce672155053376c74ddb19bb61f1e94a6e88b/go/03-gorm-demo/model.go)、[schema.go](https://github.com/zzxrepository/gocode-examples/blob/ce4ce672155053376c74ddb19bb61f1e94a6e88b/go/03-gorm-demo/schema.go) | 用户、商品、订单模型与迁移 |
+| [user.go](https://github.com/zzxrepository/gocode-examples/blob/ce4ce672155053376c74ddb19bb61f1e94a6e88b/go/03-gorm-demo/user.go) | 单行查询、分页与 Context |
+| [order.go](https://github.com/zzxrepository/gocode-examples/blob/ce4ce672155053376c74ddb19bb61f1e94a6e88b/go/03-gorm-demo/order.go) | 同一事务中的库存扣减与订单创建 |
+| [demo.go](https://github.com/zzxrepository/gocode-examples/blob/ce4ce672155053376c74ddb19bb61f1e94a6e88b/go/03-gorm-demo/demo.go) | 创建演示数据、按主键清理 |
+| [demo_crud.go](https://github.com/zzxrepository/gocode-examples/blob/ce4ce672155053376c74ddb19bb61f1e94a6e88b/go/03-gorm-demo/demo_crud.go) | 查询、零值更新、原生 SQL 和软删除 |
+| [demo_transaction.go](https://github.com/zzxrepository/gocode-examples/blob/ce4ce672155053376c74ddb19bb61f1e94a6e88b/go/03-gorm-demo/demo_transaction.go) | 提交、业务错误回滚和预加载 |
+
+### 2.14.2 初始化与运行
+
+准备 Go 1.26.5 和本机 MySQL，按照 2.1.2 创建 `gorm_demo` 数据库并设置 `MYSQL_DSN`。取得配套仓库后，进入项目目录：
+
+```bash
+cd gocode-examples/go/03-gorm-demo
+make init
+make run
+```
+
+`make init` 等同于 `go run . -init`，只迁移表。`make run` 等同于 `go run .`，也会检查表结构，再创建本次演示数据。
+
+需要观察实际执行的 SQL 时运行：
+
+```bash
+make sql
+```
+
+该命令等同于 `go run . -sql`，会在演示期间启用 GORM 的 SQL 日志。Makefile 默认使用 PATH 中的 `go`；也可以通过 `make GO=/path/to/go` 指定 SDK，并使 `GOROOT` 与其一致。
+
+程序先创建一名用户、批量创建另外两名用户和一个商品，随后按本文顺序执行查询、更新、下单、预加载和软删除。部分输出如下，已省略日志时间：
+
+```text
+Create: 主键已回填=true；批量创建=2 条
+零值查询: struct=3 条 map=1 条
+Session 条件隔离: 成年=2 未成年=1
+结构体更新后: age=20 active=true
+Map 更新后: age=0 active=false
+Select 更新后: age=0 active=false
+事务提交: 创建订单成功，剩余库存=3
+库存不足: 拒绝下单，剩余库存仍为 3
+事务回滚: INSERT 后返回错误，该记录未保留
+Preload: 当前用户关联订单=1 条
+软删除: 普通查询未找到；Unscoped 的 DeletedAt.Valid=true
+软删除后复用邮箱: MySQL 1062，唯一值仍被原记录占用
+清理完成: 仅删除本次演示创建的用户、订单和商品
+```
+
+邮箱包含动态后缀，不依赖固定自增编号。演示结束时先删除本次订单，再物理删除本次用户和商品，已有数据保留。强制终止进程或数据库不可达时，清理可能无法完成。
+
+未找到记录和重复邮箱实验出现对应的 GORM 错误日志，是正在观察的预期结果。
+
+### 2.14.3 测试与结果验证
+
+不连接 MySQL 的配置和参数测试：
+
+```bash
+make test
+```
+
+沿用本机账号，执行真实数据库测试、竞态检查和覆盖率统计：
+
+```bash
+make test-integration
+```
+
+这相当于：
+
+```bash
+MYSQL_INTEGRATION=1 go test -count=1 -race -cover ./...
+```
+
+未设置 `MYSQL_INTEGRATION=1` 时，真实数据库测试会跳过。启用后，每个测试创建独立的 `gorm_demo_test_*` 临时库，结束后删除，不清空 DSN 指定的学习数据库；账号需要拥有创建和删除测试库的权限。
+
+除了 CRUD，测试还验证两种容易只凭代码误判的结果：
+
+- 库存已经扣减，但订单插入违反用户外键时，库存应恢复、失败订单不应保留。
+- 8 个并发请求各购买 1 件商品，而库存只有 5 件时，最多成功 5 个订单，最终库存不能为负数。
+
+完整演示会连续运行，并检查已有用户和商品是否保持原值，以及本次数据是否清理完成。
+
+测试源码：[mysql_test.go](https://github.com/zzxrepository/gocode-examples/blob/ce4ce672155053376c74ddb19bb61f1e94a6e88b/go/03-gorm-demo/mysql_test.go)、[gorm_integration_test.go](https://github.com/zzxrepository/gocode-examples/blob/ce4ce672155053376c74ddb19bb61f1e94a6e88b/go/03-gorm-demo/gorm_integration_test.go)。
+
+<span id="_2-14-本节小结"></span>
+
+## 2.15 本节小结
 
 GORM 在标准库数据库操作之上，增加了模型映射、SQL 构造、关联处理和常见操作约定。
 
@@ -1711,3 +1835,4 @@ GORM 把模型信息与操作条件组织为 SQL，最终仍然通过标准库�
 15. [LearnKu：GORM v2 中文文档](https://learnku.com/docs/gorm/v2)
 16. [博客园参考文章](https://www.cnblogs.com/taoxiaoxin/p/17956555)
 17. [TopGoer：GORM 介绍](https://www.topgoer.com/数据库操作/gorm/gorm介绍.html)——使用旧版 API，阅读时注意与本文版本区分。
+18. [GORM 配套 Demo：固定版本源码与运行说明](https://github.com/zzxrepository/gocode-examples/tree/ce4ce672155053376c74ddb19bb61f1e94a6e88b/go/03-gorm-demo)
